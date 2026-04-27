@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
     frontend_origin: str = "http://localhost:5173"
-    cors_extra_origins: str = "http://agriscann.duckdns.org"
-    allowed_hosts: str = "localhost,127.0.0.1"
+    cors_extra_origins: str = "http://agriscann.duckdns.org,https://agriscann.duckdns.org"
+    allowed_hosts: str = "localhost,127.0.0.1,agriscann.duckdns.org"
 
     database_url: str = "mysql+aiomysql://agriscan:@localhost:3306/agriscanproject"
     auto_create_tables: bool = False
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 14
     session_timeout_minutes: int = 30
     use_secure_cookies: bool = False
+    force_https_redirect: bool = False
 
     smtp_host: str | None = None
     smtp_port: int = 587
@@ -51,6 +52,7 @@ class Settings(BaseSettings):
             "http://localhost:5173",
             "http://127.0.0.1:5173",
             "http://agriscann.duckdns.org",
+            "https://agriscann.duckdns.org",
         }
         origins.update(origin.strip() for origin in self.cors_extra_origins.split(","))
         return sorted({origin.strip().rstrip("/") for origin in origins if origin.strip()})

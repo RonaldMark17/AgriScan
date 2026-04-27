@@ -116,3 +116,22 @@ Set real secrets and API keys before deployment:
 - `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`
 
 Use HTTPS, set `ENVIRONMENT=production`, configure `ALLOWED_HOSTS`, and run the frontend behind the included Nginx container or your platform edge.
+
+For `agriscann.duckdns.org`, the backend should use:
+
+```env
+ENVIRONMENT=production
+FRONTEND_ORIGIN=https://agriscann.duckdns.org
+CORS_EXTRA_ORIGINS=https://agriscann.duckdns.org
+ALLOWED_HOSTS=agriscann.duckdns.org,localhost,127.0.0.1
+USE_SECURE_COOKIES=true
+FORCE_HTTPS_REDIRECT=false
+```
+
+Build the frontend with a same-origin API URL so browser requests go through the HTTPS site:
+
+```bash
+VITE_API_BASE_URL=/api/v1 docker compose up -d --build
+```
+
+If an Ubuntu host Nginx terminates TLS in front of Docker, use `deploy/nginx/agriscan.conf.example` as the site config. The important detail is that `/api/` proxies to `http://127.0.0.1:8000` without a trailing path, so FastAPI still receives `/api/v1/...`.

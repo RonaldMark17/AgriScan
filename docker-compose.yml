@@ -28,7 +28,9 @@ services:
       - ./backend/.env.example
     environment:
       DATABASE_URL: mysql+aiomysql://agriscan:agriscan_password@mysql:3306/agriscanproject
-      FRONTEND_ORIGIN: http://localhost:5173
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-http://agriscann.duckdns.org,https://agriscann.duckdns.org}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,agriscann.duckdns.org}
     ports:
       - "8000:8000"
     volumes:
@@ -40,10 +42,11 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+        VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY:-}
     container_name: agriscan-frontend
     restart: unless-stopped
-    environment:
-      VITE_API_BASE_URL: http://localhost:8000/api/v1
     ports:
       - "5173:80"
     depends_on:

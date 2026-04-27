@@ -56,8 +56,9 @@ app = FastAPI(
 
 app.add_middleware(SecurityHeadersMiddleware)
 if settings.environment == "production":
-    app.add_middleware(HTTPSRedirectMiddleware)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
+    if settings.force_https_redirect:
+        app.add_middleware(HTTPSRedirectMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
