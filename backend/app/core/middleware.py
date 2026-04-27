@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Awaitable, Callable
+from ipaddress import ip_address
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
@@ -7,6 +8,26 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger("agriscan.api")
+
+
+def _is_potentially_trustworthy_origin(request: Request) -> bool:
+    if request.url.scheme == "https":
+        return True
+    if request.url.scheme != "http":
+        return False
+
+    hostname = request.url.hostname
+    if not hostname:
+        return False
+
+    normalized_host = hostname.rstrip(".").lower()
+    if normalized_host == "localhost" or normalized_host.endswith(".localhost"):
+        return True
+
+    try:
+        return ip_address(normalized_host).is_loopback
+    except ValueError:
+        return False
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -30,7 +51,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(self), geolocation=(self), microphone=()"
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        if _is_potentially_trustworthy_origin(request):
+            response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-site"
         response.headers.setdefault(
             "Content-Security-Policy",

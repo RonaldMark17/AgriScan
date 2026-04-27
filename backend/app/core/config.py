@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
     frontend_origin: str = "http://localhost:5173"
+    cors_extra_origins: str = "http://agriscann.duckdns.org"
     allowed_hosts: str = "localhost,127.0.0.1"
 
     database_url: str = "mysql+aiomysql://agriscan:@localhost:3306/agriscanproject"
@@ -45,8 +46,14 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> List[str]:
-        origins = {self.frontend_origin, "http://localhost:5173", "http://127.0.0.1:5173"}
-        return [origin.strip() for origin in origins if origin.strip()]
+        origins = {
+            self.frontend_origin,
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://agriscann.duckdns.org",
+        }
+        origins.update(origin.strip() for origin in self.cors_extra_origins.split(","))
+        return sorted({origin.strip().rstrip("/") for origin in origins if origin.strip()})
 
     @property
     def allowed_host_list(self) -> List[str]:
