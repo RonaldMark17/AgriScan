@@ -1,0 +1,12 @@
+{
+  "classes": [
+    "corn_leaf_blight",
+    "healthy",
+    "pest_leaf_damage",
+    "tomato_late_blight"
+  ],
+  "last_train_accuracy": 0.9615819454193115,
+  "last_val_accuracy": 0.9750889539718628,
+  "model_path": "C:\\Users\\ronal\\OneDrive\\Desktop\\agriscan\\backend\\app\\ml\\artifacts\\crop_disease_model.keras",
+  "labels_path": "C:\\Users\\ronal\\OneDrive\\Desktop\\agriscan\\backend\\app\\ml\\artifacts\\labels.json"
+}

@@ -1,0 +1,1 @@
+"""AgriScan backend package."""
