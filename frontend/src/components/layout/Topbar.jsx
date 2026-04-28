@@ -1,9 +1,10 @@
 import { Bell, Leaf, Loader2, LogOut, Mic, Settings, UserRound } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useI18n } from '../../context/I18nContext.jsx';
+import { useVoice } from '../../context/VoiceContext.jsx';
 import LanguageToggle from '../shared/LanguageToggle.jsx';
 
 function formatNotificationTime(value) {
@@ -21,14 +22,31 @@ function notificationTarget(notification) {
     case 'marketplace':
     case 'recommendation':
       return '/scan';
+    case 'disease_scan':
+      return '/disease-detector';
+    case 'farm_approved':
+      return '/farms';
     default:
       return '/reports';
   }
 }
 
+function voiceGuideKey(pathname) {
+  if (pathname === '/') return 'voiceGuideDashboard';
+  if (pathname.startsWith('/farms')) return 'voiceGuideFarms';
+  if (pathname.startsWith('/scan')) return 'voiceGuideManualScan';
+  if (pathname.startsWith('/disease-detector')) return 'voiceGuideDiseaseDetector';
+  if (pathname.startsWith('/reports')) return 'voiceGuideReports';
+  if (pathname.startsWith('/settings')) return 'voiceGuideSettings';
+  if (pathname.startsWith('/admin')) return 'voiceGuideAdmin';
+  return 'voiceGuideDefault';
+}
+
 export default function Topbar() {
   const { logout, user } = useAuth();
   const { t } = useI18n();
+  const { speak, speechSupported, voiceAssistantEnabled } = useVoice();
+  const location = useLocation();
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -110,30 +128,35 @@ export default function Topbar() {
 
   return (
     <>
-    <header className="sticky top-0 z-30 border-b border-stone-200 bg-white">
-      <div className="flex h-[72px] items-center gap-3 px-4 sm:px-6 lg:px-9">
-        <Link to="/" className="flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-leaf-600 text-white">
-            <Leaf className="h-6 w-6" />
+    <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
+      <div className="flex h-16 items-center gap-2 px-3 sm:gap-3 sm:px-5 lg:h-[72px] lg:px-9">
+        <Link to="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-leaf-600 text-white sm:h-11 sm:w-11">
+            <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
           </span>
-          <span className="text-xl font-bold text-leaf-600 sm:text-2xl">AgriScan</span>
+          <span className="truncate text-lg font-bold text-leaf-600 sm:text-2xl">AgriScan</span>
         </Link>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           <div className="hidden sm:block lg:hidden">
             <LanguageToggle />
           </div>
           <Link
             to="/settings/security"
-            className="hidden items-center gap-2 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-2 text-sm font-bold text-leaf-700 transition hover:bg-leaf-100 sm:inline-flex"
+          className="focus-ring hidden min-h-10 items-center gap-2 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-2 text-sm font-bold text-leaf-700 transition hover:bg-leaf-100 sm:inline-flex"
+            onClick={(event) => {
+              if (!voiceAssistantEnabled || !speechSupported) return;
+              event.preventDefault();
+              speak(t(voiceGuideKey(location.pathname)), { kind: 'assistant' });
+            }}
           >
             <Mic className="h-4 w-4" />
-            {t('voiceActive')}
+            {voiceAssistantEnabled ? t('voiceActive') : t('voiceInactive')}
           </Link>
           <div className="relative" ref={notificationsRef}>
             <button
               type="button"
-              className="relative grid h-10 w-10 place-items-center rounded-lg bg-white text-stone-700 transition hover:bg-stone-50"
+              className="focus-ring relative grid h-10 w-10 place-items-center rounded-lg border border-transparent bg-white text-stone-700 transition hover:border-stone-200 hover:bg-stone-50"
               aria-label={t('notifications')}
               aria-expanded={notificationsOpen}
               onClick={() => {
@@ -153,7 +176,7 @@ export default function Topbar() {
                   <div>
                     <p className="text-sm font-bold text-stone-950">{t('notifications')}</p>
                     <p className="text-xs text-stone-500">
-                      {unreadCount > 0 ? `${unreadCount} unread` : t('noNotificationsYet')}
+                      {unreadCount > 0 ? t('unreadNotifications', { count: unreadCount }) : t('noNotificationsYet')}
                     </p>
                   </div>
                   <Link
@@ -213,7 +236,7 @@ export default function Topbar() {
           <div className="relative" ref={profileRef}>
             <button
               type="button"
-              className="relative grid h-11 w-11 place-items-center rounded-full bg-stone-100 text-stone-400 transition hover:bg-stone-200"
+              className="focus-ring relative grid h-10 w-10 place-items-center rounded-full bg-stone-100 text-stone-500 transition hover:bg-stone-200 sm:h-11 sm:w-11"
               aria-label={t('settings')}
               aria-expanded={profileOpen}
               onClick={() => {

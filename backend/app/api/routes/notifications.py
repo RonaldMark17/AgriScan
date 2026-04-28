@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.models import Notification, PushSubscription, User
 from app.schemas.common import MessageResponse
 from app.schemas.domain import NotificationRead, PushSubscriptionRequest
+from app.services.push_notifications import create_notification, dispatch_push_to_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -42,6 +43,9 @@ async def subscribe_push(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
+    if not payload.keys.get("p256dh") or not payload.keys.get("auth"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Push subscription keys are incomplete.")
+
     result = await db.execute(select(PushSubscription).where(PushSubscription.endpoint == payload.endpoint))
     subscription = result.scalar_one_or_none()
     if subscription is None:
@@ -52,3 +56,39 @@ async def subscribe_push(
         subscription.keys_json = payload.keys
     await db.commit()
     return MessageResponse(message="Push subscription saved.")
+
+
+@router.post("/push/test", response_model=MessageResponse)
+async def send_test_push(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    title = "AgriScan notifications ready"
+    body = "You will receive alerts after important crop scans and farm updates."
+    notification = await create_notification(
+        db,
+        user_id=current_user.id,
+        title=title,
+        body=body,
+        notification_type="system",
+        payload={"url": "/settings/security"},
+    )
+    await db.commit()
+
+    dispatch = await dispatch_push_to_user(
+        db,
+        user_id=current_user.id,
+        title=title,
+        body=body,
+        url="/settings/security",
+        payload={"notification_id": notification.id, "type": "system"},
+    )
+    if dispatch.sent:
+        return MessageResponse(message=f"Test notification saved and sent to {dispatch.sent} device(s).")
+    if dispatch.skipped_reason == "vapid_not_configured":
+        return MessageResponse(message="Test notification saved. Add backend VAPID keys to send browser pushes.")
+    if dispatch.skipped_reason == "pywebpush_not_installed":
+        return MessageResponse(message="Test notification saved. Install backend requirements to send browser pushes.")
+    if dispatch.skipped_reason == "no_subscriptions":
+        return MessageResponse(message="Test notification saved. Enable push notifications on this device first.")
+    return MessageResponse(message="Test notification saved, but no browser push was delivered.")

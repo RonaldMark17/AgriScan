@@ -38,9 +38,9 @@ export default function InstallPrompt() {
   if ((!prompt || installDismissed) && !updateReady) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto flex max-w-md items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-soft">
-      <p className="text-sm font-semibold text-stone-800">{updateReady ? t('newVersionReady') : t('installPrompt')}</p>
-      <div className="flex shrink-0 items-center gap-2">
+    <div className="surface fixed bottom-20 left-3 right-3 z-40 mx-auto flex max-w-md flex-col gap-3 rounded-lg p-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between sm:bottom-4 sm:left-4 sm:right-4">
+      <p className="text-sm font-semibold leading-5 text-stone-800">{updateReady ? t('newVersionReady') : t('installPrompt')}</p>
+      <div className="flex shrink-0 items-center gap-2 self-end min-[420px]:self-auto">
         <button
           className="btn-primary"
           type="button"

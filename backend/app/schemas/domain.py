@@ -75,6 +75,9 @@ class ScanRead(BaseModel):
     farm_id: int | None
     crop_id: int | None
     crop_label: str | None = None
+    analysis_mode: str | None = None
+    reference_url: str | None = None
+    reference_title: str | None = None
     image_path: str
     disease_name: str
     confidence: float

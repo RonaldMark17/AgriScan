@@ -1,4 +1,4 @@
-import { Leaf } from 'lucide-react';
+import { Leaf, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import LanguageToggle from '../components/shared/LanguageToggle.jsx';
@@ -28,37 +28,43 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form);
-      setMessage('Account created. You can now log in.');
+      setMessage(t('accountCreated'));
       window.setTimeout(() => navigate('/login'), 900);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Registration failed.'));
+      setError(getApiErrorMessage(requestError, t('registrationFailed')));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-xl">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-lg bg-leaf-800 text-white">
+    <main className="flex min-h-svh items-center justify-center bg-[#f7faf6] px-3 py-6 sm:px-4 sm:py-10">
+      <div className="w-full max-w-4xl">
+        <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-leaf-800 text-white">
               <Leaf className="h-6 w-6" />
             </div>
-            <div>
-              <p className="text-xl font-bold text-leaf-900">AgriScan</p>
-              <p className="text-sm text-stone-500">Farmer and buyer registration</p>
+            <div className="min-w-0">
+              <p className="truncate text-xl font-bold text-leaf-900">AgriScan</p>
+              <p className="text-sm text-stone-500">{t('farmerBuyerRegistration')}</p>
             </div>
           </div>
           <LanguageToggle />
         </div>
 
-        <form className="surface rounded-lg p-6" onSubmit={handleSubmit}>
-          <h1 className="text-2xl font-bold text-stone-950">{t('register')}</h1>
-          <p className="mt-1 text-sm text-stone-500">Strong passwords are required for account protection.</p>
+        <form className="surface grid rounded-lg lg:grid-cols-[0.85fr_1.15fr]" onSubmit={handleSubmit}>
+          <div className="border-b border-stone-200 bg-leaf-50 p-4 sm:p-6 lg:border-b-0 lg:border-r">
+            <div className="grid h-12 w-12 place-items-center rounded-lg bg-white text-leaf-800 shadow-[0_8px_18px_rgba(15,23,42,0.06)]">
+              <Leaf className="h-7 w-7" />
+            </div>
+            <h1 className="mt-4 text-2xl font-bold leading-tight text-stone-950">{t('register')}</h1>
+            <p className="mt-2 text-sm leading-6 text-stone-600">{t('strongPasswordRequired')}</p>
+          </div>
 
-          {message && <div className="mt-4 rounded-lg bg-leaf-50 p-3 text-sm font-medium text-leaf-800">{message}</div>}
-          {error && <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
+          <div className="p-4 sm:p-6">
+          {message && <div className="success-message">{message}</div>}
+          {error && <div className="danger-message">{error}</div>}
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="block sm:col-span-2">
@@ -70,15 +76,15 @@ export default function Register() {
               <input className="field mt-2" type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-stone-700">Phone</span>
+              <span className="text-sm font-semibold text-stone-700">{t('phone')}</span>
               <input className="field mt-2" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
             </label>
             <label className="block">
               <span className="text-sm font-semibold text-stone-700">{t('role')}</span>
               <select className="field mt-2" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
-                <option value="farmer">Farmer</option>
-                <option value="buyer">Buyer</option>
-                <option value="inspector">Inspector / Agriculture Staff</option>
+                <option value="farmer">{t('farmer')}</option>
+                <option value="buyer">{t('buyer')}</option>
+                <option value="inspector">{t('inspector')}</option>
               </select>
             </label>
             <label className="block">
@@ -87,13 +93,17 @@ export default function Register() {
             </label>
           </div>
 
-          <button className="btn-primary mt-6 w-full" disabled={loading}>{loading ? 'Creating...' : t('register')}</button>
+          <button className="btn-primary mt-6 w-full" disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {loading ? t('creating') : t('register')}
+          </button>
           <p className="mt-4 text-center text-sm text-stone-500">
-            Already registered?{' '}
+            {t('alreadyRegistered')}{' '}
             <Link className="font-semibold text-leaf-700 hover:text-leaf-900" to="/login">
-              Login
+              {t('login')}
             </Link>
           </p>
+          </div>
         </form>
       </div>
     </main>

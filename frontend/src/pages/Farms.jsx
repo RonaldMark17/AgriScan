@@ -89,6 +89,33 @@ function createApproxBoundaryGeoJson(latitude, longitude, areaHectares) {
   };
 }
 
+function cleanText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeNumber(value, precision) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Number(parsed.toFixed(precision)) : null;
+}
+
+function farmSignature(farm) {
+  return JSON.stringify([
+    cleanText(farm.name).toLowerCase(),
+    cleanText(farm.barangay).toLowerCase(),
+    cleanText(farm.municipality).toLowerCase(),
+    cleanText(farm.province).toLowerCase(),
+    normalizeNumber(farm.latitude, 6),
+    normalizeNumber(farm.longitude, 6),
+    normalizeNumber(farm.area_hectares, 4),
+    farm.boundary_geojson ? JSON.stringify(farm.boundary_geojson) : null,
+  ]);
+}
+
+function hasDuplicateFarm(farms, payload) {
+  const nextSignature = farmSignature(payload);
+  return farms.some((farm) => farmSignature(farm) === nextSignature);
+}
+
 function getPolygonPath(boundaryGeojson) {
   if (boundaryGeojson?.type !== 'Polygon' || !Array.isArray(boundaryGeojson.coordinates?.[0])) {
     return null;
@@ -433,6 +460,11 @@ export default function Farms() {
         boundary_geojson: draftBoundaryGeoJson,
       };
 
+      if (hasDuplicateFarm(farms, payload)) {
+        setError('A farm with the same details already exists.');
+        return;
+      }
+
       const { data: createdFarm } = await api.post('/farms', payload);
       setForm(EMPTY_FORM);
       await loadFarms(createdFarm.id);
@@ -442,25 +474,50 @@ export default function Farms() {
   }
 
   return (
-    <div>
-      <PageHeader eyebrow="Farm mapping" title="Farm registry" />
-      <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
-        <form className="surface rounded-lg p-5" onSubmit={submit}>
-          <h2 className="flex items-center gap-2 text-lg font-bold text-stone-950">
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="Farm mapping"
+        title="Farm registry"
+        body="Register farm locations, capture GPS points, and keep field boundaries ready for scans and weather alerts."
+      />
+      <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
+        <form className="surface rounded-lg p-4 sm:p-5" onSubmit={submit}>
+          <h2 className="section-title flex items-center gap-2">
             <Plus className="h-5 w-5 text-leaf-700" />
             Register farm
           </h2>
-          {error && <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
+          {error && <div className="danger-message mt-4">{error}</div>}
           <div className="mt-4 grid gap-3">
-            <input className="field" placeholder="Farm name" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-            <input className="field" placeholder="Barangay" value={form.barangay} onChange={(event) => setForm({ ...form, barangay: event.target.value })} />
-            <input className="field" placeholder="Municipality / City" value={form.municipality} onChange={(event) => setForm({ ...form, municipality: event.target.value })} />
-            <input className="field" placeholder="Province" value={form.province} onChange={(event) => setForm({ ...form, province: event.target.value })} />
+            <label className="block">
+              <span className="text-sm font-semibold text-stone-700">Farm name</span>
+              <input className="field mt-2" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-stone-700">Barangay</span>
+              <input className="field mt-2" value={form.barangay} onChange={(event) => setForm({ ...form, barangay: event.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-stone-700">Municipality / City</span>
+              <input className="field mt-2" value={form.municipality} onChange={(event) => setForm({ ...form, municipality: event.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-stone-700">Province</span>
+              <input className="field mt-2" value={form.province} onChange={(event) => setForm({ ...form, province: event.target.value })} />
+            </label>
             <div className="grid gap-3 sm:grid-cols-2">
-              <input className="field" placeholder="Latitude" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} />
-              <input className="field" placeholder="Longitude" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} />
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">Latitude</span>
+                <input className="field mt-2" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">Longitude</span>
+                <input className="field mt-2" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} />
+              </label>
             </div>
-            <input className="field" placeholder="Area in hectares" value={form.area_hectares} onChange={(event) => setForm({ ...form, area_hectares: event.target.value })} />
+            <label className="block">
+              <span className="text-sm font-semibold text-stone-700">Area in hectares</span>
+              <input className="field mt-2" value={form.area_hectares} onChange={(event) => setForm({ ...form, area_hectares: event.target.value })} />
+            </label>
             <button type="button" className="btn-secondary" onClick={() => locate()} disabled={gpsLocating}>
               {gpsLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
               {gpsLocating ? 'Locating...' : 'Use GPS location'}
@@ -476,7 +533,7 @@ export default function Farms() {
           <div className="surface rounded-lg p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="flex items-center gap-2 text-lg font-bold text-stone-950">
+                <div className="section-title flex items-center gap-2">
                   <MapPinned className="h-5 w-5 text-leaf-700" />
                   GPS boundary map
                 </div>
@@ -497,7 +554,7 @@ export default function Farms() {
             )}
 
             <div className="relative mt-4 overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
-              <div ref={mapHostRef} className="min-h-[420px] w-full" />
+              <div ref={mapHostRef} className="min-h-[300px] w-full sm:min-h-[380px] lg:min-h-[420px]" />
               {(mapState.loading || mapState.error) && (
                 <div className="absolute inset-0 grid place-items-center bg-white/85 px-6 text-center">
                   <div>
@@ -532,13 +589,13 @@ export default function Farms() {
                     onClick={() => setSelectedFarmId(farm.id)}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-bold text-stone-950">{farm.name}</h3>
+                      <div className="min-w-0">
+                        <h3 className="break-words font-bold text-stone-950">{farm.name}</h3>
                         <p className="mt-1 text-sm text-stone-500">{formatFarmLocation(farm)}</p>
                       </div>
-                      <span className="rounded-full bg-leaf-100 px-2 py-1 text-xs font-bold uppercase text-leaf-800">{farm.status}</span>
+                      <span className="shrink-0 rounded-full bg-leaf-100 px-2 py-1 text-xs font-bold uppercase text-leaf-800">{farm.status}</span>
                     </div>
-                    <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <dl className="mt-4 grid gap-2 text-sm min-[420px]:grid-cols-2">
                       <div>
                         <dt className="text-stone-500">Area</dt>
                         <dd className="font-semibold">{farm.area_hectares || '-'} ha</dd>

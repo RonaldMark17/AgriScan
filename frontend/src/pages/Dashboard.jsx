@@ -54,9 +54,9 @@ function MetricCard({ icon: Icon, label, value, unit, status, tone = 'green', he
         <Icon className={`h-6 w-6 ${toneClass}`} />
         <span className="rounded-full border border-stone-200 px-3 py-1 text-xs font-bold text-stone-600">{status}</span>
       </div>
-      <p className="mt-8 text-sm font-semibold text-stone-500">{label}</p>
-      <div className="mt-1 flex items-end gap-1">
-        <span className="text-4xl font-bold tracking-normal text-stone-950">{value}</span>
+      <p className="mt-6 text-sm font-semibold text-stone-500 sm:mt-8">{label}</p>
+      <div className="mt-1 flex min-w-0 items-end gap-1">
+        <span className="min-w-0 break-words text-3xl font-bold tracking-normal text-stone-950 sm:text-4xl">{value}</span>
         {unit && <span className="mb-1 text-base font-semibold text-stone-500">{unit}</span>}
       </div>
       <p className="mt-4 text-sm text-stone-500">{helper}</p>
@@ -415,23 +415,23 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-normal text-stone-950 sm:text-4xl">{t('dashboardGreeting', { name: firstName })}</h1>
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-4xl">{t('dashboardGreeting', { name: firstName })}</h1>
           <p className="mt-2 text-lg text-stone-500">{t('dashboardSubtitle')}</p>
         </div>
-        <Link to="/scan" className="btn-primary h-14 px-8 text-base shadow-[0_10px_20px_rgba(22,163,74,0.25)]">
+        <Link to="/scan" className="btn-primary h-12 w-full px-6 text-base shadow-[0_10px_20px_rgba(22,163,74,0.25)] sm:w-auto sm:px-8 lg:h-14">
           <ScanLine className="h-5 w-5" />
           {t('newManualScan')}
         </Link>
       </div>
 
       <section className={`mb-8 flex flex-col gap-4 rounded-lg border p-5 sm:flex-row sm:items-center sm:justify-between ${alertToneClasses.wrapper}`}>
-        <div className="flex items-center gap-4">
-          <div className={`grid h-12 w-12 place-items-center rounded-full ${alertToneClasses.iconBadge}`}>
+        <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
+          <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-full sm:h-12 sm:w-12 ${alertToneClasses.iconBadge}`}>
             <AlertTriangle className="h-6 w-6" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-lg font-bold">
               {featuredAlert?.title || 'No active field alerts'}
             </p>
@@ -449,7 +449,7 @@ export default function Dashboard() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-5">
-          <div className="grid gap-5 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <MetricCard icon={Droplets} label="Soil Moisture" value={moistureMetric.value} unit={moistureMetric.unit} status={moistureMetric.status} tone={moistureMetric.tone} helper={moistureMetric.helper} to="/scan" />
             <MetricCard icon={Thermometer} label="Soil Temp" value={temperatureMetric.value} unit={temperatureMetric.unit} status={temperatureMetric.status} tone={temperatureMetric.tone} helper={temperatureMetric.helper} to="/scan" />
             <MetricCard icon={Zap} label="Nutrient Level" value={nutrientMetric.value} unit={nutrientMetric.unit} status={nutrientMetric.status} tone={nutrientMetric.tone} helper={nutrientMetric.helper} to="/scan" />
@@ -469,7 +469,7 @@ export default function Dashboard() {
             </div>
             {phChartData.length > 0 ? (
               <>
-                <div className="mt-8 h-[420px]">
+                <div className="mt-6 h-72 sm:mt-8 sm:h-[360px] xl:h-[420px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={phChartData} margin={{ left: 0, right: 20, top: 10, bottom: 10 }}>
                       <CartesianGrid stroke="#e7e5e4" strokeDasharray="6 8" vertical={false} />
@@ -523,9 +523,9 @@ export default function Dashboard() {
 
             {gpsState.error && <p className="mt-3 text-sm font-medium text-amber-700">{gpsState.error}</p>}
 
-            <div className="mt-6 flex items-center gap-5">
-              <span className="text-4xl font-bold text-stone-950">{weatherTemperature}C</span>
-              <div className="border-l border-sky-200 pl-5 text-sm text-stone-700">
+            <div className="mt-6 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:gap-5">
+              <span className="text-3xl font-bold text-stone-950 sm:text-4xl">{weatherTemperature}C</span>
+              <div className="border-t border-sky-200 pt-3 text-sm text-stone-700 min-[420px]:border-l min-[420px]:border-t-0 min-[420px]:pl-5 min-[420px]:pt-0">
                 <p>Humidity: {weatherHumidity}%</p>
                 <p>Wind: {weatherWind} km/h</p>
                 <p>Feels like: {feelsLike}C</p>

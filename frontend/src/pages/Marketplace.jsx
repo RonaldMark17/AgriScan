@@ -1,6 +1,8 @@
 import { ArrowRight, Crosshair, Droplets, Filter, Info, Leaf, Loader2, MapPin, Play, TrendingUp, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
+import { useI18n } from '../context/I18nContext.jsx';
+import { useVoice } from '../context/VoiceContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 
 const categories = ['All Crops', 'Vegetables', 'Grains', 'Fruits', 'Root Crops'];
@@ -77,20 +79,29 @@ function buildCropCard(item, result) {
   };
 }
 
-function buildAudioGuide(selectedCrop, result) {
+function buildAudioGuide(selectedCrop, result, t) {
   if (selectedCrop) {
-    return `${selectedCrop.name}. ${selectedCrop.guide} Watering: ${selectedCrop.watering} Fertilizer: ${selectedCrop.fertilizer}`;
+    return t('audioSelectedCropGuide', {
+      crop: selectedCrop.name,
+      guide: selectedCrop.guide,
+      watering: selectedCrop.watering,
+      fertilizer: selectedCrop.fertilizer,
+    });
   }
 
   if (result?.best_crop) {
-    const currentWeather = result.weather_summary ? ` Current weather: ${result.weather_summary}.` : '';
-    return `${result.best_crop} is the best crop recommendation right now.${currentWeather} ${result.recommendations?.[0]?.planting_window || ''}`.trim();
+    const weather = result.weather_summary ? t('audioCurrentWeather', { weather: result.weather_summary }) : '';
+    return t('audioBestCropGuide', {
+      crop: result.best_crop,
+      weather,
+      window: result.recommendations?.[0]?.planting_window || '',
+    }).trim();
   }
 
-  return 'AgriScan is ready to refresh crop recommendations using your latest soil scan and current location.';
+  return t('audioRecommendationReady');
 }
 
-function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio }) {
+function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
   if (!crop) return null;
 
   return (
@@ -104,11 +115,11 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio }) {
       >
         <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-5 sm:p-6">
           <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">Crop Guide</p>
+            <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">{t('cropGuide')}</p>
             <h2 id="crop-guide-title" className="mt-1 text-2xl font-bold text-stone-950">{crop.name}</h2>
             <p className="mt-2 text-sm text-stone-500">{crop.variety} - {crop.window}</p>
           </div>
-          <button className="btn-icon shrink-0" type="button" onClick={onClose} aria-label="Close crop guide">
+          <button className="btn-icon shrink-0" type="button" onClick={onClose} aria-label={t('closeCropGuide')}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -120,18 +131,18 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio }) {
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div className="rounded-lg border border-stone-200 p-4">
-              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">Watering</p>
+              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('watering')}</p>
               <p className="mt-2 text-sm leading-6 text-stone-700">{crop.watering}</p>
             </div>
             <div className="rounded-lg border border-stone-200 p-4">
-              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">Fertilizer</p>
+              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('fertilizer')}</p>
               <p className="mt-2 text-sm leading-6 text-stone-700">{crop.fertilizer}</p>
             </div>
           </div>
 
           <div className="mt-5 rounded-lg border border-sky-100 bg-sky-50 p-4">
-            <p className="text-sm font-bold uppercase tracking-wide text-sky-700">Live Weather Context</p>
-            <p className="mt-2 text-sm text-stone-700">{weatherSummary || 'Refresh recommendations to pull the latest weather context for this crop.'}</p>
+            <p className="text-sm font-bold uppercase tracking-wide text-sky-700">{t('liveWeatherContext')}</p>
+            <p className="mt-2 text-sm text-stone-700">{weatherSummary || t('refreshWeatherContext')}</p>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -145,10 +156,10 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio }) {
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button className="btn-secondary" type="button" onClick={onPlayAudio}>
               <Play className="h-4 w-4" />
-              Play Audio Guide
+              {t('playAudioGuide')}
             </button>
             <button className="btn-primary" type="button" onClick={onClose}>
-              Close Guide
+              {t('closeCropGuide')}
             </button>
           </div>
         </div>
@@ -219,6 +230,8 @@ function CropCard({ crop, onGuide, weatherSummary }) {
 }
 
 export default function Marketplace() {
+  const { t } = useI18n();
+  const { speak, voiceTutorialsEnabled } = useVoice();
   const [activeCategory, setActiveCategory] = useState('All Crops');
   const [sortMode, setSortMode] = useState('Suitability');
   const [selectedCrop, setSelectedCrop] = useState(null);
@@ -307,19 +320,19 @@ export default function Marketplace() {
   }
 
   function playAudioGuide() {
-    const message = buildAudioGuide(selectedCrop, result);
+    const message = buildAudioGuide(selectedCrop, result, t);
 
-    if (!('speechSynthesis' in window)) {
-      setAudioStatus('Audio guide is not supported on this browser.');
+    if (!voiceTutorialsEnabled) {
+      setAudioStatus(t('voiceTutorialsDisabled'));
       return;
     }
 
-    window.speechSynthesis.cancel();
-    const utterance = new window.SpeechSynthesisUtterance(message);
-    utterance.rate = 0.95;
-    utterance.onend = () => setAudioStatus('Audio guide finished.');
-    window.speechSynthesis.speak(utterance);
-    setAudioStatus('Playing audio guide...');
+    const spoken = speak(message, {
+      kind: 'tutorial',
+      onEnd: () => setAudioStatus(t('audioFinished')),
+      onError: () => setAudioStatus(t('audioUnsupported')),
+    });
+    setAudioStatus(spoken.ok ? t('audioPlaying') : t('audioUnsupported'));
   }
 
   const locationLabel = result?.location?.label || 'Saved farm location if available';
@@ -334,6 +347,7 @@ export default function Marketplace() {
         weatherSummary={result?.weather_summary}
         onClose={() => setSelectedCrop(null)}
         onPlayAudio={playAudioGuide}
+        t={t}
       />
 
       <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -440,7 +454,7 @@ export default function Marketplace() {
         <div className="shrink-0">
           <button className="btn-primary h-14 w-full px-8 text-base sm:w-auto" onClick={playAudioGuide} type="button">
             <Play className="h-5 w-5" />
-            Play Audio Guide
+            {t('playAudioGuide')}
           </button>
           {audioStatus && <p className="mt-2 text-center text-sm font-semibold text-leaf-800">{audioStatus}</p>}
         </div>

@@ -9,6 +9,8 @@ cd backend
 python -m pip install -r requirements-ml.txt
 ```
 
+Use Python 3.12 for TensorFlow on Windows. `requirements-ml.txt` contains the TensorFlow classifier stack only; install `requirements-yolo.txt` only when you want to run the optional YOLO workflow.
+
 You can also run the scripts from `backend/app/ml`, but the dataset is still written under `backend/app/ml/datasets/...` and the training artifacts stay under `backend/app/ml/artifacts/...`.
 
 ## 2. Download Internet Datasets
@@ -22,13 +24,13 @@ The default dataset preparation script now focuses on crops that are more releva
 - guava: `YaswanthReddy23/Guava_leaf`
 
 ```powershell
-python app/ml/prepare_training_dataset.py --clean --sources philippines --max-per-class 250
+python app/ml/prepare_training_dataset.py --clean --sources philippines --max-per-class 50
 ```
 
 If you are already inside `backend/app/ml`, use:
 
 ```powershell
-python prepare_training_dataset.py --clean --sources philippines --max-per-class 250
+python prepare_training_dataset.py --clean --sources philippines --max-per-class 50
 ```
 
 Output:
@@ -67,7 +69,7 @@ This expanded crop set is aimed at common Philippine crops such as rice, corn, b
 ## 3A. Train TensorFlow Classifier
 
 ```powershell
-python app/ml/train_classifier.py --epochs 8 --fine-tune-epochs 2
+python app/ml/train_classifier.py --epochs 6 --fine-tune-epochs 1 --batch-size 16
 ```
 
 This saves:
@@ -85,6 +87,7 @@ The FastAPI scan route loads this model automatically through `MODEL_PATH` and `
 For a workflow closer to the YOLO presentation:
 
 ```powershell
+python -m pip install -r requirements-yolo.txt
 python app/ml/train_yolo.py --task classify --model yolov8n-cls.pt --epochs 20 --imgsz 224
 ```
 

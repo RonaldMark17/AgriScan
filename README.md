@@ -57,6 +57,17 @@ copy .env.example .env
 npm run dev
 ```
 
+To serve the built frontend from the backend instead of running Vite separately:
+
+```bash
+cd frontend
+npm run build:backend
+cd ../backend
+uvicorn app.main:app --reload
+```
+
+Open `http://localhost:8000`; API routes remain under `/api/v1`.
+
 Database:
 
 ```bash
@@ -88,10 +99,10 @@ mysql -u root -p < database/schema.sql
 
 ## ML Integration
 
-The scan API accepts crop images and returns disease name, confidence, cause, and treatment recommendation. Put a TensorFlow SavedModel at:
+The scan API accepts crop images and returns crop label, disease name, confidence, cause, and treatment recommendation. The trained TensorFlow classifier lives at:
 
 ```text
-backend/app/ml/artifacts/crop_disease_model
+backend/app/ml/artifacts/crop_disease_model.keras
 ```
 
 Then install:
@@ -100,7 +111,7 @@ Then install:
 pip install -r backend/requirements-ml.txt
 ```
 
-If no model is present, AgriScan uses a deterministic image-analysis fallback so the capstone demo remains functional.
+Use Python 3.12 for ML dependencies. If no model is present, AgriScan uses a deterministic image-analysis fallback so the capstone demo remains functional.
 
 ## Production Notes
 

@@ -56,7 +56,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Cross-Origin-Resource-Policy"] = "same-site"
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+            (
+                "default-src 'self'; "
+                "script-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://tile.openstreetmap.org; "
+                "connect-src 'self' https://nominatim.openstreetmap.org; "
+                "font-src 'self' data:; "
+                "worker-src 'self'; "
+                "manifest-src 'self'; "
+                "frame-ancestors 'none'; "
+                "object-src 'none'; "
+                "base-uri 'self'"
+            ),
         )
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"

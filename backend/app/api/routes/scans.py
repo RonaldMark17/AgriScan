@@ -12,10 +12,36 @@ from app.models import Farm, Scan, User
 from app.schemas.domain import ScanRead
 from app.services.audit import write_audit_log
 from app.services.ml_service import detector, manual_entry_diagnosis
+from app.services.push_notifications import create_notification, dispatch_push_to_user
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 settings = get_settings()
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+NON_ALERT_SCAN_NAMES = {"healthy", "healthy crop", "invalid crop or leaf image", "low-confidence crop image"}
+
+
+def _scan_alert_details(scan: Scan, crop_label: str | None, crop_type: str | None) -> tuple[str, str, dict] | None:
+    disease_name = (scan.disease_name or "").strip()
+    if disease_name.lower() in NON_ALERT_SCAN_NAMES or (scan.confidence or 0) < 0.55:
+        return None
+
+    crop_name = (crop_label or crop_type or "Crop").strip()
+    confidence_percent = round((scan.confidence or 0) * 100)
+    title = "Crop disease alert"
+    if "pest" in disease_name.lower():
+        title = "Crop pest alert"
+    elif "review" in disease_name.lower():
+        title = "Crop scan needs review"
+
+    body = f"{crop_name}: {disease_name} detected with {confidence_percent}% confidence. Open AgriScan for guidance."
+    payload = {
+        "scan_id": scan.id,
+        "crop_label": crop_name,
+        "disease_name": disease_name,
+        "confidence": scan.confidence,
+        "url": "/disease-detector",
+    }
+    return title, body, payload
 
 
 @router.get("", response_model=list[ScanRead])
@@ -41,6 +67,7 @@ async def create_scan(
     symptoms: str | None = Form(default=None, max_length=1000),
     severity: str | None = Form(default=None, pattern="^(low|medium|high|mild|severe)$"),
     field_notes: str | None = Form(default=None, max_length=1500),
+    offline_mode: bool = Form(default=False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Scan:
@@ -74,10 +101,22 @@ async def create_scan(
         file_path.write_bytes(content)
 
     detection = (
-        detector.detect(str(file_path), crop_type=crop_type)
+        detector.detect(
+            str(file_path),
+            crop_type=crop_type,
+            original_filename=image.filename if image is not None else None,
+            allow_online_lookup=not offline_mode,
+        )
         if file_path is not None
         else manual_entry_diagnosis(crop_type, affected_part, symptoms, severity, field_notes)
     )
+    if file_path is not None and detection.disease_name == "Invalid crop or leaf image":
+        file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detection.cause or "Upload a clear crop or leaf photo for disease analysis.",
+        )
+
     scan = Scan(
         user_id=current_user.id,
         farm_id=farm_id,
@@ -90,6 +129,18 @@ async def create_scan(
     )
     db.add(scan)
     await db.flush()
+    scan_alert = _scan_alert_details(scan, detection.crop_label, crop_type)
+    scan_notification = None
+    if scan_alert is not None:
+        title, body, payload = scan_alert
+        scan_notification = await create_notification(
+            db,
+            user_id=current_user.id,
+            title=title,
+            body=body,
+            notification_type="disease_scan",
+            payload=payload,
+        )
     await write_audit_log(
         db,
         request,
@@ -106,5 +157,18 @@ async def create_scan(
     )
     await db.commit()
     await db.refresh(scan)
+    if scan_alert is not None and scan_notification is not None:
+        title, body, payload = scan_alert
+        await dispatch_push_to_user(
+            db,
+            user_id=current_user.id,
+            title=title,
+            body=body,
+            url="/disease-detector",
+            payload={**payload, "notification_id": scan_notification.id, "type": "disease_scan"},
+        )
     setattr(scan, "crop_label", detection.crop_label)
+    setattr(scan, "analysis_mode", detection.analysis_mode)
+    setattr(scan, "reference_url", detection.reference_url)
+    setattr(scan, "reference_title", detection.reference_title)
     return scan

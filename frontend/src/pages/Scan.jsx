@@ -23,6 +23,8 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import { recommendationsImage, soilScanImage } from '../assets/visuals/index.js';
+import { useI18n } from '../context/I18nContext.jsx';
+import { useVoice } from '../context/VoiceContext.jsx';
 import { reverseGeocodeLocation } from '../utils/openStreetMap.js';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 
@@ -150,17 +152,26 @@ function buildCropCard(item, result) {
   };
 }
 
-function buildAudioGuide(selectedCrop, result) {
+function buildAudioGuide(selectedCrop, result, t) {
   if (selectedCrop) {
-    return `${selectedCrop.name}. ${selectedCrop.guide} Watering: ${selectedCrop.watering} Fertilizer: ${selectedCrop.fertilizer}`;
+    return t('audioSelectedCropGuide', {
+      crop: selectedCrop.name,
+      guide: selectedCrop.guide,
+      watering: selectedCrop.watering,
+      fertilizer: selectedCrop.fertilizer,
+    });
   }
 
   if (result?.best_crop) {
-    const currentWeather = result.weather_summary ? ` Current weather: ${result.weather_summary}.` : '';
-    return `${result.best_crop} is the best crop recommendation right now.${currentWeather} ${result.recommendations?.[0]?.planting_window || ''}`.trim();
+    const weather = result.weather_summary ? t('audioCurrentWeather', { weather: result.weather_summary }) : '';
+    return t('audioBestCropGuide', {
+      crop: result.best_crop,
+      weather,
+      window: result.recommendations?.[0]?.planting_window || '',
+    }).trim();
   }
 
-  return 'AgriScan is ready to refresh crop recommendations using your latest soil scan and current location.';
+  return t('audioRecommendationReady');
 }
 
 function readStoredScans() {
@@ -349,7 +360,7 @@ function NutrientControl({ label, value, onChange }) {
   return (
     <div>
       <p className="text-sm font-bold text-stone-700">{label}</p>
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className="mt-2 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
         {nutrientLevels.map(([level, text]) => (
           <button
             key={level}
@@ -423,7 +434,7 @@ function InputGuideModal({ open, onClose }) {
   );
 }
 
-function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio }) {
+function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
   if (!crop) return null;
 
   return (
@@ -437,11 +448,11 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio }) {
       >
         <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-5 sm:p-6">
           <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">Crop Guide</p>
+            <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">{t('cropGuide')}</p>
             <h2 id="crop-guide-title" className="mt-1 text-2xl font-bold text-stone-950">{crop.name}</h2>
             <p className="mt-2 text-sm text-stone-500">{crop.variety} | {crop.window}</p>
           </div>
-          <button className="btn-icon shrink-0" type="button" onClick={onClose} aria-label="Close crop guide">
+          <button className="btn-icon shrink-0" type="button" onClick={onClose} aria-label={t('closeCropGuide')}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -453,18 +464,18 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio }) {
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div className="rounded-lg border border-stone-200 p-4">
-              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">Watering</p>
+              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('watering')}</p>
               <p className="mt-2 text-sm leading-6 text-stone-700">{crop.watering}</p>
             </div>
             <div className="rounded-lg border border-stone-200 p-4">
-              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">Fertilizer</p>
+              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('fertilizer')}</p>
               <p className="mt-2 text-sm leading-6 text-stone-700">{crop.fertilizer}</p>
             </div>
           </div>
 
           <div className="mt-5 rounded-lg border border-sky-100 bg-sky-50 p-4">
-            <p className="text-sm font-bold uppercase tracking-wide text-sky-700">Live Weather Context</p>
-            <p className="mt-2 text-sm text-stone-700">{weatherSummary || 'Refresh recommendations to pull the latest weather context for this crop.'}</p>
+            <p className="text-sm font-bold uppercase tracking-wide text-sky-700">{t('liveWeatherContext')}</p>
+            <p className="mt-2 text-sm text-stone-700">{weatherSummary || t('refreshWeatherContext')}</p>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -478,10 +489,10 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio }) {
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button className="btn-secondary" type="button" onClick={onPlayAudio}>
               <Play className="h-4 w-4" />
-              Play Audio Guide
+              {t('playAudioGuide')}
             </button>
             <button className="btn-primary" type="button" onClick={onClose}>
-              Close Guide
+              {t('closeCropGuide')}
             </button>
           </div>
         </div>
@@ -494,18 +505,18 @@ function CropCard({ crop, onGuide, weatherSummary }) {
   return (
     <article className="surface overflow-hidden rounded-lg">
       <div className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="grid h-14 w-14 place-items-center rounded-lg bg-leaf-50 text-leaf-600">
+        <div className="flex flex-col gap-4 min-[440px]:flex-row min-[440px]:items-start min-[440px]:justify-between">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-600 sm:h-14 sm:w-14">
               <Leaf className="h-7 w-7" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-stone-950">{crop.name}</h2>
+            <div className="min-w-0">
+              <h2 className="break-words text-xl font-bold text-stone-950 sm:text-2xl">{crop.name}</h2>
               <p className="text-base text-stone-500">{crop.variety}</p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-4xl font-bold text-leaf-600">{crop.score}%</p>
+          <div className="text-left min-[440px]:text-right">
+            <p className="text-3xl font-bold text-leaf-600 sm:text-4xl">{crop.score}%</p>
             <p className="text-xs font-bold uppercase text-stone-500">Suitability</p>
           </div>
         </div>
@@ -552,6 +563,8 @@ function CropCard({ crop, onGuide, weatherSummary }) {
 }
 
 export default function Scan() {
+  const { t } = useI18n();
+  const { speak, voiceTutorialsEnabled } = useVoice();
   const [form, setForm] = useState(initialForm);
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
@@ -791,19 +804,19 @@ export default function Scan() {
   }
 
   function playAudioGuide(crop = selectedCrop) {
-    const message = buildAudioGuide(crop, result);
+    const message = buildAudioGuide(crop, result, t);
 
-    if (!('speechSynthesis' in window)) {
-      setAudioStatus('Audio guide is not supported on this browser.');
+    if (!voiceTutorialsEnabled) {
+      setAudioStatus(t('voiceTutorialsDisabled'));
       return;
     }
 
-    window.speechSynthesis.cancel();
-    const utterance = new window.SpeechSynthesisUtterance(message);
-    utterance.rate = 0.95;
-    utterance.onend = () => setAudioStatus('Audio guide finished.');
-    window.speechSynthesis.speak(utterance);
-    setAudioStatus('Playing audio guide...');
+    const spoken = speak(message, {
+      kind: 'tutorial',
+      onEnd: () => setAudioStatus(t('audioFinished')),
+      onError: () => setAudioStatus(t('audioUnsupported')),
+    });
+    setAudioStatus(spoken.ok ? t('audioPlaying') : t('audioUnsupported'));
   }
 
   const locationLabel = result?.location?.label || locationState.label || 'Saved farm location if available';
@@ -819,11 +832,12 @@ export default function Scan() {
         weatherSummary={result?.weather_summary}
         onClose={() => setSelectedCrop(null)}
         onPlayAudio={() => playAudioGuide(selectedCrop)}
+        t={t}
       />
 
       <header className="overflow-hidden rounded-lg border border-leaf-100 bg-white">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="p-6 sm:p-8">
+          <div className="p-5 sm:p-8">
             <div className="flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-2 rounded-full bg-leaf-50 px-4 py-2 text-sm font-bold text-leaf-700">
                 <FlaskConical className="h-4 w-4" />
@@ -831,7 +845,7 @@ export default function Scan() {
               </span>
               <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">Recommendations Included</span>
             </div>
-            <h1 className="mt-5 text-3xl font-bold tracking-normal text-stone-950 sm:text-4xl">
+            <h1 className="mt-5 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-4xl">
               Manual Scan & Crop Recommendations
             </h1>
             <p className="mt-3 max-w-2xl text-base leading-7 text-stone-500 sm:text-lg">
@@ -852,7 +866,7 @@ export default function Scan() {
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-center justify-between gap-4 text-sm">
                     <span className="font-semibold text-leaf-900">{label}</span>
-                    <span className="font-bold text-stone-950">{value}</span>
+                    <span className="min-w-0 text-right font-bold text-stone-950">{value}</span>
                   </div>
                 ))}
               </div>
@@ -870,8 +884,8 @@ export default function Scan() {
         </div>
       </header>
 
-      <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <form onSubmit={submit} className="surface rounded-lg p-5 xl:sticky xl:top-24 xl:self-start">
+      <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] xl:gap-6">
+        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 xl:sticky xl:top-24 xl:self-start">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-stone-950">Soil Details</h2>
@@ -954,7 +968,7 @@ export default function Scan() {
             <NutrientControl label="Potassium" value={form.potassium_level} onChange={(value) => updateField('potassium_level', value)} />
             <FieldHelp>Low: yellow or brown leaf edges and weaker stems. Medium: balanced growth. High: strong tested potassium level.</FieldHelp>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-sm font-bold text-stone-700">Drainage</span>
                 <select className="field mt-2 h-12" value={form.drainage} onChange={(event) => updateField('drainage', event.target.value)}>
@@ -971,7 +985,7 @@ export default function Scan() {
               </label>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-sm font-bold text-stone-700">Season</span>
                 <select className="field mt-2 h-12" value={form.season} onChange={(event) => updateField('season', event.target.value)}>
@@ -1015,7 +1029,7 @@ export default function Scan() {
 
           <button className="btn-primary mt-6 h-12 w-full text-base" disabled={!canSubmit || loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sprout className="h-4 w-4" />}
-            {loading ? 'Checking soil...' : 'Recommend Best Crop'}
+            {loading ? t('checkingSoil') : t('recommendBestCrop')}
           </button>
         </form>
 
@@ -1033,11 +1047,11 @@ export default function Scan() {
                 <p className="mt-1 text-sm text-stone-600">{result?.weather_summary || 'Current live weather will appear here after soil analysis.'}</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button className="btn-secondary h-10 px-4 text-sm" onClick={() => runRecommendation(buildPayload())} type="button" disabled={!canSubmit || loading}>
+                <button className="btn-secondary h-10 w-full px-4 text-sm sm:w-auto" onClick={() => runRecommendation(buildPayload())} type="button" disabled={!canSubmit || loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
                   {loading ? 'Refreshing...' : 'Refresh Recommendation'}
                 </button>
-                <button className="btn-secondary h-10 px-4 text-sm" onClick={cycleSortMode} type="button">
+                <button className="btn-secondary h-10 w-full px-4 text-sm sm:w-auto" onClick={cycleSortMode} type="button">
                   <Filter className="h-4 w-4" />
                   Sort: {sortMode}
                 </button>
@@ -1060,7 +1074,7 @@ export default function Scan() {
                 </span>
                 <button className="btn-secondary h-10 px-4 text-sm" onClick={() => playAudioGuide()} type="button">
                   <Play className="h-4 w-4" />
-                  Play Audio Guide
+                  {t('playAudioGuide')}
                 </button>
               </div>
             </div>
@@ -1143,7 +1157,7 @@ export default function Scan() {
             <div className="shrink-0">
               <button className="btn-primary h-14 w-full px-8 text-base sm:w-auto" onClick={() => playAudioGuide()} type="button">
                 <Play className="h-5 w-5" />
-                Play Audio Guide
+                {t('playAudioGuide')}
               </button>
             </div>
           </section>

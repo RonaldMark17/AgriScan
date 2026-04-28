@@ -1,4 +1,4 @@
-import { Copy, QrCode, ShieldCheck } from 'lucide-react';
+import { Copy, Loader2, QrCode, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client.js';
@@ -13,6 +13,7 @@ export default function MfaSetup() {
   const [code, setCode] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [error, setError] = useState('');
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -30,6 +31,7 @@ export default function MfaSetup() {
   async function verify(event) {
     event.preventDefault();
     setError('');
+    setVerifying(true);
     try {
       const { data } = await api.post('/auth/mfa/verify-setup', { setup_token: setupToken, code });
       setRecoveryCodes(data.recovery_codes || []);
@@ -44,30 +46,37 @@ export default function MfaSetup() {
       }
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Invalid setup code.'));
+    } finally {
+      setVerifying(false);
     }
   }
 
   return (
-    <main className="grid min-h-screen place-items-center px-4 py-10">
-      <div className="surface w-full max-w-2xl rounded-lg p-6">
-        <div className="flex items-center gap-3">
+    <main className="grid min-h-svh place-items-center bg-[#f7faf6] px-3 py-6 sm:px-4 sm:py-10">
+      <div className="surface w-full max-w-2xl rounded-lg p-5 sm:p-6">
+        <div className="flex items-start gap-3 sm:items-center">
           <div className="grid h-12 w-12 place-items-center rounded-lg bg-leaf-100 text-leaf-800">
             <QrCode className="h-7 w-7" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-stone-950">Set up MFA</h1>
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl font-bold text-stone-950">Set up MFA</h1>
             <p className="text-sm text-stone-500">Scan the QR code with Google Authenticator or Microsoft Authenticator.</p>
           </div>
         </div>
 
-        {error && <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
+        {error && <div className="danger-message mt-4">{error}</div>}
 
-        {!setup && !error && <p className="mt-6 text-sm text-stone-500">Generating secure authenticator secret...</p>}
+        {!setup && !error && (
+          <div className="state-message mt-6 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-leaf-700" />
+            Generating secure authenticator secret...
+          </div>
+        )}
 
         {setup && !recoveryCodes.length && (
           <div className="mt-6 grid gap-6 md:grid-cols-[240px_1fr]">
-            <div className="rounded-lg border border-stone-200 bg-white p-4">
-              <img src={setup.qr_code_data_url} alt="MFA QR code" className="h-52 w-52" />
+            <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+              <img src={setup.qr_code_data_url} alt="MFA QR code" className="mx-auto aspect-square w-full max-w-52" />
             </div>
             <form onSubmit={verify}>
               <label className="text-sm font-semibold text-stone-700">Manual secret</label>
@@ -78,15 +87,18 @@ export default function MfaSetup() {
                 </button>
               </div>
               <label className="mt-5 block text-sm font-semibold text-stone-700">6-digit code</label>
-              <input className="field mt-2 text-center text-2xl font-bold tracking-[0.3em]" value={code} onChange={(event) => setCode(event.target.value.trim())} required />
-              <button className="btn-primary mt-5 w-full">Enable MFA</button>
+              <input className="field mt-2 text-center text-xl font-bold tracking-[0.18em] sm:text-2xl sm:tracking-[0.3em]" autoComplete="one-time-code" inputMode="numeric" placeholder="000000" value={code} onChange={(event) => setCode(event.target.value.trim())} required />
+              <button className="btn-primary mt-5 w-full" disabled={verifying}>
+                {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                Enable MFA
+              </button>
             </form>
           </div>
         )}
 
         {recoveryCodes.length > 0 && (
           <div className="mt-6">
-            <div className="rounded-lg bg-leaf-50 p-4 text-leaf-900">
+            <div className="success-message text-leaf-900">
               <div className="flex items-center gap-2 font-bold">
                 <ShieldCheck className="h-5 w-5" />
                 MFA is enabled

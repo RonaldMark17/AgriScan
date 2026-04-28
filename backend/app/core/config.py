@@ -38,11 +38,17 @@ class Settings(BaseSettings):
     google_maps_api_key: str | None = None
     sms_api_key: str | None = None
     ocr_api_key: str | None = None
+    vapid_subject: str = "mailto:noreply@agriscanproject.com"
     vapid_public_key: str | None = None
     vapid_private_key: str | None = None
 
     upload_dir: str = "uploads"
-    model_path: str = "app/ml/artifacts/crop_disease_model"
+    frontend_dist_dir: str = "static/frontend"
+    model_path: str = "app/ml/artifacts/crop_disease_model.keras"
+    model_labels_path: str = "app/ml/artifacts/labels.json"
+    enable_online_disease_lookup: bool = True
+    force_offline_disease_detection: bool = False
+    online_disease_lookup_timeout_seconds: float = 3.0
     require_admin_mfa: bool = True
 
     @property

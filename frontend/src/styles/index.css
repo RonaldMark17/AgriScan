@@ -5,7 +5,7 @@
 :root {
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #fbfbf9;
+  background: #f7faf6;
   color: #1d1d1f;
 }
 
@@ -15,13 +15,43 @@
 
 html {
   min-height: 100%;
-  background: #fbfbf9;
+  background: #f7faf6;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+
+main,
+section,
+article,
+aside,
+form,
+header,
+footer,
+nav,
+.surface {
+  min-width: 0;
+}
+
+:where(.grid) {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 button,
@@ -31,26 +61,62 @@ textarea {
   font: inherit;
 }
 
+button {
+  touch-action: manipulation;
+}
+
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-leaf-600 focus:ring-offset-2;
+  @apply focus:outline-none focus:ring-2 focus:ring-leaf-600 focus:ring-offset-2 focus:ring-offset-white;
 }
 
 .surface {
-  @apply border border-stone-200 bg-white shadow-[0_8px_20px_rgba(15,23,42,0.04)];
+  @apply border border-stone-200 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.055)];
 }
 
 .field {
-  @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-leaf-600 focus:ring-2 focus:ring-leaf-100;
+  @apply min-h-11 min-w-0 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-leaf-600 focus:ring-2 focus:ring-leaf-100 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-500;
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-leaf-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-leaf-800 focus-ring disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-lg bg-leaf-700 px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-leaf-800 focus-ring disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50 focus-ring disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-center text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50 focus-ring disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .btn-icon {
-  @apply inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 transition hover:bg-stone-50 focus-ring;
+  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 transition hover:border-stone-400 hover:bg-stone-50 focus-ring;
+}
+
+.page-stack {
+  @apply space-y-5 sm:space-y-6;
+}
+
+.eyebrow {
+  @apply text-xs font-bold uppercase tracking-wide text-leaf-700;
+}
+
+.section-title {
+  @apply text-base font-bold text-stone-950 sm:text-lg;
+}
+
+.status-pill {
+  @apply inline-flex min-h-7 items-center justify-center rounded-full px-2.5 py-1 text-xs font-bold;
+}
+
+.state-message {
+  @apply rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm font-medium text-stone-700;
+}
+
+.success-message {
+  @apply rounded-lg border border-leaf-100 bg-leaf-50 p-3 text-sm font-medium text-leaf-800;
+}
+
+.danger-message {
+  @apply rounded-lg border border-red-100 bg-red-50 p-3 text-sm font-medium text-red-700;
+}
+
+.table-shell {
+  @apply overflow-x-auto rounded-lg border border-stone-200 bg-white;
 }

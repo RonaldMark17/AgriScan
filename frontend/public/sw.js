@@ -1,4 +1,6 @@
-const CACHE_NAME = 'agriscan-cache-v2';
+/* global Response */
+
+const CACHE_NAME = 'agriscan-cache-v4';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -6,6 +8,7 @@ const APP_SHELL = [
   '/manifest.webmanifest',
   '/icons/icon.svg'
 ];
+const API_PATH_PREFIXES = ['/api/', '/uploads/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -36,15 +39,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (API_PATH_PREFIXES.some((prefix) => requestUrl.pathname.startsWith(prefix))) {
+    return;
+  }
+
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          if (response.ok) {
+            const requestClone = response.clone();
+            const indexClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, requestClone);
+              cache.put('/index.html', indexClone);
+            });
+          }
           return response;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('/offline.html')))
+        .catch(() =>
+          caches.match(request)
+            .then((cached) => cached || caches.match('/index.html'))
+            .then((cached) => cached || caches.match('/offline.html'))
+            .then((cached) => cached || new Response('Offline', { status: 503 }))
+        )
     );
     return;
   }
@@ -59,25 +77,37 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => cached || self.Response.error());
+        .catch(() => cached || new Response('', { status: 504, statusText: 'Offline' }));
       return cached || network;
     })
   );
 });
 
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : { title: 'AgriScan', body: 'New farm alert available.' };
+  let data = { title: 'AgriScan', body: 'New farm alert available.', url: '/' };
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { ...data, body: event.data.text() || data.body };
+    }
+  }
   event.waitUntil(
     self.registration.showNotification(data.title || 'AgriScan', {
       body: data.body || 'Open AgriScan for details.',
       icon: '/icons/icon.svg',
       badge: '/icons/icon.svg',
-      data: data.url || '/'
+      data: {
+        ...data,
+        url: data.url || '/'
+      }
     })
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow(event.notification.data || '/'));
+  const data = event.notification.data || {};
+  const targetUrl = typeof data === 'string' ? data : data.url || '/';
+  event.waitUntil(clients.openWindow(targetUrl));
 });
