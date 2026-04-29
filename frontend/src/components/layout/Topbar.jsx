@@ -42,6 +42,17 @@ function voiceGuideKey(pathname) {
   return 'voiceGuideDefault';
 }
 
+function pageTitleKey(pathname) {
+  if (pathname === '/') return 'dashboard';
+  if (pathname.startsWith('/farms')) return 'farms';
+  if (pathname.startsWith('/scan')) return 'manualScan';
+  if (pathname.startsWith('/disease-detector')) return 'diseaseDetector';
+  if (pathname.startsWith('/reports')) return 'reports';
+  if (pathname.startsWith('/settings')) return 'security';
+  if (pathname.startsWith('/admin')) return 'users';
+  return 'dashboard';
+}
+
 export default function Topbar() {
   const { logout, user } = useAuth();
   const { t } = useI18n();
@@ -128,47 +139,55 @@ export default function Topbar() {
 
   return (
     <>
-    <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
-      <div className="flex h-16 items-center gap-2 px-3 sm:gap-3 sm:px-5 lg:h-[72px] lg:px-9">
-        <Link to="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-leaf-600 text-white sm:h-11 sm:w-11">
-            <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
-          </span>
-          <span className="truncate text-lg font-bold text-leaf-600 sm:text-2xl">AgriScan</span>
-        </Link>
-
-        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <div className="hidden sm:block lg:hidden">
-            <LanguageToggle />
-          </div>
+      <header className="fixed inset-x-0 top-0 z-[70] border-b border-stone-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+        <div className="grid h-16 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center lg:h-[72px] lg:grid-cols-[256px_minmax(0,1fr)_auto]">
           <Link
-            to="/settings/security"
-          className="focus-ring hidden min-h-10 items-center gap-2 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-2 text-sm font-bold text-leaf-700 transition hover:bg-leaf-100 sm:inline-flex"
-            onClick={(event) => {
-              if (!voiceAssistantEnabled || !speechSupported) return;
-              event.preventDefault();
-              speak(t(voiceGuideKey(location.pathname)), { kind: 'assistant' });
-            }}
+            to="/"
+            className="flex h-full min-w-0 items-center gap-2 border-r border-stone-200 px-3 sm:gap-3 sm:px-5 lg:px-6"
           >
-            <Mic className="h-4 w-4" />
-            {voiceAssistantEnabled ? t('voiceActive') : t('voiceInactive')}
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-leaf-600 text-white sm:h-11 sm:w-11">
+              <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
+            </span>
+            <span className="truncate text-lg font-bold text-leaf-600 sm:text-2xl">AgriScan</span>
           </Link>
-          <div className="relative" ref={notificationsRef}>
-            <button
-              type="button"
-              className="focus-ring relative grid h-10 w-10 place-items-center rounded-lg border border-transparent bg-white text-stone-700 transition hover:border-stone-200 hover:bg-stone-50"
-              aria-label={t('notifications')}
-              aria-expanded={notificationsOpen}
-              onClick={() => {
-                setNotificationsOpen((current) => !current);
-                setProfileOpen(false);
+
+          <div className="hidden min-w-0 px-7 lg:block xl:px-9">
+            <p className="truncate text-lg font-bold text-stone-950">{t(pageTitleKey(location.pathname))}</p>
+            <p className="truncate text-xs font-semibold text-stone-500">{user?.full_name || user?.email || 'AgriScan User'}</p>
+          </div>
+
+          <div className="flex min-w-0 items-center justify-end gap-1.5 px-3 sm:gap-2 sm:px-5 lg:px-7 xl:px-9">
+            <div className="hidden sm:block lg:hidden">
+              <LanguageToggle />
+            </div>
+            <Link
+              to="/settings/security"
+              className="focus-ring hidden min-h-10 max-w-[12rem] items-center gap-2 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-2 text-sm font-bold text-leaf-700 transition hover:bg-leaf-100 md:inline-flex"
+              onClick={(event) => {
+                if (!voiceAssistantEnabled || !speechSupported) return;
+                event.preventDefault();
+                speak(t(voiceGuideKey(location.pathname)), { kind: 'assistant' });
               }}
             >
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 ? (
-                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
-              ) : null}
-            </button>
+              <Mic className="h-4 w-4" />
+              <span className="truncate">{voiceAssistantEnabled ? t('voiceActive') : t('voiceInactive')}</span>
+            </Link>
+            <div className="relative" ref={notificationsRef}>
+              <button
+                type="button"
+                className="focus-ring relative grid h-10 w-10 place-items-center rounded-lg border border-transparent bg-white text-stone-700 transition hover:border-stone-200 hover:bg-stone-50"
+                aria-label={t('notifications')}
+                aria-expanded={notificationsOpen}
+                onClick={() => {
+                  setNotificationsOpen((current) => !current);
+                  setProfileOpen(false);
+                }}
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 ? (
+                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+                ) : null}
+              </button>
 
             {notificationsOpen ? (
               <div className="surface absolute right-0 top-[calc(100%+10px)] z-40 w-[min(92vw,380px)] rounded-lg p-2">
@@ -283,30 +302,30 @@ export default function Topbar() {
             ) : null}
           </div>
         </div>
-      </div>
-    </header>
-    {confirmLogoutOpen ? (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4">
-        <div className="surface w-full max-w-md rounded-lg bg-white p-6">
-          <h2 className="text-xl font-bold text-stone-950">{t('logoutConfirmTitle')}</h2>
-          <p className="mt-3 text-sm leading-6 text-stone-600">{t('logoutConfirmBody')}</p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setConfirmLogoutOpen(false)}
-              disabled={loggingOut}
-            >
-              {t('cancel')}
-            </button>
-            <button type="button" className="btn-primary bg-red-600 hover:bg-red-700" onClick={handleLogout} disabled={loggingOut}>
-              {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-              {loggingOut ? t('loading') : t('confirmLogout')}
-            </button>
+        </div>
+      </header>
+      {confirmLogoutOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4">
+          <div className="surface w-full max-w-md rounded-lg bg-white p-6">
+            <h2 className="text-xl font-bold text-stone-950">{t('logoutConfirmTitle')}</h2>
+            <p className="mt-3 text-sm leading-6 text-stone-600">{t('logoutConfirmBody')}</p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setConfirmLogoutOpen(false)}
+                disabled={loggingOut}
+              >
+                {t('cancel')}
+              </button>
+              <button type="button" className="btn-primary bg-red-600 hover:bg-red-700" onClick={handleLogout} disabled={loggingOut}>
+                {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+                {loggingOut ? t('loading') : t('confirmLogout')}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    ) : null}
+      ) : null}
     </>
   );
 }
