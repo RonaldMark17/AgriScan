@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pyotp
 import qrcode
+from cryptography.fernet import InvalidToken
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,7 +67,10 @@ async def enable_mfa_and_issue_recovery_codes(db: AsyncSession, user: User, code
 def get_user_mfa_secret(user: User) -> str | None:
     if not user.mfa_setting or not user.mfa_setting.secret_encrypted:
         return None
-    return decrypt_secret(user.mfa_setting.secret_encrypted)
+    try:
+        return decrypt_secret(user.mfa_setting.secret_encrypted)
+    except (InvalidToken, ValueError):
+        return None
 
 
 async def verify_recovery_code(db: AsyncSession, user: User, code: str) -> bool:
