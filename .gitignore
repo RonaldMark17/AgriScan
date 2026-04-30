@@ -22,6 +22,8 @@ mysql_data/
 *.sqlite3
 backend/data/
 backend/static/frontend/*
+!backend/static/frontend/
+!backend/static/frontend/**
 .DS_Store
 Thumbs.db
 .wireframe_preview/

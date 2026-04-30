@@ -1,4 +1,4 @@
-import { Bell, Leaf, Loader2, LogOut, Mic, Settings, UserRound } from 'lucide-react';
+import { Bell, Leaf, Loader2, LogOut, Mic, Settings, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../../api/client.js';
@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useI18n } from '../../context/I18nContext.jsx';
 import { useVoice } from '../../context/VoiceContext.jsx';
 import { notifyUnreadNotifications } from '../../utils/browserNotifications.js';
+import { connectRealtimeAlertStream } from '../../utils/realtimeAlerts.js';
 import LanguageToggle from '../shared/LanguageToggle.jsx';
 
 function formatNotificationTime(value) {
@@ -32,6 +33,10 @@ function notificationTarget(notification) {
   }
 }
 
+function notificationId(notification) {
+  return notification?.id === undefined || notification?.id === null ? '' : String(notification.id);
+}
+
 function voiceGuideKey(pathname) {
   if (pathname === '/') return 'voiceGuideDashboard';
   if (pathname.startsWith('/farms')) return 'voiceGuideFarms';
@@ -55,7 +60,7 @@ function pageTitleKey(pathname) {
 }
 
 export default function Topbar() {
-  const { logout, user } = useAuth();
+  const { accessToken, logout, user } = useAuth();
   const { t } = useI18n();
   const { speak, speechSupported, voiceAssistantEnabled } = useVoice();
   const location = useLocation();
@@ -65,8 +70,11 @@ export default function Topbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [notificationToast, setNotificationToast] = useState(null);
   const notificationsRef = useRef(null);
   const profileRef = useRef(null);
+  const knownNotificationIdsRef = useRef(new Set());
+  const notificationsInitializedRef = useRef(false);
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
   const unreadCount = useMemo(() => notifications.filter((item) => !item.is_read).length, [notifications]);
 
@@ -75,6 +83,15 @@ export default function Topbar() {
     try {
       const { data } = await api.get('/notifications');
       const nextNotifications = Array.isArray(data) ? data : [];
+      const unreadNotifications = nextNotifications.filter((notification) => !notification.is_read && notificationId(notification));
+      const newUnreadNotifications = unreadNotifications.filter(
+        (notification) => !knownNotificationIdsRef.current.has(notificationId(notification))
+      );
+      if (notificationsInitializedRef.current && newUnreadNotifications.length > 0) {
+        setNotificationToast(newUnreadNotifications[0]);
+      }
+      knownNotificationIdsRef.current = new Set(nextNotifications.map(notificationId).filter(Boolean));
+      notificationsInitializedRef.current = true;
       setNotifications(nextNotifications);
       void notifyUnreadNotifications(nextNotifications, user?.id);
     } catch {
@@ -82,6 +99,12 @@ export default function Topbar() {
     } finally {
       if (!silent) setNotificationsLoading(false);
     }
+  }, [user?.id]);
+
+  useEffect(() => {
+    knownNotificationIdsRef.current = new Set();
+    notificationsInitializedRef.current = false;
+    setNotificationToast(null);
   }, [user?.id]);
 
   useEffect(() => {
@@ -103,7 +126,7 @@ export default function Topbar() {
       }
     };
 
-    const intervalId = window.setInterval(pollNotifications, 30000);
+    const intervalId = window.setInterval(pollNotifications, 60000);
     window.addEventListener('focus', pollNotifications);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -113,6 +136,21 @@ export default function Topbar() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [loadNotifications]);
+
+  useEffect(() => {
+    return connectRealtimeAlertStream({
+      token: accessToken,
+      onSignal: () => {
+        void loadNotifications({ silent: true });
+      },
+    });
+  }, [accessToken, loadNotifications]);
+
+  useEffect(() => {
+    if (!notificationToast) return undefined;
+    const timeoutId = window.setTimeout(() => setNotificationToast(null), 8000);
+    return () => window.clearTimeout(timeoutId);
+  }, [notificationToast]);
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -347,6 +385,31 @@ export default function Topbar() {
                 {loggingOut ? t('loading') : t('confirmLogout')}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+      {notificationToast ? (
+        <div className="fixed right-3 top-20 z-[90] w-[min(92vw,360px)] rounded-lg border border-leaf-100 bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
+              <Bell className="h-5 w-5" />
+            </div>
+            <Link
+              to={notificationTarget(notificationToast)}
+              className="min-w-0 flex-1"
+              onClick={() => setNotificationToast(null)}
+            >
+              <p className="truncate text-sm font-bold text-stone-950">{notificationToast.title}</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-600">{notificationToast.body}</p>
+            </Link>
+            <button
+              type="button"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+              aria-label="Dismiss notification"
+              onClick={() => setNotificationToast(null)}
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
       ) : null}

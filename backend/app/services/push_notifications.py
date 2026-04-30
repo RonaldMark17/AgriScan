@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
-from app.models import Notification, PushSubscription
+from app.models import Notification
+from app.services.realtime_alerts import realtime_alert_hub
 
 logger = logging.getLogger(__name__)
-PUSH_TTL_SECONDS = 7 * 24 * 60 * 60
 
 
 @dataclass(slots=True)
@@ -54,80 +50,18 @@ async def dispatch_push_to_user(
     url: str = "/",
     payload: dict[str, Any] | None = None,
 ) -> PushDispatchResult:
-    settings = get_settings()
-    if not settings.vapid_private_key or not settings.vapid_public_key:
-        logger.info("Skipping push notification because VAPID keys are not configured.")
-        return PushDispatchResult(skipped_reason="vapid_not_configured")
-
-    try:
-        from pywebpush import WebPushException, webpush
-    except ImportError:
-        logger.warning("Skipping push notification because pywebpush is not installed.")
-        return PushDispatchResult(skipped_reason="pywebpush_not_installed")
-
-    result = await db.execute(select(PushSubscription).where(PushSubscription.user_id == user_id))
-    subscriptions = list(result.scalars().all())
-    if not subscriptions:
-        return PushDispatchResult(skipped_reason="no_subscriptions")
-
-    message = {
+    realtime_payload = {
+        "type": "notifications.changed",
         "title": title,
         "body": body,
         "url": url,
-        **(payload or {}),
+        "payload": payload or {},
     }
-    dispatch = PushDispatchResult(attempted=len(subscriptions))
-    stale_subscriptions: list[PushSubscription] = []
-
-    for subscription in subscriptions:
-        subscription_info = _subscription_info(subscription)
-        if subscription_info is None:
-            dispatch.failed += 1
-            stale_subscriptions.append(subscription)
-            continue
-
-        try:
-            await asyncio.to_thread(
-                webpush,
-                subscription_info=subscription_info,
-                data=json.dumps(message),
-                vapid_private_key=settings.vapid_private_key,
-                vapid_claims={"sub": settings.vapid_subject},
-                ttl=PUSH_TTL_SECONDS,
-                timeout=10,
-                headers={"Urgency": "high"},
-            )
-            dispatch.sent += 1
-        except WebPushException as exc:
-            dispatch.failed += 1
-            response = getattr(exc, "response", None)
-            status_code = getattr(response, "status_code", None)
-            if status_code in {404, 410}:
-                stale_subscriptions.append(subscription)
-            else:
-                logger.info("Push notification failed for user %s: %s", user_id, exc)
-        except Exception:
-            dispatch.failed += 1
-            logger.info("Push notification failed for user %s.", user_id, exc_info=True)
-
-    if stale_subscriptions:
-        for subscription in stale_subscriptions:
-            await db.delete(subscription)
-        await db.commit()
-
-    return dispatch
-
-
-def _subscription_info(subscription: PushSubscription) -> dict[str, Any] | None:
-    keys = subscription.keys_json or {}
-    p256dh = keys.get("p256dh")
-    auth = keys.get("auth")
-    if not subscription.endpoint or not p256dh or not auth:
-        return None
-    return {
-        "endpoint": subscription.endpoint,
-        "keys": {
-            "p256dh": str(p256dh),
-            "auth": str(auth),
-        },
-    }
+    sent = await realtime_alert_hub.notify_user(user_id, realtime_payload)
+    logger.info(
+        "Notification for user %s saved; realtime signal sent to %s connection(s): %s",
+        user_id,
+        sent,
+        title,
+    )
+    return PushDispatchResult(attempted=sent, sent=sent, skipped_reason="manual_service_worker" if not sent else None)

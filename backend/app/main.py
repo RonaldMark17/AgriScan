@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -13,7 +13,9 @@ from app.api.api import api_router
 from app.core.config import get_settings
 from app.core.database import Base, AsyncSessionLocal, engine, run_schema_compatibility_migrations
 from app.core.middleware import SecurityHeadersMiddleware
+from app.core.security import decode_token
 from app.models import Role
+from app.services.realtime_alerts import realtime_alert_hub
 
 settings = get_settings()
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +92,33 @@ app.mount("/uploads", StaticFiles(directory=settings.upload_dir, check_dir=False
 @app.get("/health", tags=["system"])
 async def health() -> dict:
     return {"status": "ok", "service": "agriscan-api"}
+
+
+@app.websocket(f"{settings.api_v1_prefix}/notifications/stream")
+async def notification_stream(websocket: WebSocket) -> None:
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    try:
+        payload = decode_token(token, "access")
+        if not payload.get("mfa", True):
+            raise ValueError("MFA verification required.")
+        user_id = int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await realtime_alert_hub.connect(user_id, websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        await realtime_alert_hub.disconnect(user_id, websocket)
+    except Exception:
+        await realtime_alert_hub.disconnect(user_id, websocket)
+        await websocket.close()
 
 
 @app.get("/{full_path:path}", include_in_schema=False)

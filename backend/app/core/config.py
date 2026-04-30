@@ -40,9 +40,6 @@ class Settings(BaseSettings):
     google_maps_api_key: str | None = None
     sms_api_key: str | None = None
     ocr_api_key: str | None = None
-    vapid_subject: str = "mailto:noreply@agriscanproject.com"
-    vapid_public_key: str | None = None
-    vapid_private_key: str | None = None
 
     upload_dir: str = "uploads"
     frontend_dist_dir: str = "static/frontend"

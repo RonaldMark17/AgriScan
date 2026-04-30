@@ -46,6 +46,64 @@ function notificationUrl(notification) {
   return notification?.payload?.url || notification?.url || notification?.data?.url || '/';
 }
 
+function notificationPayload(notification) {
+  const id = notificationId(notification);
+  const url = notificationUrl(notification);
+  return {
+    ...(notification?.payload || {}),
+    title: notification?.title || 'AgriScan',
+    body: notification?.body || 'Open AgriScan for details.',
+    tag: notification?.tag || id || notification?.type || 'agriscan-notification',
+    notification_id: id || undefined,
+    type: notification?.type || 'system',
+    timestamp: notification?.created_at ? Date.parse(notification.created_at) || Date.now() : Date.now(),
+    url,
+  };
+}
+
+function waitForServiceWorkerResult(worker, payload) {
+  return new Promise((resolve) => {
+    const channel = new window.MessageChannel();
+    const timeoutId = window.setTimeout(() => resolve(false), 4000);
+
+    channel.port1.onmessage = (event) => {
+      window.clearTimeout(timeoutId);
+      resolve(Boolean(event.data?.ok));
+    };
+
+    worker.postMessage({ type: 'SHOW_NOTIFICATION', payload }, [channel.port2]);
+  });
+}
+
+async function showWithServiceWorker(payload) {
+  if (!('serviceWorker' in navigator)) return false;
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const worker = registration?.active || navigator.serviceWorker.controller;
+    if (worker && 'MessageChannel' in window) {
+      return await waitForServiceWorkerResult(worker, payload);
+    }
+    if (registration?.showNotification) {
+      await registration.showNotification(payload.title || 'AgriScan', {
+        body: payload.body || 'Open AgriScan for details.',
+        icon: '/icons/icon.svg',
+        badge: '/icons/icon.svg',
+        tag: payload.tag || payload.type || payload.notification_id || 'agriscan-notification',
+        renotify: true,
+        requireInteraction: true,
+        timestamp: Number(payload.timestamp) || Date.now(),
+        data: payload,
+      });
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 export function browserNotificationsSupported() {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
@@ -67,6 +125,22 @@ export function setManualNotificationsEnabled(enabled) {
   }
 }
 
+export async function ensureManualNotificationsEnabled() {
+  if (!browserNotificationsSupported()) return false;
+
+  let permission = window.Notification.permission;
+  if (permission === 'default') {
+    permission = await window.Notification.requestPermission();
+  }
+  if (permission !== 'granted') {
+    setManualNotificationsEnabled(false);
+    return false;
+  }
+
+  setManualNotificationsEnabled(true);
+  return true;
+}
+
 export function rememberNotificationIds(notifications, userId) {
   if (!Array.isArray(notifications)) return;
   const current = readShownNotificationIds(userId);
@@ -82,46 +156,28 @@ export async function showBrowserNotification(notification, userId) {
   if (!manualNotificationsEnabled()) return false;
 
   const id = notificationId(notification);
-  const title = notification?.title || 'AgriScan';
-  const url = notificationUrl(notification);
-  const options = {
-    body: notification?.body || 'Open AgriScan for details.',
-    icon: '/icons/icon.svg',
-    badge: '/icons/icon.svg',
-    tag: notification?.tag || id || notification?.type || 'agriscan-notification',
-    renotify: true,
-    requireInteraction: true,
-    timestamp: notification?.created_at ? Date.parse(notification.created_at) || Date.now() : Date.now(),
-    data: {
-      ...(notification?.payload || {}),
-      notification_id: id || undefined,
-      type: notification?.type || 'system',
-      url,
-    },
-  };
+  const payload = notificationPayload(notification);
 
-  try {
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration();
-      if (registration?.showNotification) {
-        await registration.showNotification(title, options);
-        if (id) {
-          const current = readShownNotificationIds(userId);
-          current.ids.add(id);
-          writeShownNotificationIds(userId, current.ids);
-        }
-        return true;
-      }
+  if (await showWithServiceWorker(payload)) {
+    if (id) {
+      const current = readShownNotificationIds(userId);
+      current.ids.add(id);
+      writeShownNotificationIds(userId, current.ids);
     }
-  } catch {
-    // Fall back to the window Notification API when the service worker is not ready.
+    return true;
   }
 
   try {
-    const browserNotification = new window.Notification(title, options);
+    const browserNotification = new window.Notification(payload.title, {
+      body: payload.body,
+      icon: '/icons/icon.svg',
+      badge: '/icons/icon.svg',
+      tag: payload.tag,
+      data: payload,
+    });
     browserNotification.onclick = () => {
       window.focus();
-      window.location.assign(url);
+      window.location.assign(payload.url || '/');
     };
     if (id) {
       const current = readShownNotificationIds(userId);

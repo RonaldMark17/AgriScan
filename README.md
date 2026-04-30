@@ -133,7 +133,6 @@ Set real secrets and API keys before deployment:
 - `SMTP_*`
 - `WEATHER_API_KEY`
 - `GOOGLE_MAPS_API_KEY`
-- `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`
 
 Use HTTPS, set `ENVIRONMENT=production`, configure `ALLOWED_HOSTS`, and run the frontend behind the included Nginx container or your platform edge.
 
@@ -154,13 +153,27 @@ Build the frontend with a same-origin API URL so browser requests go through the
 docker compose --env-file backend/.env up -d --build
 ```
 
-For production, set these values in `backend/.env` before rebuilding:
+For production, set the same-origin frontend API URL before rebuilding:
 
 ```env
 VITE_API_BASE_URL=/api/v1
-VAPID_PUBLIC_KEY=your-public-vapid-key
-VAPID_PRIVATE_KEY=your-private-vapid-key
 ```
+
+Browser notifications are shown manually through the service worker while AgriScan is open or running in a background tab, so no notification keys are required.
+
+## Notification Flow
+
+AgriScan notifications are not true Web Push. They do not use browser push subscriptions, PushManager, pywebpush, webpush, or VAPID keys.
+
+Current flow:
+
+- Backend saves notifications in the database, then sends a realtime WebSocket signal from `backend/app/main.py`.
+- Frontend listens with `connectRealtimeAlertStream` in `frontend/src/utils/realtimeAlerts.js`.
+- `frontend/src/components/layout/Topbar.jsx` reloads notifications on realtime signals and every 60 seconds while the app is running.
+- New unread items show an in-app toast plus a browser/local notification when permission is enabled.
+- Browser/local notifications are displayed through `frontend/public/sw.js` using `self.registration.showNotification(...)`.
+
+This means notifications work while AgriScan is open or in a background tab. True closed-browser delivery would require real Web Push, which is intentionally not enabled here.
 
 Seed or refresh the production demo data without wiping the SQLite volume:
 

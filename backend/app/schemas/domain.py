@@ -145,7 +145,3 @@ class AuditLogRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
-class PushSubscriptionRequest(BaseModel):
-    endpoint: str = Field(min_length=10, max_length=700)
-    keys: dict[str, Any]

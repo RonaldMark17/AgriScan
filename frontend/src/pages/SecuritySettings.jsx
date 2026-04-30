@@ -8,9 +8,9 @@ import { useVoice } from '../context/VoiceContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 import {
   browserNotificationsSupported,
+  ensureManualNotificationsEnabled,
   manualNotificationsEnabled,
   rememberNotificationIds,
-  setManualNotificationsEnabled,
   showBrowserNotification,
 } from '../utils/browserNotifications.js';
 
@@ -31,6 +31,7 @@ export default function SecuritySettings() {
   const [settingsStatus, setSettingsStatus] = useState('');
   const [pushLoading, setPushLoading] = useState(false);
   const [testPushLoading, setTestPushLoading] = useState(false);
+  const [testNotificationPreview, setTestNotificationPreview] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
@@ -147,21 +148,13 @@ export default function SecuritySettings() {
 
   async function enablePush() {
     setPushLoading(true);
-    if (!browserNotificationsSupported()) {
-      setPushStatus(t('pushUnsupported'));
-      setPushEnabled(false);
-      setPushLoading(false);
-      return;
-    }
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      setPushStatus(t('pushDenied'));
-      setPushEnabled(false);
-      setPushLoading(false);
-      return;
-    }
     try {
-      setManualNotificationsEnabled(true);
+      const enabled = await ensureManualNotificationsEnabled();
+      if (!enabled) {
+        setPushStatus(browserNotificationsSupported() ? t('pushDenied') : t('pushUnsupported'));
+        setPushEnabled(false);
+        return;
+      }
       const { data } = await api.get('/notifications');
       rememberNotificationIds(Array.isArray(data) ? data : [], user?.id);
       setPushEnabled(true);
@@ -177,21 +170,24 @@ export default function SecuritySettings() {
   async function sendTestPush() {
     setTestPushLoading(true);
     try {
-      const { data } = await api.post('/notifications/push/test');
-      await showBrowserNotification(
-        {
-          title: 'AgriScan notifications ready',
-          body: 'You will receive alerts while AgriScan is open on this device.',
-          type: 'system',
-          tag: 'agriscan-test-notification',
-          payload: { url: '/settings/security' },
-        },
-        user?.id
-      );
+      const enabled = await ensureManualNotificationsEnabled();
+      await api.post('/notifications/test');
+      const timestamp = Date.now();
+      const testNotification = {
+        id: `test-${timestamp}`,
+        title: 'AgriScan notifications ready',
+        body: 'You will receive alerts while AgriScan is open on this device.',
+        type: 'system',
+        tag: `agriscan-test-notification-${timestamp}`,
+        created_at: new Date(timestamp).toISOString(),
+        payload: { url: '/settings/security' },
+      };
+      const shown = enabled ? await showBrowserNotification(testNotification, user?.id) : false;
       const notificationsResponse = await api.get('/notifications');
       rememberNotificationIds(Array.isArray(notificationsResponse.data) ? notificationsResponse.data : [], user?.id);
-      setPushStatus(data?.message || t('testNotificationSent'));
-      setPushEnabled(true);
+      setTestNotificationPreview(testNotification);
+      setPushStatus(shown ? t('testNotificationSent') : t('testNotificationFallback'));
+      setPushEnabled(enabled);
     } catch (error) {
       setPushStatus(getApiErrorMessage(error, t('testNotificationFailed')));
     } finally {
@@ -428,6 +424,20 @@ export default function SecuritySettings() {
               <BellRing className="h-4 w-4" />
               {testPushLoading ? t('sendingTestNotification') : t('sendTestNotification')}
             </button>
+            {testNotificationPreview && (
+              <div className="mt-3 rounded-lg border border-leaf-100 bg-white p-4 text-sm shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
+                    <BellRing className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-stone-950">{testNotificationPreview.title}</p>
+                    <p className="mt-1 text-stone-600">{testNotificationPreview.body}</p>
+                    <p className="mt-2 text-xs font-semibold text-leaf-700">{t('testNotificationPreview')}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="surface rounded-lg p-4 sm:p-6">

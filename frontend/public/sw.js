@@ -1,6 +1,6 @@
 /* global Response */
 
-const CACHE_NAME = 'agriscan-cache-v8';
+const CACHE_NAME = 'agriscan-cache-v9';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -24,9 +24,59 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+function notificationOptions(data = {}) {
+  return {
+    body: data.body || 'Open AgriScan for details.',
+    icon: '/icons/icon.svg',
+    badge: '/icons/icon.svg',
+    tag: data.tag || data.type || data.notification_id || 'agriscan-notification',
+    renotify: true,
+    requireInteraction: true,
+    timestamp: Number(data.timestamp) || Date.now(),
+    vibrate: [120, 60, 120],
+    actions: [
+      { action: 'open', title: 'Open AgriScan' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ],
+    data: {
+      ...data,
+      url: data.url || '/'
+    }
+  };
+}
+
+function showAgriScanNotification(data = {}) {
+  return self.registration.showNotification(data.title || 'AgriScan', notificationOptions(data));
+}
+
+function replyToMessage(event, message) {
+  if (event.ports?.[0]) {
+    event.ports[0].postMessage(message);
+    return;
+  }
+  event.source?.postMessage(message);
+}
+
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'SKIP_WAITING') {
+  const message = event.data || {};
+
+  if (message.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+
+  if (message.type === 'SHOW_NOTIFICATION') {
+    event.waitUntil(
+      showAgriScanNotification(message.payload || {})
+        .then(() => replyToMessage(event, { type: 'SHOW_NOTIFICATION_RESULT', ok: true }))
+        .catch((error) =>
+          replyToMessage(event, {
+            type: 'SHOW_NOTIFICATION_RESULT',
+            ok: false,
+            error: error?.message || 'Notification failed'
+          })
+        )
+    );
   }
 });
 
@@ -79,37 +129,6 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => cached || new Response('', { status: 504, statusText: 'Offline' }));
       return cached || network;
-    })
-  );
-});
-
-self.addEventListener('push', (event) => {
-  let data = { title: 'AgriScan', body: 'New farm alert available.', url: '/' };
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch {
-      data = { ...data, body: event.data.text() || data.body };
-    }
-  }
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'AgriScan', {
-      body: data.body || 'Open AgriScan for details.',
-      icon: '/icons/icon.svg',
-      badge: '/icons/icon.svg',
-      tag: data.tag || data.type || 'agriscan-notification',
-      renotify: true,
-      requireInteraction: true,
-      timestamp: Number(data.timestamp) || Date.now(),
-      vibrate: [120, 60, 120],
-      actions: [
-        { action: 'open', title: 'Open AgriScan' },
-        { action: 'dismiss', title: 'Dismiss' }
-      ],
-      data: {
-        ...data,
-        url: data.url || '/'
-      }
     })
   );
 });

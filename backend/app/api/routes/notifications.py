@@ -4,9 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models import Notification, PushSubscription, User
+from app.models import Notification, User
 from app.schemas.common import MessageResponse
-from app.schemas.domain import NotificationRead, PushSubscriptionRequest
+from app.schemas.domain import NotificationRead
 from app.services.push_notifications import create_notification, dispatch_push_to_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -37,29 +37,8 @@ async def mark_read(
     return MessageResponse(message="Notification marked as read.")
 
 
-@router.post("/push/subscribe", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-async def subscribe_push(
-    payload: PushSubscriptionRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> MessageResponse:
-    if not payload.keys.get("p256dh") or not payload.keys.get("auth"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Push subscription keys are incomplete.")
-
-    result = await db.execute(select(PushSubscription).where(PushSubscription.endpoint == payload.endpoint))
-    subscription = result.scalar_one_or_none()
-    if subscription is None:
-        subscription = PushSubscription(user_id=current_user.id, endpoint=payload.endpoint, keys_json=payload.keys)
-        db.add(subscription)
-    else:
-        subscription.user_id = current_user.id
-        subscription.keys_json = payload.keys
-    await db.commit()
-    return MessageResponse(message="Push subscription saved.")
-
-
-@router.post("/push/test", response_model=MessageResponse)
-async def send_test_push(
+@router.post("/test", response_model=MessageResponse)
+async def send_test_notification(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
@@ -84,11 +63,5 @@ async def send_test_push(
         payload={"notification_id": notification.id, "type": "system"},
     )
     if dispatch.sent:
-        return MessageResponse(message=f"Test notification saved and sent to {dispatch.sent} device(s).")
-    if dispatch.skipped_reason == "vapid_not_configured":
-        return MessageResponse(message="Test notification saved. Manual browser notifications do not need VAPID keys.")
-    if dispatch.skipped_reason == "pywebpush_not_installed":
-        return MessageResponse(message="Test notification saved. Manual browser notifications are available in the web app.")
-    if dispatch.skipped_reason == "no_subscriptions":
-        return MessageResponse(message="Test notification saved. AgriScan will show it while the web app is open.")
-    return MessageResponse(message="Test notification saved, but no browser push was delivered.")
+        return MessageResponse(message=f"Test notification saved. Realtime signal sent to {dispatch.sent} open device(s).")
+    return MessageResponse(message="Test notification saved. The service worker will show it while AgriScan is open.")
