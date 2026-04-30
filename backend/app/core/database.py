@@ -75,6 +75,8 @@ SQLITE_COMPATIBILITY_COLUMNS = {
         "created_at": "created_at DATETIME",
     },
     "audit_logs": {
+        "actor_user_id": "actor_user_id INTEGER",
+        "action": "action VARCHAR(120)",
         "resource_type": "resource_type VARCHAR(80)",
         "resource_id": "resource_id VARCHAR(80)",
         "ip_address": "ip_address VARCHAR(80)",
@@ -83,21 +85,29 @@ SQLITE_COMPATIBILITY_COLUMNS = {
         "created_at": "created_at DATETIME",
     },
     "mfa_settings": {
+        "user_id": "user_id INTEGER",
         "secret_encrypted": "secret_encrypted BLOB",
         "enabled": "enabled BOOLEAN NOT NULL DEFAULT 0",
         "verified_at": "verified_at DATETIME",
         "created_at": "created_at DATETIME",
     },
     "recovery_codes": {
+        "user_id": "user_id INTEGER",
+        "code_hash": "code_hash VARCHAR(255)",
         "used_at": "used_at DATETIME",
         "created_at": "created_at DATETIME",
     },
     "password_reset_otps": {
+        "user_id": "user_id INTEGER",
+        "otp_hash": "otp_hash VARCHAR(255)",
+        "expires_at": "expires_at DATETIME",
         "attempts": "attempts INTEGER NOT NULL DEFAULT 0",
         "used_at": "used_at DATETIME",
         "created_at": "created_at DATETIME",
     },
     "refresh_tokens": {
+        "user_id": "user_id INTEGER",
+        "token_hash": "token_hash VARCHAR(255)",
         "device_name": "device_name VARCHAR(160)",
         "ip_address": "ip_address VARCHAR(80)",
         "user_agent": "user_agent VARCHAR(500)",
@@ -106,6 +116,7 @@ SQLITE_COMPATIBILITY_COLUMNS = {
         "created_at": "created_at DATETIME",
     },
     "device_login_history": {
+        "user_id": "user_id INTEGER",
         "ip_address": "ip_address VARCHAR(80)",
         "user_agent": "user_agent VARCHAR(500)",
         "device_name": "device_name VARCHAR(160)",
@@ -114,11 +125,13 @@ SQLITE_COMPATIBILITY_COLUMNS = {
         "created_at": "created_at DATETIME",
     },
     "login_attempts": {
+        "email": "email VARCHAR(255)",
         "ip_address": "ip_address VARCHAR(80)",
         "success": "success BOOLEAN NOT NULL DEFAULT 0",
         "created_at": "created_at DATETIME",
     },
     "push_subscriptions": {
+        "user_id": "user_id INTEGER",
         "endpoint": "endpoint VARCHAR(700)",
         "subscription_keys": "subscription_keys JSON",
         "created_at": "created_at DATETIME",
