@@ -1,7 +1,7 @@
 import { BellRing, CheckCircle2, ClipboardList, Cloud, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api/client.js';
+import { api, getVapidPublicKey } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
@@ -151,7 +151,7 @@ export default function SecuritySettings() {
       setPushLoading(false);
       return;
     }
-    const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+    const publicKey = await getVapidPublicKey();
     if (!publicKey) {
       setPushStatus(t('pushMissingKey'));
       setPushEnabled(false);

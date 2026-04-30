@@ -15,6 +15,7 @@ agriscan/
 ## Quick Start With Docker
 
 ```bash
+cp backend/.env.example backend/.env
 docker compose up --build
 ```
 
@@ -150,7 +151,21 @@ FORCE_HTTPS_REDIRECT=false
 Build the frontend with a same-origin API URL so browser requests go through the HTTPS site:
 
 ```bash
-VITE_API_BASE_URL=/api/v1 docker compose up -d --build
+docker compose --env-file backend/.env up -d --build
+```
+
+For production, set these values in `backend/.env` before rebuilding:
+
+```env
+VITE_API_BASE_URL=/api/v1
+VAPID_PUBLIC_KEY=your-public-vapid-key
+VAPID_PRIVATE_KEY=your-private-vapid-key
+```
+
+Seed or refresh the production demo data without wiping the SQLite volume:
+
+```bash
+docker compose --env-file backend/.env exec backend python scripts/seed_demo_data.py --password "ChangeMe!2026Secure"
 ```
 
 If an Ubuntu host Nginx terminates TLS in front of Docker, use `deploy/nginx/agriscan.conf.example` as the site config. The important detail is that `/api/` proxies to `http://127.0.0.1:8000` without a trailing path, so FastAPI still receives `/api/v1/...`.
