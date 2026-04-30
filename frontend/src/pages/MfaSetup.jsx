@@ -9,6 +9,7 @@ export default function MfaSetup() {
   const location = useLocation();
   const { saveTokensFromMfaSetup, accessToken, user: currentUser } = useAuth();
   const setupToken = location.state?.setupToken || null;
+  const rememberMe = Boolean(location.state?.rememberMe);
   const [setup, setSetup] = useState(null);
   const [code, setCode] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
@@ -33,7 +34,7 @@ export default function MfaSetup() {
     setError('');
     setVerifying(true);
     try {
-      const { data } = await api.post('/auth/mfa/verify-setup', { setup_token: setupToken, code });
+      const { data } = await api.post('/auth/mfa/verify-setup', { setup_token: setupToken, code, remember_me: rememberMe });
       setRecoveryCodes(data.recovery_codes || []);
       if (data.access_token) {
         saveTokensFromMfaSetup({

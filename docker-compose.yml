@@ -1,24 +1,4 @@
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: agriscan-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: agriscanproject
-      MYSQL_USER: agriscan
-      MYSQL_PASSWORD: agriscan_password
-      MYSQL_ROOT_PASSWORD: root_password
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_password"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   backend:
     build:
       context: ./backend
@@ -27,17 +7,16 @@ services:
     env_file:
       - ./backend/.env.example
     environment:
-      DATABASE_URL: mysql+aiomysql://agriscan:agriscan_password@mysql:3306/agriscanproject
+      DATABASE_URL: sqlite+aiosqlite:///./data/agriscan.sqlite3
+      AUTO_CREATE_TABLES: "true"
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
       CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-http://agriscann.duckdns.org,https://agriscann.duckdns.org}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,agriscann.duckdns.org}
     ports:
       - "8000:8000"
     volumes:
+      - backend_data:/app/data
       - backend_uploads:/app/uploads
-    depends_on:
-      mysql:
-        condition: service_healthy
 
   frontend:
     build:
@@ -53,5 +32,5 @@ services:
       - backend
 
 volumes:
-  mysql_data:
+  backend_data:
   backend_uploads:

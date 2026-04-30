@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from app.api.api import api_router
 from app.core.config import get_settings
-from app.core.database import Base, AsyncSessionLocal, engine
+from app.core.database import Base, AsyncSessionLocal, engine, run_schema_compatibility_migrations
 from app.core.middleware import SecurityHeadersMiddleware
 from app.models import Role
 
@@ -54,6 +54,7 @@ async def seed_roles() -> None:
 async def lifespan(app: FastAPI):
     if settings.auto_create_tables:
         async with engine.begin() as conn:
+            await run_schema_compatibility_migrations(conn)
             await conn.run_sync(Base.metadata.create_all)
     if settings.auto_create_tables:
         await seed_roles()

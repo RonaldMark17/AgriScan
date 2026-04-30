@@ -9,6 +9,7 @@ export default function MfaChallenge() {
   const navigate = useNavigate();
   const location = useLocation();
   const mfaToken = location.state?.mfaToken;
+  const rememberMe = Boolean(location.state?.rememberMe);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ export default function MfaChallenge() {
     setError('');
     setLoading(true);
     try {
-      await verifyMfa({ mfa_token: mfaToken, code, device_name: 'AgriScan PWA' });
+      await verifyMfa({ mfa_token: mfaToken, code, device_name: 'AgriScan PWA', remember_me: rememberMe });
       navigate('/', { replace: true });
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Invalid MFA code.'));

@@ -10,7 +10,7 @@ from sqlalchemy.exc import OperationalError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.database import AsyncSessionLocal, Base, engine
+from app.core.database import AsyncSessionLocal, Base, engine, run_schema_compatibility_migrations
 from app.core.security import get_password_hash, validate_strong_password
 from app.models import (
     AuditLog,
@@ -67,6 +67,7 @@ def polygon_around(latitude: float, longitude: float, span: float = 0.002) -> di
 
 async def ensure_schema_and_roles() -> None:
     async with engine.begin() as conn:
+        await run_schema_compatibility_migrations(conn)
         await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as db:
@@ -730,8 +731,8 @@ def main() -> None:
         asyncio.run(runner())
     except OperationalError as exc:
         raise SystemExit(
-            "Could not connect to MySQL using the current backend .env DATABASE_URL. "
-            "Make sure MySQL is running, the agriscanproject database exists, and the configured user has access."
+            "Could not connect to the configured backend database. "
+            "Make sure DATABASE_URL is reachable and AUTO_CREATE_TABLES is enabled for first-time SQLite setup."
         ) from exc
 
 

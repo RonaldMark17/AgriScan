@@ -1,6 +1,6 @@
 /* global Response */
 
-const CACHE_NAME = 'agriscan-cache-v5';
+const CACHE_NAME = 'agriscan-cache-v7';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -97,6 +97,7 @@ self.addEventListener('push', (event) => {
       body: data.body || 'Open AgriScan for details.',
       icon: '/icons/icon.svg',
       badge: '/icons/icon.svg',
+      tag: data.tag || data.type || 'agriscan-notification',
       data: {
         ...data,
         url: data.url || '/'

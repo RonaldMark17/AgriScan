@@ -89,12 +89,12 @@ def create_mfa_token(user_id: int, purpose: str = "challenge") -> str:
     )
 
 
-def create_refresh_token(user_id: int, role: str) -> str:
+def create_refresh_token(user_id: int, role: str, *, expires_days: int | None = None, remember_me: bool = False) -> str:
     return create_token(
         subject=str(user_id),
         token_type="refresh",
-        expires_delta=timedelta(days=settings.refresh_token_expire_days),
-        extra_claims={"role": role},
+        expires_delta=timedelta(days=expires_days or settings.refresh_token_expire_days),
+        extra_claims={"role": role, "remember": remember_me},
     )
 
 

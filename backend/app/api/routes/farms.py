@@ -120,14 +120,14 @@ async def approve_farm(
     approval_notification = None
     if previous_status != "approved":
         title = "Farm approved"
-        body = f"{farm.name} is approved and ready for AgriScan features."
+        body = f"Your farm {farm.name} has been approved. You can now use AgriScan farm features."
         approval_notification = await create_notification(
             db,
             user_id=farm.user_id,
             title=title,
             body=body,
             notification_type="farm_approved",
-            payload={"farm_id": farm.id, "url": "/farms"},
+            payload={"farm_id": farm.id, "url": "/farms", "approved_by_user_id": current_user.id},
         )
     await write_audit_log(db, request, "farm.approved", actor=current_user, resource_type="farm", resource_id=farm.id)
     await db.commit()
@@ -139,7 +139,12 @@ async def approve_farm(
             title=approval_notification.title,
             body=approval_notification.body,
             url="/farms",
-            payload={"farm_id": farm.id, "notification_id": approval_notification.id, "type": "farm_approved"},
+            payload={
+                "farm_id": farm.id,
+                "notification_id": approval_notification.id,
+                "type": "farm_approved",
+                "tag": f"farm-approved-{farm.id}",
+            },
         )
     return farm
 

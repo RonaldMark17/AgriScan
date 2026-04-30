@@ -15,14 +15,16 @@ class Settings(BaseSettings):
     cors_extra_origins: str = "http://agriscann.duckdns.org,https://agriscann.duckdns.org"
     allowed_hosts: str = "localhost,127.0.0.1,agriscann.duckdns.org"
 
-    database_url: str = "mysql+aiomysql://agriscan:@localhost:3306/agriscanproject"
-    auto_create_tables: bool = False
+    database_url: str = "sqlite+aiosqlite:///./data/agriscan.sqlite3"
+    mysql_database_url: str | None = None
+    auto_create_tables: bool = True
 
     secret_key: str = Field(default="change-this-access-secret")
     refresh_secret_key: str = Field(default="change-this-refresh-secret")
     fernet_key: str | None = None
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 14
+    remember_me_expire_days: int = 30
     session_timeout_minutes: int = 30
     use_secure_cookies: bool = False
     force_https_redirect: bool = False

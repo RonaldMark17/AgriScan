@@ -5,7 +5,9 @@ const ACCESS_KEY = 'agriscan_access';
 const REFRESH_KEY = 'agriscan_refresh';
 const USER_KEY = 'agriscan_user';
 const LAST_ACTIVE_KEY = 'agriscan_last_active';
+const REMEMBER_UNTIL_KEY = 'agriscan_remember_until';
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+const REMEMBER_ME_MS = 30 * 24 * 60 * 60 * 1000;
 
 const AuthContext = createContext(null);
 
@@ -65,6 +67,11 @@ export function AuthProvider({ children }) {
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       setUser(data.user);
     }
+    if (data.remember_me === true) {
+      localStorage.setItem(REMEMBER_UNTIL_KEY, String(Date.now() + REMEMBER_ME_MS));
+    } else if (data.remember_me === false) {
+      localStorage.removeItem(REMEMBER_UNTIL_KEY);
+    }
     localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
   }, []);
 
@@ -73,6 +80,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(LAST_ACTIVE_KEY);
+    localStorage.removeItem(REMEMBER_UNTIL_KEY);
     setTokenState(null);
     setRefreshTokenState(null);
     setUser(null);
@@ -153,8 +161,17 @@ export function AuthProvider({ children }) {
     async function bootstrapSession() {
       const storedAccessToken = localStorage.getItem(ACCESS_KEY);
       const storedRefreshToken = localStorage.getItem(REFRESH_KEY);
+      const rememberUntil = Number(localStorage.getItem(REMEMBER_UNTIL_KEY) || 0);
 
       if (!storedRefreshToken) {
+        if (active) {
+          setSessionReady(true);
+        }
+        return;
+      }
+
+      if (rememberUntil && rememberUntil <= Date.now()) {
+        clearSession();
         if (active) {
           setSessionReady(true);
         }
@@ -219,10 +236,18 @@ export function AuthProvider({ children }) {
       api.interceptors.request.eject(requestId);
       api.interceptors.response.eject(responseId);
     };
-  }, [refreshSession, refreshToken]);
+  }, [clearSession, refreshSession, refreshToken]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
+      const rememberUntil = Number(localStorage.getItem(REMEMBER_UNTIL_KEY) || 0);
+      if (rememberUntil > Date.now()) {
+        return;
+      }
+      if (rememberUntil && rememberUntil <= Date.now()) {
+        clearSession();
+        return;
+      }
       const lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY) || Date.now());
       if (accessToken && Date.now() - lastActive > SESSION_TIMEOUT_MS) {
         clearSession();

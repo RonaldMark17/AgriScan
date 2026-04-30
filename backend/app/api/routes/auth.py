@@ -50,7 +50,7 @@ from app.services.mfa import (
     verify_recovery_code,
     verify_totp,
 )
-from app.services.rate_limiter import login_limiter, validate_captcha
+from app.services.rate_limiter import login_limiter
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 settings = get_settings()
@@ -80,9 +80,11 @@ async def _issue_token_pair(
     user: User,
     request: Request | None,
     device_name: str | None = None,
+    remember_me: bool = False,
 ) -> tuple[str, str]:
     access_token = create_access_token(user.id, user.role.name, mfa_verified=True)
-    refresh_token = create_refresh_token(user.id, user.role.name)
+    refresh_days = settings.remember_me_expire_days if remember_me else settings.refresh_token_expire_days
+    refresh_token = create_refresh_token(user.id, user.role.name, expires_days=refresh_days, remember_me=remember_me)
     db.add(
         RefreshToken(
             user_id=user.id,
@@ -90,22 +92,23 @@ async def _issue_token_pair(
             device_name=device_name,
             ip_address=get_request_ip(request) if request else None,
             user_agent=request.headers.get("user-agent") if request else None,
-            expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
+            expires_at=datetime.now(UTC) + timedelta(days=refresh_days),
         )
     )
     await db.flush()
     return access_token, refresh_token
 
 
-def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+def _set_refresh_cookie(response: Response, refresh_token: str, remember_me: bool = False) -> None:
     if settings.use_secure_cookies:
+        max_age_days = settings.remember_me_expire_days if remember_me else settings.refresh_token_expire_days
         response.set_cookie(
             "agriscan_refresh",
             refresh_token,
             httponly=True,
             secure=True,
             samesite="strict",
-            max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+            max_age=max_age_days * 24 * 60 * 60,
         )
 
 
@@ -168,9 +171,6 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many login attempts. Try again in {limit.retry_after_seconds} seconds.",
         )
-    if limit.captcha_required and not validate_captcha(payload.captcha_token):
-        return LoginResponse(status="captcha_required", captcha_required=True, message="CAPTCHA verification is required.")
-
     result = await db.execute(
         select(User).options(selectinload(User.role), selectinload(User.mfa_setting)).where(User.email == payload.email.lower())
     )
@@ -192,14 +192,12 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
         login_limiter.record_failure(limiter_key)
         if user:
             user.failed_login_attempts += 1
-            user.captcha_required = user.failed_login_attempts >= 3
         await write_audit_log(db, request, "auth.login_failed", actor=user, resource_type="user", resource_id=user.id if user else None)
         await db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
 
     login_limiter.record_success(limiter_key)
     user.failed_login_attempts = 0
-    user.captcha_required = False
     user.last_login_at = datetime.now(UTC)
     await write_audit_log(db, request, "auth.password_verified", actor=user, resource_type="user", resource_id=user.id)
 
@@ -208,19 +206,19 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     if role_requires_mfa and not mfa_enabled:
         setup_token = create_mfa_token(user.id, purpose="setup")
         await db.commit()
-        return LoginResponse(status="mfa_setup_required", setup_token=setup_token, user=_user_payload(user))
+        return LoginResponse(status="mfa_setup_required", setup_token=setup_token, user=_user_payload(user), remember_me=payload.remember_me)
 
     if mfa_enabled:
         mfa_token = create_mfa_token(user.id, purpose="challenge")
         await db.commit()
-        return LoginResponse(status="mfa_required", mfa_token=mfa_token, user=_user_payload(user))
+        return LoginResponse(status="mfa_required", mfa_token=mfa_token, user=_user_payload(user), remember_me=payload.remember_me)
 
-    access_token, refresh_token = await _issue_token_pair(db, user, request, payload.device_name)
+    access_token, refresh_token = await _issue_token_pair(db, user, request, payload.device_name, payload.remember_me)
     await send_new_login_alert(user.email, payload.device_name, ip_address)
     await write_audit_log(db, request, "auth.login_success", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
-    _set_refresh_cookie(response, refresh_token)
-    return LoginResponse(status="ok", access_token=access_token, refresh_token=refresh_token, user=_user_payload(user))
+    _set_refresh_cookie(response, refresh_token, payload.remember_me)
+    return LoginResponse(status="ok", access_token=access_token, refresh_token=refresh_token, user=_user_payload(user), remember_me=payload.remember_me)
 
 
 @router.post("/mfa/verify", response_model=LoginResponse)
@@ -241,12 +239,12 @@ async def verify_mfa(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authenticator or recovery code.")
 
     user.last_login_at = datetime.now(UTC)
-    access_token, refresh_token = await _issue_token_pair(db, user, request, payload.device_name)
+    access_token, refresh_token = await _issue_token_pair(db, user, request, payload.device_name, payload.remember_me)
     await send_new_login_alert(user.email, payload.device_name, get_request_ip(request))
     await write_audit_log(db, request, "auth.mfa_success", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
-    _set_refresh_cookie(response, refresh_token)
-    return LoginResponse(status="ok", access_token=access_token, refresh_token=refresh_token, user=_user_payload(user))
+    _set_refresh_cookie(response, refresh_token, payload.remember_me)
+    return LoginResponse(status="ok", access_token=access_token, refresh_token=refresh_token, user=_user_payload(user), remember_me=payload.remember_me)
 
 
 @router.post("/refresh", response_model=TokenPair)
@@ -273,10 +271,11 @@ async def refresh_token(payload: RefreshRequest, request: Request, response: Res
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Inactive or missing user.")
 
     stored.revoked_at = datetime.now(UTC)
-    access_token, new_refresh_token = await _issue_token_pair(db, user, request, stored.device_name)
+    remember_me = bool(decoded.get("remember"))
+    access_token, new_refresh_token = await _issue_token_pair(db, user, request, stored.device_name, remember_me)
     await write_audit_log(db, request, "auth.token_refreshed", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
-    _set_refresh_cookie(response, new_refresh_token)
+    _set_refresh_cookie(response, new_refresh_token, remember_me)
     return TokenPair(access_token=access_token, refresh_token=new_refresh_token)
 
 
@@ -386,8 +385,8 @@ async def verify_mfa_setup(
     recovery_codes = await enable_mfa_and_issue_recovery_codes(db, user)
     access_token = refresh_token = None
     if payload.setup_token:
-        access_token, refresh_token = await _issue_token_pair(db, user, request)
-        _set_refresh_cookie(response, refresh_token)
+        access_token, refresh_token = await _issue_token_pair(db, user, request, remember_me=payload.remember_me)
+        _set_refresh_cookie(response, refresh_token, payload.remember_me)
     await write_audit_log(db, request, "auth.mfa_enabled", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
     return MFASetupVerifyResponse(
@@ -395,6 +394,7 @@ async def verify_mfa_setup(
         recovery_codes=recovery_codes,
         access_token=access_token,
         refresh_token=refresh_token,
+        remember_me=payload.remember_me,
     )
 
 

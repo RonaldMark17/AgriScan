@@ -120,3 +120,19 @@ button {
 .table-shell {
   @apply overflow-x-auto rounded-lg border border-stone-200 bg-white;
 }
+
+@media (max-width: 1023px) {
+  .topbar-shell,
+  .topbar-brand {
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+
+  .notification-menu {
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    width: auto !important;
+    max-height: min(22rem, calc(100dvh - 5rem));
+    overflow: hidden;
+  }
+}

@@ -1,6 +1,6 @@
 # AgriScan: AI-Powered Smart Farming PWA
 
-AgriScan is a full-stack Progressive Web App for smart agriculture monitoring and crop disease detection in the Philippines. It includes a React/Vite PWA frontend, FastAPI backend, MySQL schema, JWT authentication, refresh tokens, authenticator-app MFA, audit logs, farm mapping data, AI scan workflow, marketplace listings, reports, Docker support, and integration hooks for weather, maps, email, SMS, OCR, and push notifications.
+AgriScan is a full-stack Progressive Web App for smart agriculture monitoring and crop disease detection in the Philippines. It includes a React/Vite PWA frontend, FastAPI backend, SQLite offline persistence, JWT authentication, refresh tokens, authenticator-app MFA, audit logs, farm mapping data, AI scan workflow, marketplace listings, reports, Docker support, and integration hooks for weather, maps, email, SMS, OCR, and push notifications.
 
 ## Project Structure
 
@@ -8,8 +8,8 @@ AgriScan is a full-stack Progressive Web App for smart agriculture monitoring an
 agriscan/
   backend/                 FastAPI API, auth, MFA, ML integration, reports
   frontend/                React + Vite + Tailwind PWA
-  database/schema.sql      MySQL schema and role seed data
-  docker-compose.yml       MySQL + backend + frontend
+  database/schema.sql      SQLite schema and role seed data
+  docker-compose.yml       Backend + frontend with persisted SQLite data
 ```
 
 ## Quick Start With Docker
@@ -24,7 +24,7 @@ Open:
 - Backend API: `http://localhost:8000`
 - API docs: `http://localhost:8000/docs`
 
-Create the first admin after MySQL is running:
+Create the first admin after the backend is installed:
 
 ```bash
 cd backend
@@ -70,9 +70,17 @@ Open `http://localhost:8000`; API routes remain under `/api/v1`.
 
 Database:
 
+SQLite is the default local/offline database and is stored at `backend/data/agriscan.sqlite3`.
+Tables and role seed data are created automatically when `AUTO_CREATE_TABLES=true`.
+
+To copy an existing MySQL database into SQLite once:
+
 ```bash
-mysql -u root -p < database/schema.sql
+cd backend
+python scripts/migrate_mysql_to_sqlite.py --replace
 ```
+
+Set `MYSQL_DATABASE_URL` in `backend/.env` or pass `--source-url` if the old MySQL database is not on the default local connection.
 
 ## Security Highlights
 
@@ -82,7 +90,7 @@ mysql -u root -p < database/schema.sql
 - One-time backup recovery codes
 - Admin and inspector MFA policy
 - Role-based access control for admin, farmer, inspector, and buyer workflows
-- Login attempt limiter and CAPTCHA escalation
+- Login attempt limiter
 - Forgot password via email OTP
 - Device login history and new login alerts
 - Audit logs for security-sensitive actions

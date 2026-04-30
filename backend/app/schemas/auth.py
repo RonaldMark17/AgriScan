@@ -22,14 +22,15 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    captcha_token: str | None = None
     device_name: str | None = Field(default=None, max_length=160)
+    remember_me: bool = False
 
 
 class VerifyMFARequest(BaseModel):
     mfa_token: str
     code: str = Field(min_length=6, max_length=32)
     device_name: str | None = Field(default=None, max_length=160)
+    remember_me: bool = False
 
 
 class TokenPair(BaseModel):
@@ -46,7 +47,7 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     mfa_token: str | None = None
     setup_token: str | None = None
-    captcha_required: bool = False
+    remember_me: bool = False
     message: str | None = None
 
 
@@ -89,6 +90,7 @@ class MFASetupStartRequest(BaseModel):
 class MFASetupVerifyRequest(BaseModel):
     setup_token: str | None = None
     code: str = Field(min_length=6, max_length=6)
+    remember_me: bool = False
 
 
 class MFASetupVerifyResponse(BaseModel):
@@ -97,6 +99,7 @@ class MFASetupVerifyResponse(BaseModel):
     access_token: str | None = None
     refresh_token: str | None = None
     token_type: str = "bearer"
+    remember_me: bool = False
 
 
 class MFADisableRequest(BaseModel):

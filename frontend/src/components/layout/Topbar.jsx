@@ -140,10 +140,10 @@ export default function Topbar() {
   return (
     <>
       <header className="fixed inset-x-0 top-0 z-[70] border-b border-stone-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-        <div className="grid h-16 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center lg:h-[72px] lg:grid-cols-[256px_minmax(0,1fr)_auto]">
+        <div className="topbar-shell flex h-16 min-w-0 items-center justify-between lg:grid lg:h-[72px] lg:grid-cols-[256px_minmax(0,1fr)_auto]">
           <Link
             to="/"
-            className="flex h-full min-w-0 items-center gap-2 border-r border-stone-200 px-3 sm:gap-3 sm:px-5 lg:px-6"
+            className="topbar-brand flex h-full min-w-0 flex-1 items-center gap-2 border-0 px-3 sm:gap-3 sm:px-5 lg:flex-none lg:px-6"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-leaf-600 text-white sm:h-11 sm:w-11">
               <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -156,7 +156,7 @@ export default function Topbar() {
             <p className="truncate text-xs font-semibold text-stone-500">{user?.full_name || user?.email || 'AgriScan User'}</p>
           </div>
 
-          <div className="flex min-w-0 items-center justify-end gap-1.5 px-3 sm:gap-2 sm:px-5 lg:px-7 xl:px-9">
+          <div className="flex shrink-0 items-center justify-end gap-1.5 border-0 px-3 sm:gap-2 sm:px-5 lg:min-w-0 lg:px-7 xl:px-9">
             <div className="hidden sm:block lg:hidden">
               <LanguageToggle />
             </div>
@@ -190,7 +190,7 @@ export default function Topbar() {
               </button>
 
             {notificationsOpen ? (
-              <div className="surface absolute right-0 top-[calc(100%+10px)] z-40 w-[min(92vw,380px)] rounded-lg p-2">
+              <div className="notification-menu surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-[min(92vw,380px)]">
                 <div className="flex items-center justify-between px-3 py-2">
                   <div>
                     <p className="text-sm font-bold text-stone-950">{t('notifications')}</p>

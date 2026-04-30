@@ -1,6 +1,6 @@
 # AgriScan Backend
 
-FastAPI backend for AgriScan with JWT authentication, refresh tokens, TOTP MFA, recovery codes, role-based access control, audit logs, MySQL persistence, ML scan integration, weather hooks, and PDF reports.
+FastAPI backend for AgriScan with JWT authentication, refresh tokens, TOTP MFA, recovery codes, role-based access control, audit logs, SQLite offline persistence, ML scan integration, weather hooks, and PDF reports.
 
 ## Local Run
 
@@ -12,7 +12,12 @@ copy .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Use `AUTO_CREATE_TABLES=true` only for local development. For capstone or production demos, import `database/schema.sql` into MySQL first.
+SQLite is the default database and is created at `data/agriscan.sqlite3` when `AUTO_CREATE_TABLES=true`.
+To copy an existing MySQL database into SQLite, set `MYSQL_DATABASE_URL` in `.env` and run:
+
+```bash
+python scripts/migrate_mysql_to_sqlite.py --replace
+```
 
 ## Serve the Frontend From FastAPI
 
