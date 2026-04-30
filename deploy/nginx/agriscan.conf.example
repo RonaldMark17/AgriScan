@@ -39,6 +39,26 @@ server {
     proxy_pass http://127.0.0.1:8000;
   }
 
+  location /assets/ {
+    proxy_pass http://127.0.0.1:5173;
+  }
+
+  location /icons/ {
+    proxy_pass http://127.0.0.1:5173;
+  }
+
+  location = /manifest.webmanifest {
+    proxy_pass http://127.0.0.1:5173;
+  }
+
+  location = /sw.js {
+    proxy_pass http://127.0.0.1:5173;
+  }
+
+  location = /offline.html {
+    proxy_pass http://127.0.0.1:5173;
+  }
+
   location / {
     proxy_pass http://127.0.0.1:5173;
   }
