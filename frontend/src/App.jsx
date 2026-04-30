@@ -4,6 +4,7 @@ import ProtectedRoute from './router/ProtectedRoute.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Farms from './pages/Farms.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
 import Login from './pages/Login.jsx';
 import MfaChallenge from './pages/MfaChallenge.jsx';
 import MfaSetup from './pages/MfaSetup.jsx';
@@ -18,6 +19,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/register" element={<Register />} />
         <Route path="/mfa" element={<MfaChallenge />} />
         <Route path="/mfa/setup" element={<MfaSetup />} />

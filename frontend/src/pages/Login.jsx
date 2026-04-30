@@ -166,6 +166,11 @@ export default function Login() {
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
                 />
               </div>
+              <div className="mt-3 flex justify-end">
+                <Link className="text-sm font-semibold text-leaf-700 hover:text-leaf-900" to="/forgot-password">
+                  {t('forgotPassword')}
+                </Link>
+              </div>
 
               <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-stone-200 bg-white p-3 transition hover:bg-stone-50">
                 <input

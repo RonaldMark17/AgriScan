@@ -1,11 +1,18 @@
 import { BellRing, CheckCircle2, ClipboardList, Cloud, Copy, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, getVapidPublicKey } from '../api/client.js';
+import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
+import {
+  browserNotificationsSupported,
+  manualNotificationsEnabled,
+  rememberNotificationIds,
+  setManualNotificationsEnabled,
+  showBrowserNotification,
+} from '../utils/browserNotifications.js';
 
 export default function SecuritySettings() {
   const { user } = useAuth();
@@ -52,7 +59,7 @@ export default function SecuritySettings() {
   const checkPushStatus = useCallback(async () => {
     setPushChecking(true);
 
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    if (!browserNotificationsSupported()) {
       setPushEnabled(false);
       setPushStatus(t('pushUnsupported'));
       setPushChecking(false);
@@ -60,11 +67,7 @@ export default function SecuritySettings() {
     }
 
     try {
-      const registration = await navigator.serviceWorker.getRegistration();
-      const subscription = registration ? await registration.pushManager.getSubscription() : null;
-
-      if (subscription) {
-        api.post('/notifications/push/subscribe', subscription.toJSON()).catch(() => {});
+      if (manualNotificationsEnabled()) {
         setPushEnabled(true);
         setPushStatus(t('pushAlreadyEnabled'));
       } else {
@@ -144,7 +147,7 @@ export default function SecuritySettings() {
 
   async function enablePush() {
     setPushLoading(true);
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    if (!browserNotificationsSupported()) {
       setPushStatus(t('pushUnsupported'));
       setPushEnabled(false);
       setPushLoading(false);
@@ -157,33 +160,12 @@ export default function SecuritySettings() {
       setPushLoading(false);
       return;
     }
-    const publicKey = await getVapidPublicKey();
-    if (!publicKey) {
-      setPushStatus(t('pushMissingKey'));
-      setPushEnabled(false);
-      setPushLoading(false);
-      return;
-    }
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const applicationServerKey = urlBase64ToUint8Array(publicKey);
-      let subscription = await registration.pushManager.getSubscription();
-      if (
-        subscription?.options?.applicationServerKey &&
-        !uint8ArraysEqual(subscription.options.applicationServerKey, applicationServerKey)
-      ) {
-        await subscription.unsubscribe();
-        subscription = null;
-      }
-      subscription = subscription || (
-        await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey,
-        })
-      );
-      await api.post('/notifications/push/subscribe', subscription.toJSON());
+      setManualNotificationsEnabled(true);
+      const { data } = await api.get('/notifications');
+      rememberNotificationIds(Array.isArray(data) ? data : [], user?.id);
       setPushEnabled(true);
-      setPushStatus(t('pushAlreadyEnabled'));
+      setPushStatus(t('pushEnabled'));
     } catch (error) {
       setPushEnabled(false);
       setPushStatus(getApiErrorMessage(error, t('pushFailed')));
@@ -196,6 +178,18 @@ export default function SecuritySettings() {
     setTestPushLoading(true);
     try {
       const { data } = await api.post('/notifications/push/test');
+      await showBrowserNotification(
+        {
+          title: 'AgriScan notifications ready',
+          body: 'You will receive alerts while AgriScan is open on this device.',
+          type: 'system',
+          tag: 'agriscan-test-notification',
+          payload: { url: '/settings/security' },
+        },
+        user?.id
+      );
+      const notificationsResponse = await api.get('/notifications');
+      rememberNotificationIds(Array.isArray(notificationsResponse.data) ? notificationsResponse.data : [], user?.id);
       setPushStatus(data?.message || t('testNotificationSent'));
       setPushEnabled(true);
     } catch (error) {
@@ -508,18 +502,4 @@ function SettingToggle({ title, body, active = false, onToggle }) {
       </button>
     </div>
   );
-}
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-}
-
-function uint8ArraysEqual(left, right) {
-  const leftBytes = new Uint8Array(left);
-  const rightBytes = new Uint8Array(right);
-  if (leftBytes.length !== rightBytes.length) return false;
-  return leftBytes.every((value, index) => value === rightBytes[index]);
 }

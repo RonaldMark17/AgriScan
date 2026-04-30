@@ -40,7 +40,7 @@ function isTokenExpired(token) {
 }
 
 function isAuthPath(pathname) {
-  return pathname === '/login' || pathname === '/register' || pathname.startsWith('/mfa');
+  return pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname.startsWith('/mfa');
 }
 
 function getRememberUntil() {

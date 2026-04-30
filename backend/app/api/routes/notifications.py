@@ -86,9 +86,9 @@ async def send_test_push(
     if dispatch.sent:
         return MessageResponse(message=f"Test notification saved and sent to {dispatch.sent} device(s).")
     if dispatch.skipped_reason == "vapid_not_configured":
-        return MessageResponse(message="Test notification saved. Add backend VAPID keys to send browser pushes.")
+        return MessageResponse(message="Test notification saved. Manual browser notifications do not need VAPID keys.")
     if dispatch.skipped_reason == "pywebpush_not_installed":
-        return MessageResponse(message="Test notification saved. Install backend requirements to send browser pushes.")
+        return MessageResponse(message="Test notification saved. Manual browser notifications are available in the web app.")
     if dispatch.skipped_reason == "no_subscriptions":
-        return MessageResponse(message="Test notification saved. Enable push notifications on this device first.")
+        return MessageResponse(message="Test notification saved. AgriScan will show it while the web app is open.")
     return MessageResponse(message="Test notification saved, but no browser push was delivered.")

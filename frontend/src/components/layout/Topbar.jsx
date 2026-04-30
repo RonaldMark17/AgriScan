@@ -5,6 +5,7 @@ import { api } from '../../api/client.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useI18n } from '../../context/I18nContext.jsx';
 import { useVoice } from '../../context/VoiceContext.jsx';
+import { notifyUnreadNotifications } from '../../utils/browserNotifications.js';
 import LanguageToggle from '../shared/LanguageToggle.jsx';
 
 function formatNotificationTime(value) {
@@ -69,17 +70,19 @@ export default function Topbar() {
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
   const unreadCount = useMemo(() => notifications.filter((item) => !item.is_read).length, [notifications]);
 
-  const loadNotifications = useCallback(async () => {
-    setNotificationsLoading(true);
+  const loadNotifications = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setNotificationsLoading(true);
     try {
       const { data } = await api.get('/notifications');
-      setNotifications(Array.isArray(data) ? data : []);
+      const nextNotifications = Array.isArray(data) ? data : [];
+      setNotifications(nextNotifications);
+      void notifyUnreadNotifications(nextNotifications, user?.id);
     } catch {
-      setNotifications([]);
+      if (!silent) setNotifications([]);
     } finally {
-      setNotificationsLoading(false);
+      if (!silent) setNotificationsLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     loadNotifications();
@@ -89,6 +92,27 @@ export default function Topbar() {
     if (!notificationsOpen) return;
     loadNotifications();
   }, [notificationsOpen, loadNotifications]);
+
+  useEffect(() => {
+    const pollNotifications = () => {
+      void loadNotifications({ silent: true });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        pollNotifications();
+      }
+    };
+
+    const intervalId = window.setInterval(pollNotifications, 30000);
+    window.addEventListener('focus', pollNotifications);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', pollNotifications);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadNotifications]);
 
   useEffect(() => {
     function handlePointerDown(event) {
