@@ -43,6 +43,15 @@ function isAuthPath(pathname) {
   return pathname === '/login' || pathname === '/register' || pathname.startsWith('/mfa');
 }
 
+function getRememberUntil() {
+  return Number(localStorage.getItem(REMEMBER_UNTIL_KEY) || 0);
+}
+
+function hasActiveRememberedSession() {
+  const rememberUntil = getRememberUntil();
+  return Boolean(localStorage.getItem(REFRESH_KEY) && rememberUntil && rememberUntil > Date.now());
+}
+
 export function AuthProvider({ children }) {
   const [accessToken, setTokenState] = useState(() => localStorage.getItem(ACCESS_KEY));
   const [refreshToken, setRefreshTokenState] = useState(() => localStorage.getItem(REFRESH_KEY));
@@ -87,6 +96,13 @@ export function AuthProvider({ children }) {
     setAccessToken(null);
   }, []);
 
+  const clearAccessSession = useCallback(() => {
+    localStorage.removeItem(ACCESS_KEY);
+    localStorage.removeItem(LAST_ACTIVE_KEY);
+    setTokenState(null);
+    setAccessToken(null);
+  }, []);
+
   const login = useCallback(
     async (payload) => {
       const { data } = await api.post('/auth/login', payload);
@@ -123,6 +139,11 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     const token = localStorage.getItem(REFRESH_KEY);
+    if (hasActiveRememberedSession()) {
+      clearAccessSession();
+      return;
+    }
+
     try {
       if (accessToken) {
         await api.post('/auth/logout', { refresh_token: token });
@@ -130,7 +151,7 @@ export function AuthProvider({ children }) {
     } finally {
       clearSession();
     }
-  }, [accessToken, clearSession]);
+  }, [accessToken, clearAccessSession, clearSession]);
 
   const refreshSession = useCallback(async () => {
     if (refreshPromiseRef.current) {
@@ -144,8 +165,14 @@ export function AuthProvider({ children }) {
 
     refreshPromiseRef.current = api
       .post('/auth/refresh', { refresh_token: token })
-      .then(({ data }) => {
-        persistSession({ ...data, user });
+      .then(async ({ data }) => {
+        let sessionUser = user;
+        if (!sessionUser && data.access_token) {
+          setAccessToken(data.access_token);
+          const meResponse = await api.get('/auth/me');
+          sessionUser = meResponse.data;
+        }
+        persistSession({ ...data, user: sessionUser });
         return data.access_token;
       })
       .finally(() => {
@@ -155,13 +182,26 @@ export function AuthProvider({ children }) {
     return refreshPromiseRef.current;
   }, [persistSession, user]);
 
+  const restoreRememberedSession = useCallback(async () => {
+    if (!hasActiveRememberedSession()) {
+      return false;
+    }
+    try {
+      await refreshSession();
+      return true;
+    } catch {
+      clearSession();
+      return false;
+    }
+  }, [clearSession, refreshSession]);
+
   useEffect(() => {
     let active = true;
 
     async function bootstrapSession() {
       const storedAccessToken = localStorage.getItem(ACCESS_KEY);
       const storedRefreshToken = localStorage.getItem(REFRESH_KEY);
-      const rememberUntil = Number(localStorage.getItem(REMEMBER_UNTIL_KEY) || 0);
+      const rememberUntil = getRememberUntil();
 
       if (!storedRefreshToken) {
         if (active) {
@@ -240,7 +280,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      const rememberUntil = Number(localStorage.getItem(REMEMBER_UNTIL_KEY) || 0);
+      const rememberUntil = getRememberUntil();
       if (rememberUntil > Date.now()) {
         return;
       }
@@ -269,8 +309,22 @@ export function AuthProvider({ children }) {
       saveTokensFromMfaSetup,
       logout,
       clearSession,
+      restoreRememberedSession,
+      hasRememberedSession: hasActiveRememberedSession,
     }),
-    [accessToken, refreshToken, user, sessionReady, login, register, verifyMfa, saveTokensFromMfaSetup, logout, clearSession]
+    [
+      accessToken,
+      refreshToken,
+      user,
+      sessionReady,
+      login,
+      register,
+      verifyMfa,
+      saveTokensFromMfaSetup,
+      logout,
+      clearSession,
+      restoreRememberedSession,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

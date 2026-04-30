@@ -31,6 +31,8 @@ from app.schemas.auth import (
     MFASetupVerifyRequest,
     MFASetupVerifyResponse,
     PasswordResetRequest,
+    RecoveryCodesResponse,
+    RecoveryCodesRotateRequest,
     RefreshRequest,
     RegisterRequest,
     TokenPair,
@@ -396,6 +398,28 @@ async def verify_mfa_setup(
         refresh_token=refresh_token,
         remember_me=payload.remember_me,
     )
+
+
+@router.post("/mfa/recovery-codes", response_model=RecoveryCodesResponse)
+async def rotate_admin_recovery_codes(
+    payload: RecoveryCodesRotateRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RecoveryCodesResponse:
+    if current_user.role.name != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can manage recovery codes.")
+    if not current_user.mfa_setting or not current_user.mfa_setting.enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Set up MFA before generating recovery codes.")
+    if not verify_password(payload.password, current_user.hashed_password):
+        await write_audit_log(db, request, "auth.recovery_codes_failed", actor=current_user, resource_type="user", resource_id=current_user.id)
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Password confirmation failed.")
+
+    recovery_codes = await enable_mfa_and_issue_recovery_codes(db, current_user)
+    await write_audit_log(db, request, "auth.recovery_codes_rotated", actor=current_user, resource_type="user", resource_id=current_user.id)
+    await db.commit()
+    return RecoveryCodesResponse(message="New recovery codes generated. Save them now.", recovery_codes=recovery_codes)
 
 
 @router.post("/mfa/disable", response_model=MessageResponse)

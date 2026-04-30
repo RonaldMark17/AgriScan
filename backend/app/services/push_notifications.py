@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.models import Notification, PushSubscription
 
 logger = logging.getLogger(__name__)
+PUSH_TTL_SECONDS = 7 * 24 * 60 * 60
 
 
 @dataclass(slots=True)
@@ -92,6 +93,9 @@ async def dispatch_push_to_user(
                 data=json.dumps(message),
                 vapid_private_key=settings.vapid_private_key,
                 vapid_claims={"sub": settings.vapid_subject},
+                ttl=PUSH_TTL_SECONDS,
+                timeout=10,
+                headers={"Urgency": "high"},
             )
             dispatch.sent += 1
         except WebPushException as exc:

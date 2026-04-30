@@ -1,4 +1,4 @@
-import { BellRing, CheckCircle2, ClipboardList, Cloud, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
+import { BellRing, CheckCircle2, ClipboardList, Cloud, Copy, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, getVapidPublicKey } from '../api/client.js';
@@ -25,12 +25,17 @@ export default function SecuritySettings() {
   const [pushLoading, setPushLoading] = useState(false);
   const [testPushLoading, setTestPushLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+  const [recoveryCodes, setRecoveryCodes] = useState([]);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState('');
   const [toggles, setToggles] = useState(() => ({
     autoSync: localStorage.getItem('agriscan_auto_sync') !== 'false',
   }));
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
   const mfaEnabled = Boolean(user?.mfa_enabled);
   const mfaRequired = roleName === 'admin' || roleName === 'inspector';
+  const isAdmin = roleName === 'admin';
 
   const fetchDevices = useCallback(async () => {
     setHistoryLoading(true);
@@ -59,6 +64,7 @@ export default function SecuritySettings() {
       const subscription = registration ? await registration.pushManager.getSubscription() : null;
 
       if (subscription) {
+        api.post('/notifications/push/subscribe', subscription.toJSON()).catch(() => {});
         setPushEnabled(true);
         setPushStatus(t('pushAlreadyEnabled'));
       } else {
@@ -160,11 +166,19 @@ export default function SecuritySettings() {
     }
     try {
       const registration = await navigator.serviceWorker.ready;
-      const existing = await registration.pushManager.getSubscription();
-      const subscription = existing || (
+      const applicationServerKey = urlBase64ToUint8Array(publicKey);
+      let subscription = await registration.pushManager.getSubscription();
+      if (
+        subscription?.options?.applicationServerKey &&
+        !uint8ArraysEqual(subscription.options.applicationServerKey, applicationServerKey)
+      ) {
+        await subscription.unsubscribe();
+        subscription = null;
+      }
+      subscription = subscription || (
         await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          applicationServerKey,
         })
       );
       await api.post('/notifications/push/subscribe', subscription.toJSON());
@@ -188,6 +202,33 @@ export default function SecuritySettings() {
       setPushStatus(getApiErrorMessage(error, t('testNotificationFailed')));
     } finally {
       setTestPushLoading(false);
+    }
+  }
+
+  async function generateRecoveryCodes(event) {
+    event.preventDefault();
+    setRecoveryLoading(true);
+    setRecoveryStatus('');
+    setRecoveryCodes([]);
+    try {
+      const { data } = await api.post('/auth/mfa/recovery-codes', { password: recoveryPassword });
+      setRecoveryCodes(data?.recovery_codes || []);
+      setRecoveryPassword('');
+      setRecoveryStatus(data?.message || t('recoveryCodesGenerated'));
+    } catch (error) {
+      setRecoveryStatus(getApiErrorMessage(error, t('recoveryCodesFailed')));
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }
+
+  async function copyRecoveryCodes() {
+    if (!recoveryCodes.length) return;
+    try {
+      await navigator.clipboard.writeText(recoveryCodes.join('\n'));
+      setRecoveryStatus(t('recoveryCodesCopied'));
+    } catch {
+      setRecoveryStatus(t('recoveryCodesCopyFailed'));
     }
   }
 
@@ -325,6 +366,54 @@ export default function SecuritySettings() {
               </Link>
             )}
 
+            {isAdmin && (
+              <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-4 text-sm">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-amber-700">
+                    <KeyRound className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-stone-950">{t('adminRecoveryCodes')}</p>
+                    <p className="mt-1 text-stone-600">{t('adminRecoveryCodesBody')}</p>
+                  </div>
+                </div>
+                <form className="mt-4 space-y-3" onSubmit={generateRecoveryCodes}>
+                  <input
+                    className="field"
+                    type="password"
+                    autoComplete="current-password"
+                    aria-label={t('password')}
+                    placeholder={t('confirmPassword')}
+                    value={recoveryPassword}
+                    onChange={(event) => setRecoveryPassword(event.target.value)}
+                    required
+                    disabled={!mfaEnabled || recoveryLoading}
+                  />
+                  <button className="btn-secondary w-full" type="submit" disabled={!mfaEnabled || recoveryLoading}>
+                    <RefreshCw className={`h-4 w-4 ${recoveryLoading ? 'animate-spin' : ''}`} />
+                    {recoveryLoading ? t('generatingRecoveryCodes') : t('generateRecoveryCodes')}
+                  </button>
+                </form>
+                {!mfaEnabled && <p className="mt-3 text-xs font-semibold text-amber-700">{t('recoveryCodesSetupRequired')}</p>}
+                {recoveryStatus && <p className="mt-3 text-xs font-semibold text-amber-800">{recoveryStatus}</p>}
+                {recoveryCodes.length > 0 && (
+                  <div className="mt-4 rounded-lg border border-amber-200 bg-white p-3">
+                    <div className="grid gap-2 min-[380px]:grid-cols-2">
+                      {recoveryCodes.map((code) => (
+                        <code key={code} className="rounded border border-stone-200 bg-stone-50 px-2 py-2 text-center text-xs font-bold text-stone-900">
+                          {code}
+                        </code>
+                      ))}
+                    </div>
+                    <button className="btn-secondary mt-3 w-full" type="button" onClick={copyRecoveryCodes}>
+                      <Copy className="h-4 w-4" />
+                      {t('copyRecoveryCodes')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className={`mt-4 rounded-lg border p-4 text-sm ${pushEnabled ? 'border-leaf-100 bg-leaf-50' : 'border-stone-200 bg-stone-50'}`}>
               <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
                 <div className="min-w-0">
@@ -426,4 +515,11 @@ function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
+function uint8ArraysEqual(left, right) {
+  const leftBytes = new Uint8Array(left);
+  const rightBytes = new Uint8Array(right);
+  if (leftBytes.length !== rightBytes.length) return false;
+  return leftBytes.every((value, index) => value === rightBytes[index]);
 }

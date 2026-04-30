@@ -1,6 +1,6 @@
 /* global Response */
 
-const CACHE_NAME = 'agriscan-cache-v7';
+const CACHE_NAME = 'agriscan-cache-v8';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -98,6 +98,14 @@ self.addEventListener('push', (event) => {
       icon: '/icons/icon.svg',
       badge: '/icons/icon.svg',
       tag: data.tag || data.type || 'agriscan-notification',
+      renotify: true,
+      requireInteraction: true,
+      timestamp: Number(data.timestamp) || Date.now(),
+      vibrate: [120, 60, 120],
+      actions: [
+        { action: 'open', title: 'Open AgriScan' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ],
       data: {
         ...data,
         url: data.url || '/'
@@ -108,7 +116,21 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  if (event.action === 'dismiss') return;
+
   const data = event.notification.data || {};
   const targetUrl = typeof data === 'string' ? data : data.url || '/';
-  event.waitUntil(clients.openWindow(targetUrl));
+  const url = new URL(targetUrl, self.location.origin);
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const matchingClient = clientList.find((client) => {
+        const clientUrl = new URL(client.url);
+        return clientUrl.origin === url.origin && clientUrl.pathname === url.pathname;
+      });
+      if (matchingClient) {
+        return matchingClient.focus();
+      }
+      return clients.openWindow(url.href);
+    })
+  );
 });

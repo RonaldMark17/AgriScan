@@ -1,5 +1,5 @@
 import { ArrowRight, CloudSun, Languages, Leaf, LockKeyhole, Mail, ShieldCheck, Sprout } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loginHeroImage } from '../assets/visuals/index.js';
 import LanguageToggle from '../components/shared/LanguageToggle.jsx';
@@ -8,7 +8,7 @@ import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { hasRememberedSession, isAuthenticated, login, restoreRememberedSession, sessionReady } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
@@ -20,6 +20,35 @@ export default function Login() {
     { icon: CloudSun, label: t('aiCropRecommendations') },
     { icon: Languages, label: t('multilingualSupport') },
   ];
+  const returnTo = location.state?.from?.pathname || '/';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      if (!sessionReady) return;
+      if (isAuthenticated) {
+        navigate(returnTo, { replace: true });
+        return;
+      }
+      if (!hasRememberedSession()) return;
+
+      setLoading(true);
+      const restored = await restoreRememberedSession();
+      if (!cancelled && restored) {
+        navigate(returnTo, { replace: true });
+      }
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }
+
+    restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasRememberedSession, isAuthenticated, navigate, restoreRememberedSession, returnTo, sessionReady]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -28,7 +57,7 @@ export default function Login() {
     try {
       const result = await login(form);
       if (result.status === 'ok') {
-        navigate(location.state?.from?.pathname || '/', { replace: true });
+        navigate(returnTo, { replace: true });
       } else if (result.status === 'mfa_required') {
         navigate('/mfa', { state: { mfaToken: result.mfa_token, user: result.user, rememberMe: form.remember_me } });
       } else if (result.status === 'mfa_setup_required') {

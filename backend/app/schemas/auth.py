@@ -104,3 +104,12 @@ class MFASetupVerifyResponse(BaseModel):
 
 class MFADisableRequest(BaseModel):
     code: str = Field(min_length=6, max_length=32)
+
+
+class RecoveryCodesRotateRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class RecoveryCodesResponse(BaseModel):
+    message: str
+    recovery_codes: list[str]
