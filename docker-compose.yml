@@ -22,14 +22,29 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
-        VITE_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-/api/v1}"
+        VITE_VAPID_PUBLIC_KEY: "${VITE_VAPID_PUBLIC_KEY:-${VAPID_PUBLIC_KEY:-}}"
     container_name: agriscan-frontend
     restart: unless-stopped
     ports:
       - "5173:80"
     depends_on:
       - backend
+
+  seed:
+    build:
+      context: ./backend
+    profiles:
+      - tools
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./data/agriscan.sqlite3
+      AUTO_CREATE_TABLES: "true"
+    command: python scripts/seed_demo_data.py --password ${SEED_DEMO_PASSWORD:-ChangeMe!2026Secure}
+    volumes:
+      - backend_data:/app/data
+      - backend_uploads:/app/uploads
 
 volumes:
   backend_data:

@@ -13,6 +13,7 @@ COPY requirements*.txt ./
 RUN pip install --no-cache-dir -r requirements-ml.txt
 
 COPY app ./app
+COPY scripts ./scripts
 COPY static ./static
 
 RUN mkdir -p uploads data

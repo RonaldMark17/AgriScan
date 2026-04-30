@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 const ACCESS_STORAGE_KEY = 'agriscan_access';
 let publicConfigPromise = null;
 

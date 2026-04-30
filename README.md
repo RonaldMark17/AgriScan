@@ -165,7 +165,7 @@ VAPID_PRIVATE_KEY=your-private-vapid-key
 Seed or refresh the production demo data without wiping the SQLite volume:
 
 ```bash
-docker compose --env-file backend/.env exec backend python scripts/seed_demo_data.py --password "ChangeMe!2026Secure"
+docker compose --env-file backend/.env --profile tools run --rm seed
 ```
 
 If an Ubuntu host Nginx terminates TLS in front of Docker, use `deploy/nginx/agriscan.conf.example` as the site config. The important detail is that `/api/` proxies to `http://127.0.0.1:8000` without a trailing path, so FastAPI still receives `/api/v1/...`.
