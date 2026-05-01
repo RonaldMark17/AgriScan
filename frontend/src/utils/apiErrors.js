@@ -1,4 +1,8 @@
 export function getApiErrorMessage(error, fallback = 'Something went wrong.') {
+  if (error?.response?.status === 413) {
+    return fallback && fallback !== 'Something went wrong.' ? fallback : 'Uploaded file is too large.';
+  }
+
   const detail = error?.response?.data?.detail;
 
   if (typeof detail === 'string') {
