@@ -1316,6 +1316,21 @@ class CropDiseaseDetector:
             )
         return None
 
+    def _looks_like_mango_leaf(self, features: dict[str, float]) -> bool:
+        broad_lanceolate_leaf = (
+            features["green_leaf_ratio"] >= 0.32
+            and features["max_green_area_ratio"] >= 0.24
+            and features["max_green_aspect"] >= 2.6
+            and features["max_green_aspect"] <= 7.5
+        )
+        spotted_or_blighted = (
+            features["component_count"] >= 4
+            or features["lesion_ratio"] >= 0.025
+            or features["dark_lesion_ratio"] >= 0.018
+        )
+        not_fruit_cluster = features["banana_fruit_ratio"] < 0.12 and features["yellow_ratio"] < 0.09
+        return broad_lanceolate_leaf and spotted_or_blighted and not_fruit_cluster
+
     def _infer_crop_key_from_features(self, features: dict[str, float]) -> str | None:
         if features["green_leaf_ratio"] < 0.08 and features["lesion_ratio"] < 0.018:
             return None
@@ -1340,6 +1355,8 @@ class CropDiseaseDetector:
             and features["max_component_area_ratio"] < 0.055
             and features["max_green_aspect"] < 1.9
         )
+        if self._looks_like_mango_leaf(features):
+            return "mango"
         if broad_spotted_leaf:
             return "tomato"
         if many_small_spots and features["green_leaf_ratio"] < 0.55:
@@ -1658,6 +1675,12 @@ class CropDiseaseDetector:
                 treatment=meta["treatment"],
                 crop_label=self._infer_crop_label_from_scores(predictions, self._labels, predicted_key=key, crop_type=crop_type),
             )
+
+        if crop_type is None and detection.disease_name in {"Pest-related leaf damage", "Leaf spot or blight symptoms", "Healthy crop"}:
+            feature_crop = self._infer_crop_key_from_features(features)
+            feature_crop_label = self._display_crop_label(feature_crop)
+            if feature_crop_label:
+                detection.crop_label = feature_crop_label
 
         if crop_type is not None and detection.confidence < 0.60:
             fallback = self._fallback_detect(

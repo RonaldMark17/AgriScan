@@ -1,4 +1,5 @@
 import {
+  Camera,
   CheckCircle2,
   ClipboardList,
   FlaskConical,
@@ -8,14 +9,15 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, getApiBaseUrl } from '../api/client.js';
 import { diseaseDetectorImage } from '../assets/visuals/index.js';
 import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 
 const HISTORY_STORAGE_KEY = 'agriscan_disease_scans';
-const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_UPLOAD_MB = 10;
+const MAX_IMAGE_UPLOAD_BYTES = MAX_IMAGE_UPLOAD_MB * 1024 * 1024;
 const INVALID_CROP_IMAGE_MESSAGE =
   'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
 const supportedCropFocus = [
@@ -276,7 +278,7 @@ function scanRequestErrorMessage(error, fallback = 'Disease detection failed.') 
   const status = error?.response?.status;
   if (status === 401) return 'Your session expired. Please sign in again, then scan the image.';
   if (status === 403) return 'Your account is not allowed to create disease scans.';
-  if (status === 413) return apiMessage || 'Image exceeds the 10 MB upload limit.';
+  if (status === 413) return `Image exceeds the ${MAX_IMAGE_UPLOAD_MB} MB upload limit.`;
   if (status === 415) return apiMessage || 'Only JPG, PNG, and WebP images are supported.';
   if (status >= 400 && status < 500) return apiMessage || 'AgriScan could not process this image. Try a JPG, PNG, or WebP crop photo.';
   if (error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')) {
@@ -389,6 +391,17 @@ function looksLikeBananaFruitIssue(features, crop) {
   const decaySignal = features.darkLesionRatio >= 0.045 || features.lesionRatio >= 0.08;
   const notLeafDominant = features.greenLeafRatio < 0.38 || features.greenComponentCount >= 8;
   return fruitSignal && decaySignal && notLeafDominant;
+}
+
+function looksLikeMangoLeaf(features) {
+  const broadLanceolateLeaf =
+    features.greenLeafRatio >= 0.32 &&
+    features.maxGreenAreaRatio >= 0.24 &&
+    features.maxGreenAspect >= 2.6 &&
+    features.maxGreenAspect <= 7.5;
+  const spottedOrBlighted = features.componentCount >= 4 || features.lesionRatio >= 0.025 || features.darkLesionRatio >= 0.018;
+  const notFruitCluster = features.bananaFruitRatio < 0.12 && features.yellowRatio < 0.09;
+  return broadLanceolateLeaf && spottedOrBlighted && notFruitCluster;
 }
 
 function pickOfflineDiseaseKey(crop, features) {
@@ -548,6 +561,7 @@ function inferOfflineCrop(features, fileName = '') {
 
   const manySmallSpots = features.componentCount >= 7 && features.maxAreaRatio < 0.012;
   const broadSpottedLeaf = features.greenLeafRatio >= 0.52 && features.componentCount >= 10 && features.maxAreaRatio < 0.055 && features.maxGreenAspect < 1.9;
+  if (looksLikeMangoLeaf(features)) return 'mango';
   if (broadSpottedLeaf) return 'tomato';
   if (manySmallSpots && features.greenLeafRatio < 0.55) return 'tomato';
   if (features.greenLeafRatio < 0.18 && features.lesionRatio >= 0.05) return 'rice';
@@ -1004,9 +1018,12 @@ function HistoryList({ history, onSelect, t }) {
 
 export default function PlantDiseaseDetector() {
   const { t } = useI18n();
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [showImageSourcePicker, setShowImageSourcePicker] = useState(false);
   const [history, setHistory] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1108,7 +1125,7 @@ export default function PlantDiseaseDetector() {
       return;
     }
     if (nextFile.size > MAX_IMAGE_UPLOAD_BYTES) {
-      setError('Image exceeds the 10 MB upload limit.');
+      setError(`Image exceeds the ${MAX_IMAGE_UPLOAD_MB} MB upload limit.`);
       setResult(null);
       clearImage();
       return;
@@ -1125,9 +1142,24 @@ export default function PlantDiseaseDetector() {
     });
   }
 
+  function handleFileInputChange(event) {
+    updateImage(event.target.files?.[0]);
+    event.target.value = '';
+  }
+
+  function chooseImageSource(source) {
+    setShowImageSourcePicker(false);
+    if (source === 'camera') {
+      cameraInputRef.current?.click();
+      return;
+    }
+    galleryInputRef.current?.click();
+  }
+
   function clearImage() {
     setImageFile(null);
     setFileInputKey((current) => current + 1);
+    setShowImageSourcePicker(false);
     setPreviewUrl((current) => {
       if (current) {
         URL.revokeObjectURL(current);
@@ -1282,14 +1314,28 @@ export default function PlantDiseaseDetector() {
             </label>
 
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center transition hover:border-leaf-300 hover:bg-leaf-50">
-                <input
-                  accept="image/*"
-                  className="hidden"
-                  key={fileInputKey}
-                  type="file"
-                  onChange={(event) => updateImage(event.target.files?.[0])}
-                />
+              <input
+                accept="image/*"
+                className="hidden"
+                key={`gallery-${fileInputKey}`}
+                ref={galleryInputRef}
+                type="file"
+                onChange={handleFileInputChange}
+              />
+              <input
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                key={`camera-${fileInputKey}`}
+                ref={cameraInputRef}
+                type="file"
+                onChange={handleFileInputChange}
+              />
+              <button
+                className="flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                type="button"
+                onClick={() => setShowImageSourcePicker(true)}
+              >
                 {previewUrl ? (
                   <img src={previewUrl} alt="Crop preview" className="h-48 w-full rounded-lg object-cover sm:h-56" />
                 ) : (
@@ -1301,7 +1347,38 @@ export default function PlantDiseaseDetector() {
                     </p>
                   </>
                 )}
-              </label>
+              </button>
+
+              {showImageSourcePicker && (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2" role="dialog" aria-label="Choose image source">
+                  <button
+                    className="flex min-h-20 items-center gap-3 rounded-lg border border-stone-200 bg-white p-4 text-left transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                    type="button"
+                    onClick={() => chooseImageSource('gallery')}
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-leaf-50 text-leaf-700">
+                      <ImagePlus className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-stone-950">Upload from gallery</span>
+                      <span className="mt-1 block text-xs font-medium text-stone-500">Choose an existing photo</span>
+                    </span>
+                  </button>
+                  <button
+                    className="flex min-h-20 items-center gap-3 rounded-lg border border-stone-200 bg-white p-4 text-left transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                    type="button"
+                    onClick={() => chooseImageSource('camera')}
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-700">
+                      <Camera className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-stone-950">Use camera</span>
+                      <span className="mt-1 block text-xs font-medium text-stone-500">Take a new photo</span>
+                    </span>
+                  </button>
+                </div>
+              )}
 
               {imageFile && (
                 <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3">
