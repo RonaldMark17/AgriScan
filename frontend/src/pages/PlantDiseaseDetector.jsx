@@ -18,6 +18,8 @@ import { getApiErrorMessage } from '../utils/apiErrors.js';
 const HISTORY_STORAGE_KEY = 'agriscan_disease_scans';
 const MAX_IMAGE_UPLOAD_MB = 10;
 const MAX_IMAGE_UPLOAD_BYTES = MAX_IMAGE_UPLOAD_MB * 1024 * 1024;
+const TRANSPORT_IMAGE_TARGET_BYTES = 900 * 1024;
+const TRANSPORT_IMAGE_MAX_DIMENSION = 1600;
 const INVALID_CROP_IMAGE_MESSAGE =
   'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
 const supportedCropFocus = [
@@ -593,6 +595,50 @@ function loadImageElement(file) {
     };
     image.src = url;
   });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+}
+
+function jpegNameFor(file) {
+  const stem = (file.name || 'crop-image').replace(/\.[^.]+$/, '');
+  return `${stem}.jpg`;
+}
+
+async function prepareImageForUpload(file) {
+  if (!file || file.size <= TRANSPORT_IMAGE_TARGET_BYTES) return file;
+
+  try {
+    const image = await loadImageElement(file);
+    const scale = Math.min(1, TRANSPORT_IMAGE_MAX_DIMENSION / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    canvas.height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let bestBlob = null;
+    for (const quality of [0.82, 0.72, 0.62, 0.52]) {
+      const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+      if (!blob) continue;
+      if (!bestBlob || blob.size < bestBlob.size) {
+        bestBlob = blob;
+      }
+      if (blob.size <= TRANSPORT_IMAGE_TARGET_BYTES) {
+        return new window.File([blob], jpegNameFor(file), { type: 'image/jpeg', lastModified: file.lastModified || Date.now() });
+      }
+    }
+    if (bestBlob && bestBlob.size < file.size) {
+      return new window.File([bestBlob], jpegNameFor(file), { type: 'image/jpeg', lastModified: file.lastModified || Date.now() });
+    }
+  } catch {
+    // Keep the original upload if the browser cannot create a compressed transport copy.
+  }
+
+  return file;
 }
 
 async function analyzeImageOffline(file, cropType) {
@@ -1192,13 +1238,13 @@ export default function PlantDiseaseDetector() {
       return;
     }
 
-    const payload = new FormData();
-    payload.append('image', imageFile);
-    payload.append('crop_type', selectedCrop);
-
     try {
       const backendReady = await detectOnlineMode();
       const useOfflineAnalysis = !window.navigator.onLine || !backendReady;
+      const uploadImageFile = useOfflineAnalysis ? imageFile : await prepareImageForUpload(imageFile);
+      const payload = new FormData();
+      payload.append('image', uploadImageFile, uploadImageFile.name);
+      payload.append('crop_type', selectedCrop);
       payload.append('offline_mode', useOfflineAnalysis ? 'true' : 'false');
 
       if (useOfflineAnalysis) {

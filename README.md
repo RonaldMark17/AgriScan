@@ -157,9 +157,11 @@ For production, set the same-origin frontend API URL before rebuilding:
 
 ```env
 VITE_API_BASE_URL=/api/v1
+VITE_ENABLE_REALTIME_ALERTS=false
 ```
 
 Browser notifications are shown manually through the service worker while AgriScan is open or running in a background tab, so no notification keys are required.
+Realtime WebSocket alerts are optional; leave `VITE_ENABLE_REALTIME_ALERTS=false` unless the host Nginx WebSocket proxy has been applied and verified. The frontend still polls notifications every minute and whenever the tab regains focus.
 
 ## Notification Flow
 
@@ -183,7 +185,7 @@ docker compose --env-file backend/.env --profile tools run --rm seed
 
 If an Ubuntu host Nginx terminates TLS in front of Docker, use `deploy/nginx/agriscan.conf.example` as the site config. The important detail is that `/api/` proxies to `http://127.0.0.1:8000` without a trailing path, so FastAPI still receives `/api/v1/...`.
 
-For disease photo uploads, the host Nginx config must include `client_max_body_size 11m;` in the HTTPS `server` block and `/api/` location. Without it, Nginx uses its 1 MB default and rejects photos before AgriScan can apply the 10 MB app limit. After editing the EC2 host config, run:
+For disease photo uploads and realtime alerts, the host Nginx config must include `client_max_body_size 11m;` in the HTTPS `server` block and `/api/` location, plus the `/api/v1/notifications/stream` WebSocket proxy from `deploy/nginx/agriscan.conf.example`. Without the body-size setting, Nginx uses its 1 MB default and rejects photos before AgriScan can apply the 10 MB app limit. After editing the EC2 host config, run:
 
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
