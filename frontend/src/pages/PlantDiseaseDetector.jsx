@@ -515,6 +515,14 @@ function shouldRejectNonCropForeground(features, crop) {
     features.centerNeutralRatio >= 0.16 &&
     features.centerFruitRatio < 0.14 &&
     features.centerNaturalGreenRatio / Math.max(features.naturalGreenRatio, 0.001) < 0.35;
+  const flatGreenBackground =
+    !crop &&
+    features.greenLeafRatio >= 0.58 &&
+    features.lesionRatio < 0.018 &&
+    features.greenComponentCount <= 2 &&
+    features.greenEdgeRatio < 0.08 &&
+    features.adjacentNonleafRatio < 0.08 &&
+    features.centerFruitRatio < 0.18;
 
   return (
     syntheticGreenBackground ||
@@ -522,7 +530,8 @@ function shouldRejectNonCropForeground(features, crop) {
     backgroundOnlyGreen ||
     centeredNeutralObject ||
     centeredFurLikeObject ||
-    animalOnGreenBackground
+    animalOnGreenBackground ||
+    flatGreenBackground
   );
 }
 

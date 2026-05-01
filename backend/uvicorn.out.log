@@ -1,2 +1,4 @@
-INFO:     127.0.0.1:65491 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61993 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51732 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64343 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64345 - "POST /api/v1/scans HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:64346 - "POST /api/v1/scans HTTP/1.1" 201 Created

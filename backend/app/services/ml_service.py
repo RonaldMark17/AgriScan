@@ -1141,6 +1141,18 @@ class CropDiseaseDetector:
             analysis_mode="rejected upload",
         )
 
+    def _looks_like_background_green_scene(self, features: dict[str, float], crop_key: str | None) -> bool:
+        if crop_key:
+            return False
+        return (
+            features["green_leaf_ratio"] >= 0.58
+            and features["lesion_ratio"] < 0.018
+            and features["green_component_count"] <= 2
+            and features["green_edge_ratio"] < 0.08
+            and features["adjacent_nonleaf_ratio"] < 0.08
+            and features["banana_fruit_ratio"] < 0.18
+        )
+
     def _filename_context(self, original_filename: str | None, crop_type: str | None = None) -> tuple[str | None, str | None, float]:
         text = self._context_text(original_filename)
         crop_key = self._normalize_crop_type(crop_type)
@@ -1567,6 +1579,8 @@ class CropDiseaseDetector:
             return contextual
 
         normalized_crop = self._normalize_crop_type(crop_type)
+        if self._looks_like_background_green_scene(features, normalized_crop):
+            return self._invalid_crop_image_detection()
         filename_crop, _, _ = self._filename_context(original_filename, crop_type)
         inferred_crop = normalized_crop or filename_crop or self._infer_crop_key_from_features(features)
         key, confidence = self._offline_key_from_features(features, inferred_crop)

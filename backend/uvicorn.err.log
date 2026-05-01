@@ -1,4 +1,10 @@
-INFO:     Started server process [23372]
+INFO:     Started server process [22640]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+TensorFlow is not installed. Falling back to crop-image heuristics only.
+Could not load TensorFlow model. Using fallback detector.
+Traceback (most recent call last):
+  File "C:\Users\ronal\OneDrive\Desktop\agriscan\backend\app\services\ml_service.py", line 705, in _load_model
+    import tensorflow as tf
+ModuleNotFoundError: No module named 'tensorflow'
