@@ -15,7 +15,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api/client.js';
-import { recommendationsImage, soilScanImage } from '../assets/visuals/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 
@@ -401,7 +400,6 @@ export default function Dashboard() {
       : summary.location.source === 'farm'
         ? 'Using registered farm GPS'
         : 'Location not set';
-  const insightLocationLabel = summary.location.source === 'unavailable' ? 'your selected field area' : summary.location.label;
   const latestSoilScan = soilScans[0] || null;
   const moistureMetric = useMemo(() => buildMoistureMetric(latestSoilScan), [latestSoilScan]);
   const temperatureMetric = useMemo(
@@ -411,24 +409,25 @@ export default function Dashboard() {
   const nutrientMetric = useMemo(() => buildNutrientMetric(latestSoilScan), [latestSoilScan]);
   const phChartData = useMemo(() => buildPhChartData(soilScans), [soilScans]);
   const featuredAlert = summary.featured_alert;
-  const alertToneClasses = getAlertToneClasses(featuredAlert?.tone);
+  const alertToneClasses = getAlertToneClasses(featuredAlert?.tone || 'green');
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-5 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <h1 className="break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-4xl">{t('dashboardGreeting', { name: firstName })}</h1>
-          <p className="mt-2 text-lg text-stone-500">{t('dashboardSubtitle')}</p>
+          <p className="eyebrow">Overview</p>
+          <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">{t('dashboardGreeting', { name: firstName })}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">{t('dashboardSubtitle')}</p>
         </div>
-        <Link to="/scan" className="btn-primary h-12 w-full px-6 text-base shadow-[0_10px_20px_rgba(22,163,74,0.25)] sm:w-auto sm:px-8 lg:h-14">
+        <Link to="/scan" className="btn-primary h-11 w-full px-5 text-sm sm:w-auto">
           <ScanLine className="h-5 w-5" />
           {t('newManualScan')}
         </Link>
       </div>
 
-      <section className={`mb-8 flex flex-col gap-4 rounded-lg border p-5 sm:flex-row sm:items-center sm:justify-between ${alertToneClasses.wrapper}`}>
+      <section className={`mb-6 flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${alertToneClasses.wrapper}`}>
         <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
-          <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-full sm:h-12 sm:w-12 ${alertToneClasses.iconBadge}`}>
+          <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${alertToneClasses.iconBadge}`}>
             <AlertTriangle className="h-6 w-6" />
           </div>
           <div className="min-w-0">
@@ -546,42 +545,36 @@ export default function Dashboard() {
             <p className="mt-5 text-sm leading-6 text-stone-600">{summary.weather.summary}</p>
           </section>
 
-          <Link
-            to="/scan"
-            className="block overflow-hidden rounded-lg border border-leaf-100 bg-leaf-50 transition hover:-translate-y-0.5 hover:border-leaf-200 hover:bg-leaf-100/70"
-          >
-            <div className="relative h-44 overflow-hidden">
-              <img src={recommendationsImage} alt="Harvested crops prepared for recommendations" className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-leaf-950/80 via-leaf-950/20 to-transparent" />
-              <span className="absolute left-5 top-5 rounded-full bg-white/90 px-4 py-2 text-sm font-bold text-leaf-700">AI Insight</span>
+          <section className="surface rounded-lg p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="section-title">Quick actions</h2>
+              <span className="status-pill border border-stone-200 bg-stone-50 text-stone-600">Field tools</span>
             </div>
-            <div className="p-6">
-              <h2 className="text-2xl font-bold text-leaf-950">Ready for Planting?</h2>
-              <p className="mt-4 text-base leading-7 text-leaf-900">
-                Live weather for {insightLocationLabel} is now factored into your crop recommendations.
-              </p>
-              <span className="btn-primary mt-6 inline-flex w-full justify-center text-base">View Recommendations</span>
+            <div className="mt-4 space-y-2">
+              {[
+                [ScanLine, 'Manual scan', 'Record soil readings', '/scan'],
+                [FlaskConical, 'Disease detector', 'Analyze crop images', '/disease-detector'],
+                [MapPin, 'Farm map', 'Review field locations', '/farms'],
+              ].map(([Icon, label, helper, to]) => (
+                <Link
+                  key={label}
+                  to={to}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white px-3 py-3 transition hover:border-leaf-200 hover:bg-leaf-50"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-stone-50 text-leaf-700">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-stone-950">{label}</span>
+                      <span className="block truncate text-xs text-stone-500">{helper}</span>
+                    </span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-stone-400" />
+                </Link>
+              ))}
             </div>
-          </Link>
-
-          <Link
-            to="/settings/security"
-            className="block overflow-hidden rounded-lg border border-stone-200 bg-white transition hover:-translate-y-0.5 hover:border-leaf-200 hover:bg-leaf-50/40"
-          >
-            <div className="relative h-40 overflow-hidden">
-              <img src={soilScanImage} alt="Soil scan field visual with seedling" className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-stone-950/65 via-stone-950/10 to-transparent" />
-              <div className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-sm font-bold text-leaf-700">
-                <FlaskConical className="h-4 w-4" />
-                Manual Scan
-              </div>
-            </div>
-            <div className="p-6 text-center">
-              <h3 className="text-lg font-bold text-stone-950">Manual Scan Settings</h3>
-              <p className="mt-1 text-sm text-stone-500">Entry checklist ready for your next field reading</p>
-              <span className="mt-5 inline-flex font-bold text-leaf-700">Manage Settings</span>
-            </div>
-          </Link>
+          </section>
         </aside>
       </div>
     </div>

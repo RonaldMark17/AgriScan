@@ -285,13 +285,21 @@ async def refresh_token(payload: RefreshRequest, request: Request, response: Res
 async def logout(
     payload: LogoutRequest,
     response: Response,
-    current_user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
+    authenticated_user_id: int | None = None
+    if credentials is not None:
+        try:
+            decoded = decode_token(credentials.credentials, "access")
+            authenticated_user_id = int(decoded["sub"])
+        except (KeyError, TypeError, ValueError):
+            authenticated_user_id = None
+
     if payload.refresh_token:
         result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == hash_token(payload.refresh_token)))
         stored = result.scalar_one_or_none()
-        if stored and stored.user_id == current_user.id:
+        if stored and (authenticated_user_id is None or stored.user_id == authenticated_user_id):
             stored.revoked_at = datetime.now(UTC)
     response.delete_cookie("agriscan_refresh")
     await db.commit()

@@ -52,6 +52,11 @@ CLASS_METADATA: dict[str, dict[str, str]] = {
         "cause": "The image shows dark decay around the banana crown, cut ends, or bunch tissue, which is more consistent with bunch or postharvest rot than a leaf blight.",
         "treatment": "Separate affected hands, avoid wounding fruit during harvest, clean tools and handling surfaces, and confirm locally before applying any postharvest treatment.",
     },
+    "corn_ear_pest_damage": {
+        "name": "Corn earworm or borer damage",
+        "cause": "The image shows damaged corn kernels or husk tissue, which is more consistent with ear-feeding pest damage than a leaf disease.",
+        "treatment": "Inspect nearby ears for larvae and frass, remove badly damaged ears, improve field sanitation, and follow local corn IPM thresholds before using any pesticide.",
+    },
 }
 
 DEFAULT_LABELS = [
@@ -524,6 +529,15 @@ NON_CROP_IMAGE_KEYWORDS = (
     "person",
     "face",
     "baby",
+    "stage",
+    "spotlight",
+    "studio",
+    "theater",
+    "theatre",
+    "microphone",
+    "racket",
+    "ballplayer",
+    "lab_coat",
     "keyboard",
     "laptop",
     "computer",
@@ -840,6 +854,14 @@ class CropDiseaseDetector:
         saturation = max_channel - min_channel
 
         green_leaf_pixels = (green > red * 1.05) & (green > blue * 1.05) & (green > 0.15) & (saturation > 0.08)
+        chroma_green_pixels = (
+            green_leaf_pixels
+            & (green > 0.42)
+            & (red < 0.25)
+            & (blue < 0.32)
+            & (saturation > 0.36)
+        )
+        natural_green_pixels = green_leaf_pixels & ~chroma_green_pixels
         disease_tone_pixels = (
             (red > 0.32)
             & (green > 0.18)
@@ -850,6 +872,8 @@ class CropDiseaseDetector:
         plant_pixels = green_leaf_pixels | disease_tone_pixels
 
         green_dominant_ratio = float(np.mean(green_leaf_pixels))
+        chroma_green_ratio = float(np.mean(chroma_green_pixels))
+        natural_green_ratio = float(np.mean(natural_green_pixels))
         warm_plant_ratio = float(np.mean(disease_tone_pixels))
         overall_signal = max(green_dominant_ratio, warm_plant_ratio)
         nonwhite_mask = (red < 0.95) | (green < 0.95) | (blue < 0.95)
@@ -860,6 +884,8 @@ class CropDiseaseDetector:
         center_mask = np.zeros(green.shape, dtype=bool)
         center_mask[height // 4 : 3 * height // 4, width // 4 : 3 * width // 4] = True
         center_green_ratio = float(np.mean(green_leaf_pixels[center_mask]))
+        center_chroma_green_ratio = float(np.mean(chroma_green_pixels[center_mask]))
+        center_natural_green_ratio = float(np.mean(natural_green_pixels[center_mask]))
         center_plant_ratio = float(np.mean(plant_pixels[center_mask]))
 
         neutral_subject_pixels = (saturation < 0.18) & (max_channel > 0.25) & (max_channel < 0.95)
@@ -872,6 +898,7 @@ class CropDiseaseDetector:
             & (saturation > 0.10)
         )
         neutral_subject_ratio = float(np.mean(neutral_subject_pixels))
+        center_neutral_subject_ratio = float(np.mean(neutral_subject_pixels[center_mask]))
         center_tan_subject_ratio = float(np.mean(tan_subject_pixels[center_mask]))
 
         centered_non_leaf_subject = (
@@ -880,13 +907,28 @@ class CropDiseaseDetector:
             and center_plant_ratio < 0.65
             and (center_tan_subject_ratio > 0.20 or neutral_subject_ratio > 0.34)
         )
+        animal_on_green_background = (
+            green_dominant_ratio >= 0.12
+            and center_green_ratio < 0.04
+            and center_tan_subject_ratio >= 0.28
+            and center_neutral_subject_ratio >= 0.16
+            and center_natural_green_ratio / max(natural_green_ratio, 0.001) < 0.35
+        )
         has_crop_signal = (
             nonwhite_ratio >= 0.05
             and plant_within_nonwhite >= 0.35
             and (overall_signal >= 0.12 or center_green_ratio >= 0.12 or center_plant_ratio >= 0.35)
         )
+        synthetic_green_background = (
+            chroma_green_ratio >= 0.35
+            and center_chroma_green_ratio >= 0.22
+            and chroma_green_ratio / max(green_dominant_ratio, 0.001) >= 0.55
+            and natural_green_ratio <= 0.18
+            and center_natural_green_ratio <= 0.20
+            and warm_plant_ratio < 0.08
+        )
 
-        return centered_non_leaf_subject or not has_crop_signal
+        return synthetic_green_background or animal_on_green_background or centered_non_leaf_subject or not has_crop_signal
 
     def _extract_leaf_features(self, image_path: str) -> dict[str, float]:
         image = Image.open(image_path).convert("RGB").resize((160, 160))
@@ -1198,6 +1240,25 @@ class CropDiseaseDetector:
         )
         return fruit_signal and decay_signal and not_leaf_dominant
 
+    def _looks_like_corn_ear_issue(self, features: dict[str, float], crop_key: str | None) -> bool:
+        if crop_key not in {None, "corn"}:
+            return False
+
+        kernel_signal = features["banana_fruit_ratio"] >= 0.22 or features["max_fruit_area_ratio"] >= 0.12
+        husk_signal = features["green_leaf_ratio"] >= 0.06 or features["green_component_count"] >= 2
+        damage_signal = (
+            features["lesion_ratio"] >= 0.10
+            or features["dark_lesion_ratio"] >= 0.045
+            or features["rust_ratio"] >= 0.03
+        )
+        not_leaf_dominant = features["green_leaf_ratio"] < 0.42 and features["max_green_area_ratio"] < 0.28
+        not_banana_bunch = not (
+            features["green_component_count"] >= 8
+            and features["max_green_aspect"] >= 3.0
+            and features["max_fruit_area_ratio"] < 0.12
+        )
+        return kernel_signal and husk_signal and damage_signal and not_leaf_dominant and not_banana_bunch
+
     def _contextual_detection(
         self,
         features: dict[str, float],
@@ -1231,6 +1292,14 @@ class CropDiseaseDetector:
                 0.74,
                 crop_type="banana",
                 analysis_mode="fruit-aware visual fallback",
+                allow_online_lookup=allow_online_lookup,
+            )
+        if self._looks_like_corn_ear_issue(features, hint_crop):
+            return self._make_detection(
+                "corn_ear_pest_damage",
+                0.82,
+                crop_type="corn",
+                analysis_mode="crop-part visual fallback",
                 allow_online_lookup=allow_online_lookup,
             )
         return None
@@ -1290,6 +1359,8 @@ class CropDiseaseDetector:
         if self._looks_like_banana_fruit_issue(features, crop_key):
             key = "banana_crown_rot" if features["green_component_count"] >= 8 else "banana_fruit_rot"
             return key, self._confidence_from_features(features, crop_key, matched_pattern=True)
+        if self._looks_like_corn_ear_issue(features, crop_key):
+            return "corn_ear_pest_damage", 0.82
 
         structural_damage = (
             features["green_leaf_ratio"] >= 0.14
@@ -1530,6 +1601,9 @@ class CropDiseaseDetector:
         if self._has_non_crop_filename_context(original_filename):
             return self._invalid_crop_image_detection()
 
+        if self._is_obvious_non_crop_image(image_path):
+            return self._invalid_crop_image_detection()
+
         features = self._extract_leaf_features(image_path)
         contextual = self._contextual_detection(
             features,
@@ -1539,15 +1613,6 @@ class CropDiseaseDetector:
         )
         if contextual is not None:
             return contextual
-
-        if crop_type:
-            has_crop_signal = features["green_leaf_ratio"] >= 0.06 or features["lesion_ratio"] >= 0.018
-            reject_image = not has_crop_signal and self._is_obvious_non_crop_image(image_path)
-        else:
-            reject_image = self._is_obvious_non_crop_image(image_path)
-
-        if reject_image:
-            return self._invalid_crop_image_detection()
 
         normalized_crop = self._normalize_crop_type(crop_type)
         self._load_model()

@@ -3,13 +3,9 @@ import {
   ClipboardList,
   FlaskConical,
   ImagePlus,
-  Leaf,
   Loader2,
-  RefreshCw,
   RotateCcw,
   Upload,
-  Wifi,
-  WifiOff,
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -19,6 +15,8 @@ import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 
 const HISTORY_STORAGE_KEY = 'agriscan_disease_scans';
+const INVALID_CROP_IMAGE_MESSAGE =
+  'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
 const supportedCropFocus = [
   { key: 'rice', name: 'Rice', aliases: ['palay'] },
   { key: 'corn', name: 'Corn', aliases: ['maize', 'mais'] },
@@ -265,6 +263,32 @@ function cropDisplayName(value) {
   return cropDisplayNamesByKey[cropKey] || value || 'General crop leaf';
 }
 
+function shouldUseBrowserFallback(error) {
+  if (!window.navigator.onLine) return true;
+  if (error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')) return true;
+  if (!error?.response) return true;
+  return error.response.status >= 500;
+}
+
+function scanRequestErrorMessage(error, fallback = 'Disease detection failed.') {
+  const apiMessage = getApiErrorMessage(error, '');
+  const status = error?.response?.status;
+  if (status === 401) return 'Your session expired. Please sign in again, then scan the image.';
+  if (status === 403) return 'Your account is not allowed to create disease scans.';
+  if (status === 413) return apiMessage || 'Image exceeds the 8 MB upload limit.';
+  if (status === 415) return apiMessage || 'Only JPG, PNG, and WebP images are supported.';
+  if (status >= 400 && status < 500) return apiMessage || 'AgriScan could not process this image. Try a JPG, PNG, or WebP crop photo.';
+  if (error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')) {
+    return 'The backend model took too long to respond, so AgriScan used browser analysis for this scan.';
+  }
+  return apiMessage || fallback;
+}
+
+function isLocalVisualAnalysisMode(mode) {
+  const text = (mode || '').toLowerCase();
+  return text.includes('offline') || text.includes('fallback') || text.includes('browser') || text.includes('crop-part') || text.includes('filename-guided');
+}
+
 function healthyKeyForCrop(crop) {
   return crop ? `${crop}_healthy` : 'healthy';
 }
@@ -437,6 +461,71 @@ function computeOfflineConfidence(features, crop) {
   return Math.min(Math.max(confidence, 0.6), 0.86);
 }
 
+function hasCropSubjectInForeground(features, crop) {
+  const cropKey = normalizeCropKey(crop);
+  const fruitOrProduceCrop = ['banana', 'corn', 'mango', 'guava', 'tomato', 'pepper', 'eggplant', 'cacao', 'coffee'].includes(cropKey);
+  const centeredLeaf = features.centerGreenRatio >= 0.075 || (features.maxGreenAreaRatio >= 0.12 && features.greenLeafRatio >= 0.18);
+  const animalLikeCenter =
+    features.centerGreenRatio < 0.04 &&
+    features.centerTanRatio >= 0.28 &&
+    features.centerNeutralRatio >= 0.16 &&
+    features.centerFruitRatio < 0.14;
+  const centeredDiseaseTissue =
+    !animalLikeCenter &&
+    features.centerLesionRatio >= 0.08 &&
+    (features.centerGreenRatio >= 0.035 || features.greenLeafRatio >= 0.1);
+  const centeredFruitOrStem =
+    fruitOrProduceCrop &&
+    features.centerFruitRatio >= 0.18 &&
+    (features.centerGreenRatio >= 0.035 || features.greenLeafRatio >= 0.1 || features.lesionRatio >= 0.065);
+
+  return centeredLeaf || centeredDiseaseTissue || centeredFruitOrStem;
+}
+
+function shouldRejectNonCropForeground(features, crop) {
+  const hasForegroundCrop = hasCropSubjectInForeground(features, crop);
+  const syntheticGreenBackground =
+    features.chromaGreenRatio >= 0.35 &&
+    features.centerChromaGreenRatio >= 0.22 &&
+    features.chromaGreenRatio / Math.max(features.greenLeafRatio, 0.001) >= 0.55 &&
+    features.naturalGreenRatio <= 0.18 &&
+    features.centerNaturalGreenRatio <= 0.2 &&
+    features.bananaFruitRatio < 0.1;
+  const weakOverallCropSignal =
+    features.greenLeafRatio < 0.06 && features.lesionRatio < 0.018 && features.bananaFruitRatio < 0.08;
+  const backgroundOnlyGreen =
+    features.greenLeafRatio >= 0.08 &&
+    features.centerGreenRatio < 0.045 &&
+    features.centerFruitRatio < 0.1 &&
+    features.centerLesionRatio < 0.08;
+  const centeredNeutralObject =
+    features.centerNeutralRatio >= 0.34 &&
+    features.centerGreenRatio < 0.08 &&
+    features.centerFruitRatio < 0.22;
+  const centeredFurLikeObject =
+    features.centerGreenRatio < 0.07 &&
+    features.centerTanRatio >= 0.18 &&
+    features.centerNeutralRatio >= 0.16 &&
+    features.maxGreenAreaRatio < 0.16 &&
+    !hasForegroundCrop;
+  const animalOnGreenBackground =
+    features.greenLeafRatio >= 0.12 &&
+    features.centerGreenRatio < 0.04 &&
+    features.centerTanRatio >= 0.28 &&
+    features.centerNeutralRatio >= 0.16 &&
+    features.centerFruitRatio < 0.14 &&
+    features.centerNaturalGreenRatio / Math.max(features.naturalGreenRatio, 0.001) < 0.35;
+
+  return (
+    syntheticGreenBackground ||
+    weakOverallCropSignal ||
+    backgroundOnlyGreen ||
+    centeredNeutralObject ||
+    centeredFurLikeObject ||
+    animalOnGreenBackground
+  );
+}
+
 function inferOfflineCrop(features, fileName = '') {
   const filenameContext = inferContextFromFilename(fileName, '');
   if (filenameContext.crop) return filenameContext.crop;
@@ -485,7 +574,7 @@ function loadImageElement(file) {
 async function analyzeImageOffline(file, cropType) {
   const crop = normalizeCropKey(cropType);
   if (hasNonCropFilenameContext(file.name)) {
-    throw new Error('Upload a crop leaf, fruit, stem, or plant-part photo. Animals, people, tools, and vehicles cannot be diagnosed.');
+    throw new Error(INVALID_CROP_IMAGE_MESSAGE);
   }
 
   const image = await loadImageElement(file);
@@ -505,10 +594,22 @@ async function analyzeImageOffline(file, cropType) {
   let darkLesion = 0;
   let edgeLesion = 0;
   let bananaFruit = 0;
+  let chromaGreen = 0;
+  let naturalGreen = 0;
+  let centerGreen = 0;
+  let centerChromaGreen = 0;
+  let centerNaturalGreen = 0;
+  let centerLesion = 0;
+  let centerFruit = 0;
+  let centerNeutral = 0;
+  let centerTan = 0;
   let sum = 0;
   let sumSq = 0;
   const lesionMask = new Uint8Array(size * size);
   const greenMask = new Uint8Array(size * size);
+  const centerStart = size * 0.25;
+  const centerEnd = size * 0.75;
+  const centerPixelCount = (centerEnd - centerStart) * (centerEnd - centerStart);
 
   for (let index = 0; index < size * size; index += 1) {
     const offset = index * 4;
@@ -528,6 +629,9 @@ async function analyzeImageOffline(file, cropType) {
     const isYellow = red > 0.45 && green > 0.42 && blue < 0.32 && green > blue * 1.15;
     const isRust = red > 0.48 && green > 0.2 && green < 0.48 && blue < 0.24 && red > green * 1.2;
     const isLesion = (isBrown || isDark || isYellow) && !isGreenLeaf;
+    const isChromaGreen = isGreenLeaf && green > 0.42 && red < 0.25 && blue < 0.32 && saturation > 0.36;
+    const isNeutralSubject = saturation < 0.18 && maxChannel > 0.25 && maxChannel < 0.95;
+    const isTanSubject = red > 0.42 && green > 0.25 && blue > 0.12 && red > green * 1.08 && green > blue * 1.05 && saturation > 0.1;
     const isBananaFruit =
       red > 0.36 &&
       green > 0.32 &&
@@ -538,9 +642,17 @@ async function analyzeImageOffline(file, cropType) {
       green < red * 1.55 &&
       saturation > 0.05 &&
       !isGreenLeaf;
+    const x = index % size;
+    const y = Math.floor(index / size);
+    const isCenterPixel = x >= centerStart && x < centerEnd && y >= centerStart && y < centerEnd;
     if (isGreenLeaf) {
       greenLeaf += 1;
       greenMask[index] = 1;
+      if (isChromaGreen) {
+        chromaGreen += 1;
+      } else {
+        naturalGreen += 1;
+      }
     }
     if (isBananaFruit) bananaFruit += 1;
     if (isYellow) yellow += 1;
@@ -549,9 +661,16 @@ async function analyzeImageOffline(file, cropType) {
     if (isLesion) {
       lesion += 1;
       lesionMask[index] = 1;
-      const x = index % size;
-      const y = Math.floor(index / size);
       if (x < 14 || x > size - 15 || y < 14 || y > size - 15) edgeLesion += 1;
+    }
+    if (isCenterPixel) {
+      if (isGreenLeaf) centerGreen += 1;
+      if (isChromaGreen) centerChromaGreen += 1;
+      if (isGreenLeaf && !isChromaGreen) centerNaturalGreen += 1;
+      if (isLesion) centerLesion += 1;
+      if (isBananaFruit) centerFruit += 1;
+      if (isNeutralSubject) centerNeutral += 1;
+      if (isTanSubject) centerTan += 1;
     }
     if (isGreenLeaf || isLesion) plant += 1;
   }
@@ -688,8 +807,21 @@ async function analyzeImageOffline(file, cropType) {
     greenEdgeRatio: greenEdge / Math.max(greenLeaf, 1),
     adjacentNonleafRatio: adjacentNonleaf / Math.max(greenLeaf, 1),
     bananaFruitRatio: bananaFruit / (size * size),
+    chromaGreenRatio: chromaGreen / (size * size),
+    naturalGreenRatio: naturalGreen / (size * size),
+    centerGreenRatio: centerGreen / centerPixelCount,
+    centerChromaGreenRatio: centerChromaGreen / centerPixelCount,
+    centerNaturalGreenRatio: centerNaturalGreen / centerPixelCount,
+    centerLesionRatio: centerLesion / centerPixelCount,
+    centerFruitRatio: centerFruit / centerPixelCount,
+    centerNeutralRatio: centerNeutral / centerPixelCount,
+    centerTanRatio: centerTan / centerPixelCount,
     contrast: Math.sqrt(Math.max(variance, 0)) * 255,
   };
+
+  if (shouldRejectNonCropForeground(features, crop)) {
+    throw new Error(INVALID_CROP_IMAGE_MESSAGE);
+  }
 
   const filenameContext = inferContextFromFilename(file.name, crop);
   const analysisCrop = crop || filenameContext.crop || inferOfflineCrop(features, file.name);
@@ -736,20 +868,16 @@ function ResultPanel({ result, previewUrl, t }) {
                 {cropLabel}
               </span>
             )}
-            {result?.analysis_mode && (
-              <span className="inline-flex min-w-0 items-center gap-2 rounded-full bg-sky-50 px-3 py-2 text-sm font-bold capitalize text-sky-700 sm:px-4">
-                {result.analysis_mode.includes('offline') ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
-                {result.analysis_mode}
-              </span>
-            )}
           </div>
 
           <h2 className="mt-5 break-words text-2xl font-bold text-stone-950 sm:text-3xl">
             {result?.disease_name || t('readyForDiseaseAnalysis')}
           </h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
-            {result?.cause || t('diseaseAnalysisPrompt')}
-          </p>
+          {!result ? (
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
+              {t('diseaseAnalysisPrompt')}
+            </p>
+          ) : null}
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
@@ -781,7 +909,9 @@ function ResultPanel({ result, previewUrl, t }) {
               <article className="rounded-lg border border-sky-100 bg-sky-50 p-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('modelBasis')}</p>
                 <p className="mt-2 text-sm leading-6 text-stone-700">
-                  {result.analysis_mode?.includes('offline') ? 'Offline mode used local image features plus the selected or estimated crop. Confirm severe cases with a local agriculture officer.' : t('modelBasisBody')}
+                  {isLocalVisualAnalysisMode(result.analysis_mode)
+                    ? 'Local visual analysis used image features plus the selected or estimated crop. Confirm severe cases with a local agriculture officer.'
+                    : t('modelBasisBody')}
                 </p>
                 {result.reference_url && (
                   <a className="mt-3 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900" href={result.reference_url} rel="noreferrer" target="_blank">
@@ -1002,6 +1132,17 @@ export default function PlantDiseaseDetector() {
 
     setLoading(true);
     setError('');
+    setResult(null);
+
+    let preflightOfflineResult;
+    try {
+      preflightOfflineResult = await analyzeImageOffline(imageFile, selectedCrop);
+    } catch (validationError) {
+      setResult(null);
+      setError(validationError?.message || INVALID_CROP_IMAGE_MESSAGE);
+      setLoading(false);
+      return;
+    }
 
     const payload = new FormData();
     payload.append('image', imageFile);
@@ -1013,9 +1154,8 @@ export default function PlantDiseaseDetector() {
       payload.append('offline_mode', useOfflineAnalysis ? 'true' : 'false');
 
       if (useOfflineAnalysis) {
-        const offlineResult = await analyzeImageOffline(imageFile, selectedCrop);
         const nextResult = {
-          ...offlineResult,
+          ...preflightOfflineResult,
           local_id: makeHistoryId(),
           image_name: imageFile.name,
         };
@@ -1025,6 +1165,7 @@ export default function PlantDiseaseDetector() {
       }
 
       const response = await api.post('/scans', payload, {
+        timeout: 120000,
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -1047,7 +1188,12 @@ export default function PlantDiseaseDetector() {
         requestError?.response?.status === 400 &&
         /crop|leaf|plant|animal|vehicle|object/i.test(apiMessage || '');
       if (invalidCropImage) {
-        setError(apiMessage || 'Upload a crop leaf, fruit, stem, or plant-part photo.');
+        setResult(null);
+        setError(apiMessage || INVALID_CROP_IMAGE_MESSAGE);
+        return;
+      }
+      if (!shouldUseBrowserFallback(requestError)) {
+        setError(scanRequestErrorMessage(requestError));
         return;
       }
 
@@ -1061,8 +1207,9 @@ export default function PlantDiseaseDetector() {
         };
         setResult(nextResult);
         saveHistory(nextResult);
-        setError('Network or ML service was unavailable, so AgriScan used offline visual analysis.');
+        setError(scanRequestErrorMessage(requestError, 'Network or ML service was unavailable, so AgriScan used browser visual analysis.'));
       } catch (offlineError) {
+        setResult(null);
         setError(offlineError?.message || getApiErrorMessage(requestError, 'Disease detection failed.'));
       }
     } finally {
@@ -1077,40 +1224,21 @@ export default function PlantDiseaseDetector() {
 
   return (
     <div className="space-y-6">
-      <header className="overflow-hidden rounded-lg border border-leaf-100 bg-white">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="p-5 sm:p-8">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center gap-2 rounded-full bg-leaf-50 px-4 py-2 text-sm font-bold text-leaf-700">
-                <Leaf className="h-4 w-4" />
-                {t('plantDiseaseDetector')}
-              </span>
-              <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">
-                ML image analysis
-              </span>
-            </div>
-            <h1 className="mt-5 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-4xl">
-              {t('plantDiseaseDetector')}
-            </h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-stone-500 sm:text-lg">
-              {t('plantDiseaseDetectorBody')}
-            </p>
-          </div>
-
-          <div className="grid content-center gap-3 border-t border-leaf-100 bg-leaf-50 p-6 lg:border-l lg:border-t-0">
-            <div className="overflow-hidden rounded-lg border border-white/80 bg-white shadow-sm">
-              <img src={diseaseDetectorImage} alt="Rice, corn, and tomato leaves with disease symptoms" className="h-40 w-full object-cover" />
-            </div>
-            <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Supported crop focus ({quickCropOptions.length})</p>
-            <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto pr-1">
-              {quickCropOptions.map((crop) => (
-                <span key={crop} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-stone-700">
-                  {crop}
-                </span>
-              ))}
-            </div>
-            <p className="text-sm leading-6 text-stone-600">{t('supportedVisualCrops')}</p>
-          </div>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="eyebrow">Image diagnosis</p>
+          <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">
+            {t('plantDiseaseDetector')}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+            Upload a crop image and review the model diagnosis, confidence, and treatment guidance.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="status-pill border border-stone-200 bg-white text-stone-700">{quickCropOptions.length} crops</span>
+          <span className={`status-pill ${detectorMode === 'online' ? 'bg-leaf-50 text-leaf-800' : detectorMode === 'offline' ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-700'}`}>
+            {detectorMode === 'online' ? 'ML online' : detectorMode === 'offline' ? 'Device mode' : 'Checking'}
+          </span>
         </div>
       </header>
 
@@ -1119,7 +1247,7 @@ export default function PlantDiseaseDetector() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-stone-950">{t('uploadCropImage')}</h2>
-              <p className="mt-1 text-sm text-stone-500">Upload one clear crop or leaf image. Choosing the crop is optional but improves offline accuracy.</p>
+              <p className="mt-1 text-sm text-stone-500">Upload a clear crop image.</p>
             </div>
             <button className="btn-icon" type="button" onClick={resetForm} title={t('resetForm')}>
               <RotateCcw className="h-4 w-4" />
@@ -1135,49 +1263,7 @@ export default function PlantDiseaseDetector() {
                   <option key={crop} value={crop}>{crop}</option>
                 ))}
               </select>
-              <p className="mt-1 text-xs leading-5 text-stone-500">
-                Leave this on auto detect when you are unsure. AgriScan will estimate the crop from the image when possible.
-              </p>
             </label>
-
-            <div className={`rounded-lg border p-4 ${detectorMode === 'online' ? 'border-leaf-100 bg-leaf-50' : detectorMode === 'offline' ? 'border-amber-200 bg-amber-50' : 'border-stone-200 bg-white'}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex items-center gap-2 text-sm font-bold text-stone-900">
-                      {detectorConnection.checking ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-stone-500" />
-                      ) : detectorMode === 'online' ? (
-                        <Wifi className="h-4 w-4 text-leaf-600" />
-                      ) : (
-                        <WifiOff className="h-4 w-4 text-amber-700" />
-                      )}
-                      {detectorConnection.checking ? 'Checking mode' : detectorMode === 'online' ? 'Online mode' : 'Offline mode'}
-                    </span>
-                    <span className="status-pill bg-white text-stone-700">Auto detected</span>
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-stone-600">
-                    {detectorConnection.checking
-                      ? 'Checking if the backend model is reachable.'
-                      : detectorMode === 'online'
-                        ? 'Backend model and web references will be used. If the service drops, AgriScan switches to device analysis automatically.'
-                        : detectorConnection.browserOnline
-                          ? 'Backend model is unreachable, so this scan will analyze on this device only.'
-                          : 'No internet detected, so this scan will analyze on this device only.'}
-                  </p>
-                </div>
-                <button
-                  className="btn-icon h-9 w-9"
-                  type="button"
-                  onClick={detectOnlineMode}
-                  disabled={detectorConnection.checking}
-                  aria-label="Refresh detector mode"
-                  title="Refresh detector mode"
-                >
-                  {detectorConnection.checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
 
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
               <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center transition hover:border-leaf-300 hover:bg-leaf-50">
@@ -1226,19 +1312,6 @@ export default function PlantDiseaseDetector() {
 
         <div className="space-y-6">
           <ResultPanel result={result} previewUrl={previewUrl} t={t} />
-
-          <section className="grid gap-4 sm:grid-cols-2">
-            <article className="surface rounded-lg p-5">
-              <Leaf className="h-5 w-5 text-leaf-600" />
-              <p className="mt-4 text-sm font-bold uppercase tracking-wide text-stone-500">{t('detectedCrop')}</p>
-              <p className="mt-1 text-xl font-bold text-stone-950">{result ? resolveCropLabel(result) : '--'}</p>
-            </article>
-            <article className="surface rounded-lg p-5">
-              <FlaskConical className="h-5 w-5 text-leaf-600" />
-              <p className="mt-4 text-sm font-bold uppercase tracking-wide text-stone-500">{t('diagnosis')}</p>
-              <p className="mt-1 text-xl font-bold text-stone-950">{result?.disease_name || '--'}</p>
-            </article>
-          </section>
 
           <HistoryList history={history} onSelect={handleHistorySelect} t={t} />
         </div>

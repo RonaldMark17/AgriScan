@@ -57,8 +57,8 @@ export default function ForgotPassword() {
   }
 
   return (
-    <main className="grid min-h-svh place-items-center bg-[#f1f6ef] px-4 py-6">
-      <section className="surface w-full max-w-md rounded-lg p-5 sm:p-6">
+    <main className="auth-page grid place-items-center">
+      <section className="auth-card w-full max-w-md p-5 sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <Link to="/login" className="inline-flex items-center gap-2 text-sm font-bold text-leaf-700 hover:text-leaf-900">
             <ArrowLeft className="h-4 w-4" />
@@ -67,7 +67,7 @@ export default function ForgotPassword() {
           <LanguageToggle />
         </div>
 
-        <div className="mt-6 grid h-12 w-12 place-items-center rounded-lg bg-leaf-100 text-leaf-800">
+        <div className="icon-tile mt-6">
           {codeSent ? <KeyRound className="h-7 w-7" /> : <Mail className="h-7 w-7" />}
         </div>
         <h1 className="mt-4 text-2xl font-bold text-stone-950">{t('forgotPasswordTitle')}</h1>

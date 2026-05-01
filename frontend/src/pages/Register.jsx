@@ -38,11 +38,11 @@ export default function Register() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-[#f7faf6] px-3 py-6 sm:px-4 sm:py-10">
+    <main className="auth-page flex items-center justify-center">
       <div className="w-full max-w-4xl">
         <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-leaf-800 text-white">
+            <div className="brand-mark">
               <Leaf className="h-6 w-6" />
             </div>
             <div className="min-w-0">
@@ -53,8 +53,8 @@ export default function Register() {
           <LanguageToggle />
         </div>
 
-        <form className="surface grid rounded-lg lg:grid-cols-[0.85fr_1.15fr]" onSubmit={handleSubmit}>
-          <div className="border-b border-stone-200 bg-leaf-50 p-4 sm:p-6 lg:border-b-0 lg:border-r">
+        <form className="auth-card grid overflow-hidden lg:grid-cols-[0.78fr_1.22fr]" onSubmit={handleSubmit}>
+          <div className="border-b border-stone-200 bg-stone-50 p-5 sm:p-6 lg:border-b-0 lg:border-r">
             <div className="grid h-12 w-12 place-items-center rounded-lg bg-white text-leaf-800 shadow-[0_8px_18px_rgba(15,23,42,0.06)]">
               <Leaf className="h-7 w-7" />
             </div>
@@ -63,46 +63,46 @@ export default function Register() {
           </div>
 
           <div className="p-4 sm:p-6">
-          {message && <div className="success-message">{message}</div>}
-          {error && <div className="danger-message">{error}</div>}
+            {message && <div className="success-message">{message}</div>}
+            {error && <div className="danger-message">{error}</div>}
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="block sm:col-span-2">
-              <span className="text-sm font-semibold text-stone-700">{t('fullName')}</span>
-              <input className="field mt-2" required value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('email')}</span>
-              <input className="field mt-2" type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('phone')}</span>
-              <input className="field mt-2" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('role')}</span>
-              <select className="field mt-2" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
-                <option value="farmer">{t('farmer')}</option>
-                <option value="buyer">{t('buyer')}</option>
-                <option value="inspector">{t('inspector')}</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('password')}</span>
-              <input className="field mt-2" type="password" required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
-            </label>
-          </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className="text-sm font-semibold text-stone-700">{t('fullName')}</span>
+                <input className="field mt-2" required value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('email')}</span>
+                <input className="field mt-2" type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('phone')}</span>
+                <input className="field mt-2" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('role')}</span>
+                <select className="field mt-2" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
+                  <option value="farmer">{t('farmer')}</option>
+                  <option value="buyer">{t('buyer')}</option>
+                  <option value="inspector">{t('inspector')}</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('password')}</span>
+                <input className="field mt-2" type="password" required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+              </label>
+            </div>
 
-          <button className="btn-primary mt-6 w-full" disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {loading ? t('creating') : t('register')}
-          </button>
-          <p className="mt-4 text-center text-sm text-stone-500">
-            {t('alreadyRegistered')}{' '}
-            <Link className="font-semibold text-leaf-700 hover:text-leaf-900" to="/login">
-              {t('login')}
-            </Link>
-          </p>
+            <button className="btn-primary mt-6 h-12 w-full" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {loading ? t('creating') : t('register')}
+            </button>
+            <p className="mt-4 text-center text-sm text-stone-500">
+              {t('alreadyRegistered')}{' '}
+              <Link className="font-semibold text-leaf-700 hover:text-leaf-900" to="/login">
+                {t('login')}
+              </Link>
+            </p>
           </div>
         </form>
       </div>

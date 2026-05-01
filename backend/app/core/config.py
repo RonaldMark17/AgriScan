@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     frontend_dist_dir: str = "static/frontend"
     model_path: str = "app/ml/artifacts/crop_disease_model.keras"
     model_labels_path: str = "app/ml/artifacts/labels.json"
+    crop_recommender_model_path: str = "app/ml/artifacts/manual_crop_recommender.pkl"
+    crop_recommender_metadata_path: str = "app/ml/artifacts/manual_crop_recommender_metadata.json"
     enable_online_disease_lookup: bool = True
     force_offline_disease_detection: bool = False
     online_disease_lookup_timeout_seconds: float = 3.0

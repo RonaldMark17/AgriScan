@@ -1,4 +1,4 @@
-import { ArrowRight, CloudSun, Languages, Leaf, LockKeyhole, Mail, ShieldCheck, Sprout } from 'lucide-react';
+import { ArrowRight, Leaf, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loginHeroImage } from '../assets/visuals/index.js';
@@ -15,11 +15,6 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '', device_name: 'AgriScan PWA', remember_me: false });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const heroFeatures = [
-    { icon: Sprout, label: t('realTimeSoilData') },
-    { icon: CloudSun, label: t('aiCropRecommendations') },
-    { icon: Languages, label: t('multilingualSupport') },
-  ];
   const returnTo = location.state?.from?.pathname || '/';
 
   useEffect(() => {
@@ -71,15 +66,15 @@ export default function Login() {
   }
 
   return (
-    <main className="min-h-svh overflow-hidden bg-[#f1f6ef] p-0 sm:p-4">
-      <div className="mx-auto grid min-h-svh max-w-7xl overflow-hidden bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:min-h-[calc(100svh-2rem)] sm:rounded-lg sm:border sm:border-stone-200/90 lg:h-[calc(100svh-2rem)] lg:grid-cols-[minmax(0,1.12fr)_440px]">
+    <main className="auth-page grid place-items-center">
+      <div className="auth-card grid min-h-[calc(100svh-3rem)] w-full max-w-6xl overflow-hidden lg:min-h-[680px] lg:grid-cols-[minmax(0,1fr)_430px]">
         <section className="relative hidden overflow-hidden bg-leaf-950 lg:block">
           <img src={loginHeroImage} alt="Farmer using AgriScan in a rice field" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-[linear-gradient(112deg,rgba(15,23,42,0.66)_0%,rgba(20,83,45,0.45)_46%,rgba(22,163,74,0.16)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(112deg,rgba(15,23,42,0.72)_0%,rgba(20,83,45,0.48)_52%,rgba(15,23,42,0.18)_100%)]" />
 
           <div className="relative flex h-full flex-col justify-between p-8 xl:p-10">
             <div className="flex items-center gap-3 text-white">
-              <span className="grid h-12 w-12 place-items-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur">
+              <span className="grid h-12 w-12 place-items-center rounded-lg border border-white/20 bg-white/10 text-white backdrop-blur">
                 <Leaf className="h-7 w-7" />
               </span>
               <div>
@@ -89,54 +84,34 @@ export default function Login() {
             </div>
 
             <div className="max-w-2xl pb-2">
-              <h1 className="max-w-xl text-5xl font-bold leading-[1.05] text-white xl:text-6xl">
+              <p className="text-xs font-bold uppercase tracking-wide text-white/70">Farm intelligence</p>
+              <h1 className="mt-3 max-w-xl text-4xl font-bold leading-tight text-white xl:text-5xl">
                 {t('heroHeadline')}
               </h1>
-              <p className="mt-5 max-w-xl text-lg leading-8 text-white/90">
+              <p className="mt-4 max-w-xl text-base leading-7 text-white/88">
                 {t('heroBody')}
               </p>
-
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                {heroFeatures.map(({ icon: Icon, label }) => (
-                  <div key={label} className="flex min-h-20 items-center gap-3 rounded-lg border border-white/18 bg-white/10 px-4 py-3 text-white backdrop-blur-sm">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/14">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span className="text-sm font-semibold">{label}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         </section>
 
-        <section className="flex min-h-0 items-center justify-center overflow-y-auto bg-[#fcfcfa] px-5 py-6 sm:px-8 lg:px-10">
+        <section className="flex min-h-0 items-center justify-center overflow-y-auto bg-white px-5 py-6 sm:px-8 lg:px-10">
           <div className="w-full max-w-[420px]">
             <div className="flex items-center justify-between gap-4">
               <Link to="/" className="flex min-w-0 items-center gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-leaf-600 text-white shadow-[0_10px_24px_rgba(22,163,74,0.28)]">
+                <span className="brand-mark">
                   <Leaf className="h-6 w-6" />
                 </span>
                 <div className="min-w-0">
                   <span className="block truncate text-xl font-bold text-leaf-700">AgriScan</span>
-                  <span className="block text-xs font-semibold uppercase tracking-wide text-stone-400">PWA</span>
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-stone-400">Account access</span>
                 </div>
               </Link>
               <LanguageToggle />
             </div>
 
-            <div className="mt-6 overflow-hidden rounded-lg lg:hidden">
-              <div className="relative h-36">
-                <img src={loginHeroImage} alt="Farmer using AgriScan in a rice field" className="h-full w-full object-cover" />
-                <div className="absolute inset-0 bg-[linear-gradient(130deg,rgba(15,23,42,0.66),rgba(22,163,74,0.24))]" />
-                <div className="absolute inset-x-0 bottom-0 p-4">
-                  <p className="max-w-xs text-xl font-bold leading-tight text-white">{t('heroHeadline')}</p>
-                </div>
-              </div>
-            </div>
-
             <form className="mt-8" onSubmit={handleSubmit}>
-              <h2 className="text-3xl font-bold tracking-normal text-stone-950">{t('login')}</h2>
+              <h2 className="text-2xl font-bold tracking-normal text-stone-950">{t('login')}</h2>
               <p className="mt-2 text-sm leading-6 text-stone-500">{t('loginSubtitle')}</p>
 
               {error && <div className="danger-message mt-4">{error}</div>}
@@ -185,7 +160,7 @@ export default function Login() {
                 </span>
               </label>
 
-              <button className="btn-primary mt-6 h-14 w-full text-base shadow-[0_14px_28px_rgba(22,163,74,0.24)]" disabled={loading}>
+              <button className="btn-primary mt-6 h-12 w-full text-base" disabled={loading}>
                 {loading ? t('signingIn') : t('accessDashboard')}
                 <ArrowRight className="h-4 w-4" />
               </button>

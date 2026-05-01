@@ -45,6 +45,7 @@ def main() -> None:
     parser.add_argument("--data", default="app/ml/datasets/agriscan_leaf", help="Dataset folder containing train/ and val/ subfolders.")
     parser.add_argument("--output", default="app/ml/artifacts/crop_disease_model.keras")
     parser.add_argument("--labels-output", default="app/ml/artifacts/labels.json")
+    parser.add_argument("--metrics-output", default=None, help="Optional JSON metrics output path. Defaults to training_metrics.json beside the model.")
     parser.add_argument("--epochs", type=int, default=8)
     parser.add_argument("--batch-size", type=int, default=24)
     parser.add_argument("--img-size", type=int, default=224)
@@ -150,7 +151,9 @@ def main() -> None:
         "model_path": str(output_path),
         "labels_path": str(labels_path),
     }
-    (output_path.parent / "training_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    metrics_path = resolve_project_path(args.metrics_output) if args.metrics_output else output_path.parent / "training_metrics.json"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     print(json.dumps(metrics, indent=2))
 
 

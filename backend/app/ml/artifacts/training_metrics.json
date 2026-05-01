@@ -48,8 +48,8 @@
     "tomato_target_spot",
     "tomato_yellow_leaf_curl_virus"
   ],
-  "last_train_accuracy": 0.8239060640335083,
-  "last_val_accuracy": 0.8432670831680298,
+  "last_train_accuracy": 0.949306309223175,
+  "last_val_accuracy": 0.8785871863365173,
   "model_path": "C:\\Users\\ronal\\OneDrive\\Desktop\\agriscan\\backend\\app\\ml\\artifacts\\crop_disease_model.keras",
   "labels_path": "C:\\Users\\ronal\\OneDrive\\Desktop\\agriscan\\backend\\app\\ml\\artifacts\\labels.json"
 }

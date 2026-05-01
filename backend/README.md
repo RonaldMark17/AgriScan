@@ -33,6 +33,8 @@ uvicorn app.main:app --reload
 
 Then open `http://localhost:8000`. FastAPI will serve the React app and keep the API under `/api/v1`.
 
-## ML Model
+## ML Models
 
 The TensorFlow crop+disease classifier is loaded from `app/ml/artifacts/crop_disease_model.keras` with labels from `app/ml/artifacts/labels.json`. Install `requirements-ml.txt` with Python 3.12 for local ML inference. Without a model, the API uses a deterministic image heuristic fallback so the scan workflow remains demonstrable.
+
+The Manual Scan crop recommender is loaded from `app/ml/artifacts/manual_crop_recommender.pkl` with metadata from `app/ml/artifacts/manual_crop_recommender_metadata.json`. Retrain it with `python app/ml/train_crop_recommender.py` from this `backend` folder.

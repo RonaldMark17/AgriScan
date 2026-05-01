@@ -12,7 +12,6 @@ export default function InstallPrompt() {
 
   useEffect(() => {
     const beforeInstall = (event) => {
-      event.preventDefault();
       if (localStorage.getItem(INSTALL_DISMISSED_KEY) === 'true') return;
       setPrompt(event);
     };
@@ -49,7 +48,11 @@ export default function InstallPrompt() {
               window.location.reload();
               return;
             }
-            await prompt.prompt();
+            try {
+              await prompt.prompt();
+            } catch {
+              // Let the browser handle the install surface if the event is no longer promptable.
+            }
             setPrompt(null);
           }}
         >

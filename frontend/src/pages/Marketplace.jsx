@@ -1,4 +1,4 @@
-import { ArrowRight, Crosshair, Droplets, Filter, Info, Leaf, Loader2, MapPin, Play, TrendingUp, X } from 'lucide-react';
+import { ArrowRight, Crosshair, Droplets, Filter, Leaf, Loader2, MapPin, Play, TrendingUp, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import { useI18n } from '../context/I18nContext.jsx';
@@ -350,11 +350,11 @@ export default function Marketplace() {
         t={t}
       />
 
-      <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <span className="inline-flex rounded-full border border-leaf-100 bg-leaf-50 px-6 py-2 text-sm font-bold text-leaf-700">AI Powered Insights</span>
-          <h1 className="mt-4 text-3xl font-bold tracking-normal text-stone-950 sm:text-4xl">Crop Recommendations</h1>
-          <p className="mt-3 max-w-4xl text-lg leading-8 text-stone-600">
+          <p className="eyebrow">Recommendations</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">Crop Recommendations</h1>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-stone-600">
             {recommendationIntro}. {result?.weather_summary ? `${result.weather_summary}.` : ''} Using {locationLabel}.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -369,12 +369,12 @@ export default function Marketplace() {
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="btn-secondary h-12 px-5 text-base" onClick={() => loadRecommendations(true)} type="button" disabled={loading || gpsState.locating}>
-            {loading || gpsState.locating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Crosshair className="h-5 w-5" />}
+          <button className="btn-secondary h-10 px-4 text-sm" onClick={() => loadRecommendations(true)} type="button" disabled={loading || gpsState.locating}>
+            {loading || gpsState.locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
             {loading || gpsState.locating ? 'Refreshing...' : 'Use Current GPS'}
           </button>
-          <button className="btn-secondary h-12 px-5 text-base" onClick={cycleSortMode} type="button">
-            <Filter className="h-5 w-5" />
+          <button className="btn-secondary h-10 px-4 text-sm" onClick={cycleSortMode} type="button">
+            <Filter className="h-4 w-4" />
             Sort: {sortMode}
           </button>
         </div>
@@ -383,6 +383,12 @@ export default function Marketplace() {
       {(gpsState.error || error) && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
           {gpsState.error || error}
+        </div>
+      )}
+
+      {audioStatus && (
+        <div className="mb-6 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800">
+          {audioStatus}
         </div>
       )}
 
@@ -437,28 +443,6 @@ export default function Marketplace() {
         </div>
       )}
 
-      <section className="mt-8 flex flex-col gap-5 rounded-lg border border-leaf-100 bg-leaf-100/70 p-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-5">
-          <div className="grid h-16 w-16 place-items-center rounded-full bg-leaf-600 text-white">
-            <Info className="h-8 w-8" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-leaf-950">Farmer's Pro Tip</h2>
-            <p className="mt-2 max-w-4xl text-base leading-7 text-leaf-900">
-              {result?.best_crop
-                ? `${result.best_crop} is the strongest fit for ${locationLabel}. ${result.recommendations?.[0]?.planting_window || ''}`
-                : 'Run or save a soil scan first so AgriScan can personalize the best crop for your field.'}
-            </p>
-          </div>
-        </div>
-        <div className="shrink-0">
-          <button className="btn-primary h-14 w-full px-8 text-base sm:w-auto" onClick={playAudioGuide} type="button">
-            <Play className="h-5 w-5" />
-            {t('playAudioGuide')}
-          </button>
-          {audioStatus && <p className="mt-2 text-center text-sm font-semibold text-leaf-800">{audioStatus}</p>}
-        </div>
-      </section>
     </div>
   );
 }

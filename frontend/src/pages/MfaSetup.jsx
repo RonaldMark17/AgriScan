@@ -53,10 +53,10 @@ export default function MfaSetup() {
   }
 
   return (
-    <main className="grid min-h-svh place-items-center bg-[#f7faf6] px-3 py-6 sm:px-4 sm:py-10">
-      <div className="surface w-full max-w-2xl rounded-lg p-5 sm:p-6">
+    <main className="auth-page grid place-items-center">
+      <div className="auth-card w-full max-w-2xl p-5 sm:p-6">
         <div className="flex items-start gap-3 sm:items-center">
-          <div className="grid h-12 w-12 place-items-center rounded-lg bg-leaf-100 text-leaf-800">
+          <div className="icon-tile">
             <QrCode className="h-7 w-7" />
           </div>
           <div className="min-w-0">
@@ -76,7 +76,7 @@ export default function MfaSetup() {
 
         {setup && !recoveryCodes.length && (
           <div className="mt-6 grid gap-6 md:grid-cols-[240px_1fr]">
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+            <div className="grid place-items-center rounded-lg border border-stone-200 bg-stone-50 p-4">
               <img src={setup.qr_code_data_url} alt="MFA QR code" className="mx-auto aspect-square w-full max-w-52" />
             </div>
             <form onSubmit={verify}>

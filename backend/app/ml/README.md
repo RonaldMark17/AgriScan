@@ -82,7 +82,30 @@ app/ml/artifacts/training_metrics.json
 
 The FastAPI scan route loads this model automatically through `MODEL_PATH` and `MODEL_LABELS_PATH`.
 
-## 3B. Train YOLOv8-Style Classifier
+## 3B. Train Manual Scan Crop Recommender
+
+The Manual Scan form uses a separate tabular scikit-learn model trained for these fields:
+
+```text
+Soil Type, pH Level, Moisture %, Soil Temp, Nitrogen, Phosphorus, Potassium, Drainage, Sunlight, Season
+```
+
+Train it with:
+
+```powershell
+python app/ml/train_crop_recommender.py
+```
+
+This saves:
+
+```text
+app/ml/artifacts/manual_crop_recommender.pkl
+app/ml/artifacts/manual_crop_recommender_metadata.json
+```
+
+The `/predictions/soil-scan` API loads this model automatically through `CROP_RECOMMENDER_MODEL_PATH` and falls back to the rule-based recommender if the artifact is missing.
+
+## 3C. Train YOLOv8-Style Classifier
 
 For a workflow closer to the YOLO presentation:
 

@@ -30,9 +30,9 @@ export default function MfaChallenge() {
 
   if (!mfaToken) {
     return (
-    <main className="grid min-h-svh place-items-center bg-[#f7faf6] px-3 py-6 sm:px-4">
-        <div className="surface w-full max-w-md rounded-lg p-5 text-center sm:p-6">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-lg bg-leaf-50 text-leaf-800">
+      <main className="auth-page grid place-items-center">
+        <div className="auth-card w-full max-w-md p-5 text-center sm:p-6">
+          <div className="icon-tile mx-auto">
             <ShieldCheck className="h-7 w-7" />
           </div>
           <h1 className="mt-3 text-xl font-bold">MFA session expired</h1>
@@ -43,9 +43,9 @@ export default function MfaChallenge() {
   }
 
   return (
-    <main className="grid min-h-svh place-items-center bg-[#f7faf6] px-3 py-6 sm:px-4">
-      <form className="surface w-full max-w-md rounded-lg p-5 sm:p-6" onSubmit={submit}>
-        <div className="grid h-12 w-12 place-items-center rounded-lg bg-leaf-100 text-leaf-800">
+    <main className="auth-page grid place-items-center">
+      <form className="auth-card w-full max-w-md p-5 sm:p-6" onSubmit={submit}>
+        <div className="icon-tile">
           <KeyRound className="h-7 w-7" />
         </div>
         <h1 className="mt-4 text-2xl font-bold text-stone-950">Authenticator code</h1>

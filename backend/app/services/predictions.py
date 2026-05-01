@@ -1,5 +1,83 @@
 from datetime import date
 
+from app.services.crop_recommender_model import predict_manual_crop_recommendations
+
+
+CROP_RECOMMENDATION_TEMPLATES = [
+    {
+        "crop": "Rice",
+        "base": 72,
+        "reason": "Performs well in clay or alluvial soils with reliable water supply.",
+        "planting_window": "Best at the start of the rainy season or when irrigation is available.",
+        "watering": "Keep soil consistently moist during establishment.",
+        "fertilizer": "Use split nitrogen application and avoid excess nitrogen during humid periods.",
+    },
+    {
+        "crop": "Corn",
+        "base": 70,
+        "reason": "Fits well-drained loam to sandy loam soils with good sunlight.",
+        "planting_window": "Plant when soil is moist but not waterlogged.",
+        "watering": "Water during tasseling and grain filling if rainfall is low.",
+        "fertilizer": "Side-dress nitrogen during vegetative growth.",
+    },
+    {
+        "crop": "Tomato",
+        "base": 68,
+        "reason": "Needs well-drained loam soil with balanced moisture and near-neutral pH.",
+        "planting_window": "Plant during cooler dry months or protected rainy-season production.",
+        "watering": "Use consistent watering and avoid wetting leaves.",
+        "fertilizer": "Support calcium and potassium to reduce fruit disorders.",
+    },
+    {
+        "crop": "Eggplant",
+        "base": 67,
+        "reason": "Adaptable to loam and clay loam soils with warm Philippine conditions.",
+        "planting_window": "Suitable for year-round planting with pest monitoring.",
+        "watering": "Maintain steady moisture without flooding.",
+        "fertilizer": "Apply compost and balanced NPK before flowering.",
+    },
+    {
+        "crop": "Pechay",
+        "base": 64,
+        "reason": "Fast-growing leafy vegetable for fertile loam soils.",
+        "planting_window": "Plant in short cycles when heavy rain is manageable.",
+        "watering": "Water lightly and regularly.",
+        "fertilizer": "Use nitrogen-rich organic fertilizer for leaf growth.",
+    },
+    {
+        "crop": "Cassava",
+        "base": 63,
+        "reason": "Tolerates sandy or light soils and lower moisture better than many vegetables.",
+        "planting_window": "Plant at the beginning of rains for establishment.",
+        "watering": "Needs little irrigation after establishment.",
+        "fertilizer": "Add potassium support for root development.",
+    },
+    {
+        "crop": "Mung Bean",
+        "base": 62,
+        "reason": "Good legume option for sandy loam and lower nitrogen soils.",
+        "planting_window": "Best after rice or during a drier window.",
+        "watering": "Avoid waterlogging and irrigate lightly during flowering.",
+        "fertilizer": "Use inoculant or compost; avoid heavy nitrogen.",
+    },
+    {
+        "crop": "Sweet Potato",
+        "base": 61,
+        "reason": "Works well in loose sandy loam soils with moderate fertility.",
+        "planting_window": "Plant when soil is warm and rainfall is steady.",
+        "watering": "Keep moist during vine establishment, then reduce watering.",
+        "fertilizer": "Avoid excess nitrogen; support potassium for tuber growth.",
+    },
+    {
+        "crop": "Gabi / Taro",
+        "base": 60,
+        "reason": "Suitable for moist clay soils and areas that stay wet.",
+        "planting_window": "Plant during rainy months or in irrigated plots.",
+        "watering": "Maintain high soil moisture.",
+        "fertilizer": "Use compost and balanced nutrients before corm expansion.",
+    },
+]
+
 
 def build_smart_recommendation(crop_type: str, soil_type: str | None, weather: dict) -> dict:
     crop = crop_type.lower()
@@ -78,80 +156,7 @@ def build_soil_crop_recommendation(
     rain_probability = live_weather.get("rain_probability") if live_weather else None
     precipitation = live_weather.get("precipitation_mm") if live_weather else None
 
-    candidates = [
-        {
-            "crop": "Rice",
-            "base": 72,
-            "reason": "Performs well in clay or alluvial soils with reliable water supply.",
-            "planting_window": "Best at the start of the rainy season or when irrigation is available.",
-            "watering": "Keep soil consistently moist during establishment.",
-            "fertilizer": "Use split nitrogen application and avoid excess nitrogen during humid periods.",
-        },
-        {
-            "crop": "Corn",
-            "base": 70,
-            "reason": "Fits well-drained loam to sandy loam soils with good sunlight.",
-            "planting_window": "Plant when soil is moist but not waterlogged.",
-            "watering": "Water during tasseling and grain filling if rainfall is low.",
-            "fertilizer": "Side-dress nitrogen during vegetative growth.",
-        },
-        {
-            "crop": "Tomato",
-            "base": 68,
-            "reason": "Needs well-drained loam soil with balanced moisture and near-neutral pH.",
-            "planting_window": "Plant during cooler dry months or protected rainy-season production.",
-            "watering": "Use consistent watering and avoid wetting leaves.",
-            "fertilizer": "Support calcium and potassium to reduce fruit disorders.",
-        },
-        {
-            "crop": "Eggplant",
-            "base": 67,
-            "reason": "Adaptable to loam and clay loam soils with warm Philippine conditions.",
-            "planting_window": "Suitable for year-round planting with pest monitoring.",
-            "watering": "Maintain steady moisture without flooding.",
-            "fertilizer": "Apply compost and balanced NPK before flowering.",
-        },
-        {
-            "crop": "Pechay",
-            "base": 64,
-            "reason": "Fast-growing leafy vegetable for fertile loam soils.",
-            "planting_window": "Plant in short cycles when heavy rain is manageable.",
-            "watering": "Water lightly and regularly.",
-            "fertilizer": "Use nitrogen-rich organic fertilizer for leaf growth.",
-        },
-        {
-            "crop": "Cassava",
-            "base": 63,
-            "reason": "Tolerates sandy or light soils and lower moisture better than many vegetables.",
-            "planting_window": "Plant at the beginning of rains for establishment.",
-            "watering": "Needs little irrigation after establishment.",
-            "fertilizer": "Add potassium support for root development.",
-        },
-        {
-            "crop": "Mung Bean",
-            "base": 62,
-            "reason": "Good legume option for sandy loam and lower nitrogen soils.",
-            "planting_window": "Best after rice or during a drier window.",
-            "watering": "Avoid waterlogging and irrigate lightly during flowering.",
-            "fertilizer": "Use inoculant or compost; avoid heavy nitrogen.",
-        },
-        {
-            "crop": "Sweet Potato",
-            "base": 61,
-            "reason": "Works well in loose sandy loam soils with moderate fertility.",
-            "planting_window": "Plant when soil is warm and rainfall is steady.",
-            "watering": "Keep moist during vine establishment, then reduce watering.",
-            "fertilizer": "Avoid excess nitrogen; support potassium for tuber growth.",
-        },
-        {
-            "crop": "Gabi / Taro",
-            "base": 60,
-            "reason": "Suitable for moist clay soils and areas that stay wet.",
-            "planting_window": "Plant during rainy months or in irrigated plots.",
-            "watering": "Maintain high soil moisture.",
-            "fertilizer": "Use compost and balanced nutrients before corm expansion.",
-        },
-    ]
+    candidates = CROP_RECOMMENDATION_TEMPLATES
 
     scored = []
     for candidate in candidates:
@@ -239,11 +244,28 @@ def build_soil_crop_recommendation(
 
         scored.append({**candidate, "suitability": max(45, min(98, round(score)))})
 
-    recommendations = sorted(scored, key=lambda item: item["suitability"], reverse=True)[:4]
+    model_prediction = predict_manual_crop_recommendations(
+        soil_type=soil_type,
+        ph_level=ph_level,
+        moisture_percent=moisture_percent,
+        soil_temperature_c=soil_temperature_c,
+        nitrogen_level=nitrogen_level,
+        phosphorus_level=phosphorus_level,
+        potassium_level=potassium_level,
+        drainage=drainage,
+        sunlight=sunlight,
+        season=season,
+    )
+    if model_prediction:
+        recommendations = _blend_model_recommendations(model_prediction, scored)
+    else:
+        recommendations = sorted(scored, key=lambda item: item["suitability"], reverse=True)[:4]
     best = recommendations[0]
     soil_summary = _soil_summary(soil_type, ph_level, moisture_percent, drainage_value, soil_temperature_c)
     resolved_location_label = _resolve_location_label(location_label, province, latitude, longitude)
     recommendation_basis = _recommendation_basis(soil_summary, live_weather, resolved_location_label)
+    if model_prediction:
+        recommendation_basis.insert(0, "Ranked by the trained Manual Scan crop model, with agronomy rules used as guardrails.")
 
     return {
         "generated_on": date.today().isoformat(),
@@ -265,7 +287,49 @@ def build_soil_crop_recommendation(
         "weather": weather,
         "weather_summary": _weather_summary(live_weather),
         "recommendation_basis": recommendation_basis,
+        "recommendation_model": {
+            "source": model_prediction["source"] if model_prediction else "rules",
+            "version": model_prediction["model_version"] if model_prediction else "rule-based-v1",
+            "accuracy": model_prediction.get("accuracy") if model_prediction else None,
+            "top_3_accuracy": model_prediction.get("top_3_accuracy") if model_prediction else None,
+        },
     }
+
+
+def _blend_model_recommendations(model_prediction: dict, scored: list[dict]) -> list[dict]:
+    scored_by_crop = {item["crop"].lower(): item for item in scored}
+    ranked: list[dict] = []
+    seen: set[str] = set()
+
+    for prediction in model_prediction.get("predictions", []):
+        crop_name = str(prediction.get("crop", ""))
+        crop_key = crop_name.lower()
+        rule_item = scored_by_crop.get(crop_key)
+        if rule_item is None:
+            continue
+
+        probability = float(prediction.get("probability") or 0)
+        model_score = 60 + (probability * 38)
+        suitability = max(45, min(98, round((model_score * 0.68) + (rule_item["suitability"] * 0.32))))
+        ranked.append(
+            {
+                **rule_item,
+                "suitability": suitability,
+                "model_confidence": round(probability, 2),
+                "rule_suitability": rule_item["suitability"],
+            }
+        )
+        seen.add(crop_key)
+
+    for rule_item in sorted(scored, key=lambda item: item["suitability"], reverse=True):
+        crop_key = rule_item["crop"].lower()
+        if crop_key not in seen:
+            ranked.append({**rule_item, "model_confidence": 0, "rule_suitability": rule_item["suitability"]})
+            seen.add(crop_key)
+        if len(ranked) >= 4:
+            break
+
+    return sorted(ranked, key=lambda item: item["suitability"], reverse=True)[:4]
 
 
 def _soil_summary(

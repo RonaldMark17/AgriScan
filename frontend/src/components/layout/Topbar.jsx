@@ -1,6 +1,6 @@
-import { Bell, Leaf, Loader2, LogOut, Mic, Settings, UserRound, X } from 'lucide-react';
+import { Bell, CheckCheck, Leaf, Loader2, LogOut, Mic, Settings, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useI18n } from '../../context/I18nContext.jsx';
@@ -64,12 +64,14 @@ export default function Topbar() {
   const { t } = useI18n();
   const { speak, speechSupported, voiceAssistantEnabled } = useVoice();
   const location = useLocation();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const [notificationToast, setNotificationToast] = useState(null);
   const notificationsRef = useRef(null);
   const profileRef = useRef(null);
@@ -77,6 +79,11 @@ export default function Topbar() {
   const notificationsInitializedRef = useRef(false);
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
   const unreadCount = useMemo(() => notifications.filter((item) => !item.is_read).length, [notifications]);
+  const notificationSummary = useMemo(() => {
+    if (unreadCount > 0) return t('unreadNotifications', { count: unreadCount });
+    if (notifications.length > 0) return t('allNotificationsRead');
+    return t('noNotificationsYet');
+  }, [notifications.length, t, unreadCount]);
 
   const loadNotifications = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setNotificationsLoading(true);
@@ -189,10 +196,40 @@ export default function Topbar() {
     }
   }
 
+  async function markAllNotificationsRead() {
+    if (unreadCount === 0 || markingAllRead) return;
+    const unreadNotificationIds = notifications.filter((item) => !item.is_read && notificationId(item)).map(notificationId);
+    if (unreadNotificationIds.length === 0) return;
+
+    setMarkingAllRead(true);
+    try {
+      const results = await Promise.allSettled(
+        unreadNotificationIds.map((id) => api.patch(`/notifications/${id}/read`))
+      );
+      const readIds = new Set(
+        results
+          .map((result, index) => (result.status === 'fulfilled' ? unreadNotificationIds[index] : null))
+          .filter(Boolean)
+      );
+
+      if (readIds.size > 0) {
+        setNotifications((current) =>
+          current.map((item) => (readIds.has(notificationId(item)) ? { ...item, is_read: true } : item))
+        );
+        setNotificationToast(null);
+      }
+    } catch {
+      // Keep the menu responsive even if the read status update fails.
+    } finally {
+      setMarkingAllRead(false);
+    }
+  }
+
   async function handleLogout() {
     setLoggingOut(true);
     try {
       await logout();
+      navigate('/login', { replace: true });
     } finally {
       setLoggingOut(false);
       setConfirmLogoutOpen(false);
@@ -201,13 +238,13 @@ export default function Topbar() {
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-[70] border-b border-stone-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+      <header className="fixed inset-x-0 top-0 z-[70] border-b border-stone-200/90 bg-white/95 shadow-[0_1px_2px_rgba(15,23,42,0.035)] backdrop-blur">
         <div className="topbar-shell flex h-16 min-w-0 items-center justify-between lg:grid lg:h-[72px] lg:grid-cols-[256px_minmax(0,1fr)_auto]">
           <Link
             to="/"
             className="topbar-brand flex h-full min-w-0 flex-1 items-center gap-2 border-0 px-3 sm:gap-3 sm:px-5 lg:flex-none lg:px-6"
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-leaf-600 text-white sm:h-11 sm:w-11">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-700 text-white sm:h-11 sm:w-11">
               <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
             </span>
             <span className="truncate text-lg font-bold text-leaf-600 sm:text-2xl">AgriScan</span>
@@ -224,15 +261,16 @@ export default function Topbar() {
             </div>
             <Link
               to="/settings/security"
-              className="focus-ring hidden min-h-10 max-w-[12rem] items-center gap-2 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-2 text-sm font-bold text-leaf-700 transition hover:bg-leaf-100 md:inline-flex"
+              className="focus-ring hidden h-10 w-10 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-800 md:grid"
               onClick={(event) => {
                 if (!voiceAssistantEnabled || !speechSupported) return;
                 event.preventDefault();
                 speak(t(voiceGuideKey(location.pathname)), { kind: 'assistant' });
               }}
+              title={voiceAssistantEnabled ? t('voiceActive') : t('voiceInactive')}
+              aria-label={voiceAssistantEnabled ? t('voiceActive') : t('voiceInactive')}
             >
               <Mic className="h-4 w-4" />
-              <span className="truncate">{voiceAssistantEnabled ? t('voiceActive') : t('voiceInactive')}</span>
             </Link>
             <div className="relative" ref={notificationsRef}>
               <button
@@ -253,20 +291,31 @@ export default function Topbar() {
 
             {notificationsOpen ? (
               <div className="notification-menu surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-[min(92vw,380px)]">
-                <div className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-start justify-between gap-3 px-3 py-2">
                   <div>
                     <p className="text-sm font-bold text-stone-950">{t('notifications')}</p>
-                    <p className="text-xs text-stone-500">
-                      {unreadCount > 0 ? t('unreadNotifications', { count: unreadCount }) : t('noNotificationsYet')}
-                    </p>
+                    <p className="text-xs text-stone-500">{notificationSummary}</p>
                   </div>
-                  <Link
-                    to="/reports"
-                    className="text-xs font-bold text-leaf-700"
-                    onClick={() => setNotificationsOpen(false)}
-                  >
-                    {t('reports')}
-                  </Link>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {unreadCount > 0 ? (
+                      <button
+                        type="button"
+                        className="focus-ring inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-leaf-100 bg-leaf-50 px-2.5 text-xs font-bold text-leaf-800 transition hover:border-leaf-200 hover:bg-leaf-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={markAllNotificationsRead}
+                        disabled={markingAllRead}
+                      >
+                        {markingAllRead ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+                        <span className="whitespace-nowrap">{t('markAllAsRead')}</span>
+                      </button>
+                    ) : null}
+                    <Link
+                      to="/reports"
+                      className="text-xs font-bold text-leaf-700"
+                      onClick={() => setNotificationsOpen(false)}
+                    >
+                      {t('reports')}
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="max-h-[320px] space-y-1 overflow-y-auto">

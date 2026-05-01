@@ -172,7 +172,7 @@ export default function Farms() {
   const [mapState, setMapState] = useState({
     loading: true,
     error: '',
-    notice: 'OpenStreetMap is active for farm pins, field boundaries, and live location capture.',
+    notice: '',
   });
 
   const mapHostRef = useRef(null);
@@ -220,7 +220,7 @@ export default function Farms() {
     }
   }, []);
 
-  const initializeLeafletMap = useCallback((notice = 'OpenStreetMap is active for farm pins, field boundaries, and live location capture.') => {
+  const initializeLeafletMap = useCallback((notice = '') => {
     if (!leafletMapRef.current && mapHostRef.current) {
       leafletMapRef.current = L.map(mapHostRef.current, {
         center: [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
@@ -478,7 +478,7 @@ export default function Farms() {
       <PageHeader
         eyebrow="Farm mapping"
         title="Farm registry"
-        body="Register farm locations, capture GPS points, and keep field boundaries ready for scans and weather alerts."
+        body="Register farm locations and keep boundaries ready for scans and weather alerts."
       />
       <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
         <form className="surface rounded-lg p-4 sm:p-5" onSubmit={submit}>
@@ -522,9 +522,6 @@ export default function Farms() {
               {gpsLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
               {gpsLocating ? 'Locating...' : 'Use GPS location'}
             </button>
-            <p className="text-xs leading-5 text-stone-500">
-              Tap the map to place the farm center. When area is provided, AgriScan previews an estimated farm boundary.
-            </p>
             <button className="btn-primary">Save farm</button>
           </div>
         </form>
@@ -538,7 +535,7 @@ export default function Farms() {
                   GPS boundary map
                 </div>
                 <p className="mt-2 text-sm text-stone-500">
-                  Interactive OpenStreetMap view with farm pins, saved boundaries, and live location capture.
+                  Farm pins, saved boundaries, and draft locations.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs font-bold uppercase tracking-wide text-stone-500">

@@ -1,6 +1,6 @@
 /* global Response */
 
-const CACHE_NAME = 'agriscan-cache-v9';
+const CACHE_NAME = 'agriscan-cache-v23';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -86,6 +86,15 @@ self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(request.url);
 
   if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  if (
+    requestUrl.pathname === '/sw.js' ||
+    requestUrl.pathname === '/index.html' ||
+    requestUrl.pathname.startsWith('/assets/')
+  ) {
+    event.respondWith(fetch(request).catch(() => caches.match(request)));
     return;
   }
 

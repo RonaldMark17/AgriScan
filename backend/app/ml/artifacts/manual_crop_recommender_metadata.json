@@ -1,0 +1,96 @@
+{
+  "model_version": "manual-scan-hgb-v1",
+  "model_type": "sklearn.pipeline.DictVectorizer+HistGradientBoostingClassifier",
+  "trained_at": "2026-05-01T04:49:30.459883+00:00",
+  "training_source": "generated_philippine_manual_scan_profiles",
+  "training_note": "No public dataset was found with all AgriScan Manual Scan fields, so this model is trained from generated agronomic crop suitability profiles and random boundary cases.",
+  "feature_schema": {
+    "numeric": [
+      "ph_level",
+      "moisture_percent",
+      "soil_temperature_c"
+    ],
+    "categorical": [
+      "soil_type",
+      "nitrogen_level",
+      "phosphorus_level",
+      "potassium_level",
+      "drainage",
+      "sunlight",
+      "season"
+    ],
+    "numeric_defaults": {
+      "ph_level": 6.5,
+      "moisture_percent": 50.0,
+      "soil_temperature_c": 28.0
+    },
+    "categorical_defaults": {
+      "soil_type": "loam",
+      "nitrogen_level": "medium",
+      "phosphorus_level": "medium",
+      "potassium_level": "medium",
+      "drainage": "moderate",
+      "sunlight": "full sun",
+      "season": "regular season"
+    }
+  },
+  "categorical_values": {
+    "soil_type": [
+      "loam",
+      "sandy loam",
+      "clay loam",
+      "clay",
+      "sandy",
+      "alluvial"
+    ],
+    "nutrient_levels": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "drainage": [
+      "good",
+      "moderate",
+      "poor",
+      "waterlogged"
+    ],
+    "sunlight": [
+      "full sun",
+      "partial shade"
+    ],
+    "season": [
+      "regular season",
+      "wet season",
+      "dry season"
+    ]
+  },
+  "numeric_ranges": {
+    "ph_level": [
+      4.7,
+      8.1
+    ],
+    "moisture_percent": [
+      20.0,
+      95.0
+    ],
+    "soil_temperature_c": [
+      18.0,
+      36.0
+    ]
+  },
+  "accuracy": 0.9577,
+  "top_3_accuracy": 0.9986,
+  "train_samples": 14080,
+  "test_samples": 3520,
+  "classes": [
+    "Cassava",
+    "Corn",
+    "Eggplant",
+    "Gabi / Taro",
+    "Mung Bean",
+    "Pechay",
+    "Rice",
+    "Sweet Potato",
+    "Tomato"
+  ]
+}

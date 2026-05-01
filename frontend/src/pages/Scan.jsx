@@ -8,7 +8,6 @@ import {
   Filter,
   FlaskConical,
   Gauge,
-  Info,
   Leaf,
   Loader2,
   MapPin,
@@ -22,7 +21,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
-import { recommendationsImage, soilScanImage } from '../assets/visuals/index.js';
 import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
 import { reverseGeocodeLocation } from '../utils/openStreetMap.js';
@@ -65,37 +63,6 @@ const nutrientLevels = [
 ];
 const categories = ['All Crops', 'Vegetables', 'Grains', 'Fruits', 'Root Crops'];
 const sortModes = ['Suitability', 'Crop Name', 'Planting Window'];
-
-const inputGuides = [
-  {
-    title: 'Soil Type',
-    body: 'Touch moist soil by hand: gritty means sandy, sticky means clay, and soft crumbly soil means loam.',
-  },
-  {
-    title: 'pH Level',
-    body: 'Use a pH strip, soil meter, or local agriculture office test. Most common crops prefer around 6.0 to 7.0.',
-  },
-  {
-    title: 'Moisture %',
-    body: 'Use a moisture meter if available. Dry and powdery soil is low, cool damp soil is medium, and soggy soil is high.',
-  },
-  {
-    title: 'Soil Temperature',
-    body: 'Use a soil thermometer or soil meter if available. Warm soil usually speeds up heat-tolerant crops, while cooler soil slows early growth.',
-  },
-  {
-    title: 'NPK Levels',
-    body: 'If you have no soil kit, use crop signs: pale leaves often mean low nitrogen, weak roots can mean low phosphorus, and brown leaf edges can mean low potassium.',
-  },
-  {
-    title: 'Drainage and Sunlight',
-    body: 'Good drainage means water disappears quickly. Full sun means at least 6 hours of direct sunlight per day.',
-  },
-  {
-    title: 'Season and Province',
-    body: 'Choose the current season in your area. Add your province when GPS is unavailable or when you want to record the location manually.',
-  },
-];
 
 function parseOptionalNumber(value) {
   if (value === '' || value === null || value === undefined) return null;
@@ -379,59 +346,7 @@ function NutrientControl({ label, value, onChange }) {
 }
 
 function FieldHelp({ children }) {
-  return <p className="mt-1 text-xs leading-5 text-stone-500">{children}</p>;
-}
-
-function InputGuideModal({ open, onClose }) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4" onClick={onClose}>
-      <div
-        className="surface max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-lg bg-white"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="soil-guide-title"
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-5 sm:p-6">
-          <div className="flex items-start gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
-              <Info className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 id="soil-guide-title" className="text-xl font-bold text-stone-950">
-                How farmers can fill this in
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-stone-600">
-                Replace the sample choices with your actual farm readings. Use a soil kit when available, or choose the closest match from these quick field checks.
-              </p>
-            </div>
-          </div>
-          <button className="btn-icon shrink-0" type="button" onClick={onClose} aria-label="Close instructions">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="max-h-[calc(85vh-110px)] overflow-y-auto p-5 sm:p-6">
-          <div className="space-y-3">
-            {inputGuides.map((guide) => (
-              <div key={guide.title} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
-                <p className="text-sm font-bold text-stone-900">{guide.title}</p>
-                <p className="mt-1 text-sm leading-6 text-stone-600">{guide.body}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 flex justify-end">
-            <button className="btn-primary" type="button" onClick={onClose}>
-              Got it
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <p className="mt-1 text-[11px] leading-4 text-stone-500">{children}</p>;
 }
 
 function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
@@ -570,7 +485,6 @@ export default function Scan() {
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showGuideModal, setShowGuideModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All Crops');
   const [sortMode, setSortMode] = useState('Suitability');
   const [selectedCrop, setSelectedCrop] = useState(null);
@@ -595,19 +509,6 @@ export default function Scan() {
     }
     requestCurrentLocation(true);
   }, []);
-
-  useEffect(() => {
-    if (!showGuideModal) return undefined;
-
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        setShowGuideModal(false);
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showGuideModal]);
 
   useEffect(() => {
     if (!selectedCrop) return undefined;
@@ -826,7 +727,6 @@ export default function Scan() {
 
   return (
     <div className="space-y-6">
-      <InputGuideModal open={showGuideModal} onClose={() => setShowGuideModal(false)} />
       <CropGuideModal
         crop={selectedCrop}
         weatherSummary={result?.weather_summary}
@@ -835,52 +735,19 @@ export default function Scan() {
         t={t}
       />
 
-      <header className="overflow-hidden rounded-lg border border-leaf-100 bg-white">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="p-5 sm:p-8">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center gap-2 rounded-full bg-leaf-50 px-4 py-2 text-sm font-bold text-leaf-700">
-                <FlaskConical className="h-4 w-4" />
-                Manual Soil Scan
-              </span>
-              <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">Recommendations Included</span>
-            </div>
-            <h1 className="mt-5 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-4xl">
-              Manual Scan & Crop Recommendations
-            </h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-stone-500 sm:text-lg">
-              Enter soil type, pH, moisture, and NPK levels. AgriScan will recommend the best crop and show detailed guides in the same workspace.
-            </p>
-          </div>
-          <div className="grid content-center gap-4 border-t border-leaf-100 bg-leaf-50 p-6 lg:border-l lg:border-t-0">
-            <div className="overflow-hidden rounded-lg border border-white/80 bg-white shadow-sm">
-              <img src={soilScanImage} alt="Soil and seedling field scan visual" className="h-40 w-full object-cover" />
-              <div className="grid gap-3 p-4">
-                {[
-                  ['Soil', form.soil_type],
-                  ['pH', form.ph_level || 'Not set'],
-                  ['Moisture', form.moisture_percent ? `${form.moisture_percent}%` : 'Not set'],
-                  ['Soil Temp', form.soil_temperature_c ? `${form.soil_temperature_c}C` : 'Not set'],
-                  ['Location', locationLabel || 'Pending'],
-                  ['Best Crop', result?.best_crop || 'Pending'],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between gap-4 text-sm">
-                    <span className="font-semibold text-leaf-900">{label}</span>
-                    <span className="min-w-0 text-right font-bold text-stone-950">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="overflow-hidden rounded-lg border border-white/80 bg-white shadow-sm">
-              <img src={recommendationsImage} alt="Harvested crops ready for recommendation matching" className="h-28 w-full object-cover" />
-              <div className="p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Recommendation Context</p>
-                <p className="mt-2 text-sm leading-6 text-stone-600">
-                  Your soil reading, GPS location, and live weather all combine to rank the best crop match for this field.
-                </p>
-              </div>
-            </div>
-          </div>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="eyebrow">Manual soil scan</p>
+          <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">
+            Manual Scan & Crop Recommendations
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+            Enter field readings to rank crop matches and prepare soil actions.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="status-pill border border-stone-200 bg-white text-stone-700">{form.soil_type}</span>
+          <span className="status-pill bg-leaf-50 text-leaf-800">{result?.best_crop || 'Ready'}</span>
         </div>
       </header>
 
@@ -890,14 +757,6 @@ export default function Scan() {
             <div>
               <h2 className="text-xl font-bold text-stone-950">Soil Details</h2>
               <p className="mt-1 text-sm text-stone-500">Type the soil reading from your farm plot.</p>
-              <button
-                className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-leaf-700"
-                type="button"
-                onClick={() => setShowGuideModal(true)}
-              >
-                <Info className="h-4 w-4" />
-                How farmers can fill this in
-              </button>
             </div>
             <button className="btn-icon" type="button" onClick={resetForm} title="Reset form">
               <RotateCcw className="h-4 w-4" />
@@ -1138,28 +997,6 @@ export default function Scan() {
                 <p className="mt-1 text-xl font-bold capitalize text-stone-950">{value}</p>
               </article>
             ))}
-          </section>
-
-          <section className="flex flex-col gap-5 rounded-lg border border-leaf-100 bg-leaf-100/70 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-5">
-              <div className="grid h-16 w-16 place-items-center rounded-full bg-leaf-600 text-white">
-                <Info className="h-8 w-8" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-leaf-950">Farmer's Pro Tip</h2>
-                <p className="mt-2 max-w-4xl text-base leading-7 text-leaf-900">
-                  {result?.best_crop
-                    ? `${result.best_crop} is the strongest fit for ${locationLabel}. ${result.recommendations?.[0]?.planting_window || ''}`
-                    : 'Run or save a soil scan first so AgriScan can personalize the best crop for your field.'}
-                </p>
-              </div>
-            </div>
-            <div className="shrink-0">
-              <button className="btn-primary h-14 w-full px-8 text-base sm:w-auto" onClick={() => playAudioGuide()} type="button">
-                <Play className="h-5 w-5" />
-                {t('playAudioGuide')}
-              </button>
-            </div>
           </section>
 
           <HistoryList history={history} onSelect={handleHistorySelect} />

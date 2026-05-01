@@ -58,6 +58,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => loadJson(USER_KEY));
   const [sessionReady, setSessionReady] = useState(false);
   const refreshPromiseRef = useRef(null);
+  const sessionVersionRef = useRef(0);
 
   useEffect(() => {
     setAccessToken(accessToken);
@@ -85,6 +86,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const clearSession = useCallback(() => {
+    sessionVersionRef.current += 1;
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
@@ -93,13 +95,6 @@ export function AuthProvider({ children }) {
     setTokenState(null);
     setRefreshTokenState(null);
     setUser(null);
-    setAccessToken(null);
-  }, []);
-
-  const clearAccessSession = useCallback(() => {
-    localStorage.removeItem(ACCESS_KEY);
-    localStorage.removeItem(LAST_ACTIVE_KEY);
-    setTokenState(null);
     setAccessToken(null);
   }, []);
 
@@ -139,19 +134,16 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     const token = localStorage.getItem(REFRESH_KEY);
-    if (hasActiveRememberedSession()) {
-      clearAccessSession();
-      return;
-    }
-
     try {
-      if (accessToken) {
+      if (token) {
         await api.post('/auth/logout', { refresh_token: token });
       }
+    } catch {
+      // Local logout must still complete if the network or token revocation fails.
     } finally {
       clearSession();
     }
-  }, [accessToken, clearAccessSession, clearSession]);
+  }, [clearSession]);
 
   const refreshSession = useCallback(async () => {
     if (refreshPromiseRef.current) {
@@ -162,15 +154,22 @@ export function AuthProvider({ children }) {
     if (!token) {
       throw new Error('No refresh token available');
     }
+    const refreshSessionVersion = sessionVersionRef.current;
 
     refreshPromiseRef.current = api
       .post('/auth/refresh', { refresh_token: token })
       .then(async ({ data }) => {
+        if (sessionVersionRef.current !== refreshSessionVersion) {
+          throw new Error('Session changed during refresh');
+        }
         let sessionUser = user;
         if (!sessionUser && data.access_token) {
           setAccessToken(data.access_token);
           const meResponse = await api.get('/auth/me');
           sessionUser = meResponse.data;
+        }
+        if (sessionVersionRef.current !== refreshSessionVersion) {
+          throw new Error('Session changed during refresh');
         }
         persistSession({ ...data, user: sessionUser });
         return data.access_token;
