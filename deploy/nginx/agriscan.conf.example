@@ -19,7 +19,8 @@ server {
   ssl_certificate /etc/letsencrypt/live/agriscann.duckdns.org/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/agriscann.duckdns.org/privkey.pem;
 
-  client_max_body_size 25m;
+  # Allow 10 MB photos plus small multipart/form-data overhead.
+  client_max_body_size 12m;
 
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;

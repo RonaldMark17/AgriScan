@@ -17,6 +17,7 @@ from app.services.push_notifications import create_notification, dispatch_push_t
 router = APIRouter(prefix="/scans", tags=["scans"])
 settings = get_settings()
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024
 NON_ALERT_SCAN_NAMES = {"healthy", "healthy crop", "invalid crop or leaf image", "low-confidence crop image"}
 
 
@@ -96,8 +97,8 @@ async def create_scan(
         file_path = upload_dir / f"{uuid4().hex}{suffix}"
 
         content = await image.read()
-        if len(content) > 8 * 1024 * 1024:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image exceeds 8 MB limit.")
+        if len(content) > MAX_IMAGE_UPLOAD_BYTES:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image exceeds 10 MB limit.")
         file_path.write_bytes(content)
 
     detection = (

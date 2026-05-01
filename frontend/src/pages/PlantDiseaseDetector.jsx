@@ -15,6 +15,7 @@ import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 
 const HISTORY_STORAGE_KEY = 'agriscan_disease_scans';
+const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 const INVALID_CROP_IMAGE_MESSAGE =
   'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
 const supportedCropFocus = [
@@ -275,7 +276,7 @@ function scanRequestErrorMessage(error, fallback = 'Disease detection failed.') 
   const status = error?.response?.status;
   if (status === 401) return 'Your session expired. Please sign in again, then scan the image.';
   if (status === 403) return 'Your account is not allowed to create disease scans.';
-  if (status === 413) return apiMessage || 'Image exceeds the 8 MB upload limit.';
+  if (status === 413) return apiMessage || 'Image exceeds the 10 MB upload limit.';
   if (status === 415) return apiMessage || 'Only JPG, PNG, and WebP images are supported.';
   if (status >= 400 && status < 500) return apiMessage || 'AgriScan could not process this image. Try a JPG, PNG, or WebP crop photo.';
   if (error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')) {
@@ -1106,6 +1107,12 @@ export default function PlantDiseaseDetector() {
       setError('Please upload a valid crop image file.');
       return;
     }
+    if (nextFile.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setError('Image exceeds the 10 MB upload limit.');
+      setResult(null);
+      clearImage();
+      return;
+    }
 
     setError('');
     setResult(null);
@@ -1278,7 +1285,6 @@ export default function PlantDiseaseDetector() {
               <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center transition hover:border-leaf-300 hover:bg-leaf-50">
                 <input
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   key={fileInputKey}
                   type="file"
