@@ -550,7 +550,7 @@ export default function Farms() {
               </div>
             )}
 
-            <div className="relative mt-4 overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
+            <div className="relative z-0 isolate mt-4 overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
               <div ref={mapHostRef} className="min-h-[300px] w-full sm:min-h-[380px] lg:min-h-[420px]" />
               {(mapState.loading || mapState.error) && (
                 <div className="absolute inset-0 grid place-items-center bg-white/85 px-6 text-center">

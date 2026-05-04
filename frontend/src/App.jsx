@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { useLayoutEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppShell from './components/layout/AppShell.jsx';
 import ProtectedRoute from './router/ProtectedRoute.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
@@ -14,9 +15,26 @@ import Reports from './pages/Reports.jsx';
 import Scan from './pages/Scan.jsx';
 import SecuritySettings from './pages/SecuritySettings.jsx';
 
+function ScrollToPageTop() {
+  const { pathname } = useLocation();
+
+  useLayoutEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToPageTop />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />

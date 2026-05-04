@@ -6,6 +6,7 @@ const REFRESH_KEY = 'agriscan_refresh';
 const USER_KEY = 'agriscan_user';
 const LAST_ACTIVE_KEY = 'agriscan_last_active';
 const REMEMBER_UNTIL_KEY = 'agriscan_remember_until';
+const MFA_TRUST_KEY = 'agriscan_mfa_trust_tokens';
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const REMEMBER_ME_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -47,6 +48,39 @@ function getRememberUntil() {
   return Number(localStorage.getItem(REMEMBER_UNTIL_KEY) || 0);
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function loadMfaTrustTokens() {
+  const stored = loadJson(MFA_TRUST_KEY);
+  return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+}
+
+function getMfaTrustToken(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+  const stored = loadMfaTrustTokens()[normalizedEmail];
+  return typeof stored === 'string' && stored ? stored : null;
+}
+
+function saveMfaTrustToken(email, token) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !token) return;
+  const tokens = loadMfaTrustTokens();
+  tokens[normalizedEmail] = token;
+  localStorage.setItem(MFA_TRUST_KEY, JSON.stringify(tokens));
+}
+
+function removeMfaTrustToken(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return;
+  const tokens = loadMfaTrustTokens();
+  if (!tokens[normalizedEmail]) return;
+  delete tokens[normalizedEmail];
+  localStorage.setItem(MFA_TRUST_KEY, JSON.stringify(tokens));
+}
+
 function hasActiveRememberedSession() {
   const rememberUntil = getRememberUntil();
   return Boolean(localStorage.getItem(REFRESH_KEY) && rememberUntil && rememberUntil > Date.now());
@@ -77,6 +111,9 @@ export function AuthProvider({ children }) {
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       setUser(data.user);
     }
+    if (data.mfa_trust_token) {
+      saveMfaTrustToken(data.user?.email, data.mfa_trust_token);
+    }
     if (data.remember_me === true) {
       localStorage.setItem(REMEMBER_UNTIL_KEY, String(Date.now() + REMEMBER_ME_MS));
     } else if (data.remember_me === false) {
@@ -100,9 +137,15 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(
     async (payload) => {
-      const { data } = await api.post('/auth/login', payload);
+      const mfaTrustToken = getMfaTrustToken(payload.email);
+      const { data } = await api.post('/auth/login', {
+        ...payload,
+        mfa_trust_token: mfaTrustToken || undefined,
+      });
       if (data.status === 'ok') {
         persistSession(data);
+      } else if (data.status === 'mfa_required' && mfaTrustToken) {
+        removeMfaTrustToken(payload.email);
       }
       return data;
     },

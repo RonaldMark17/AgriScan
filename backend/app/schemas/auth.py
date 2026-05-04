@@ -24,6 +24,7 @@ class LoginRequest(BaseModel):
     password: str
     device_name: str | None = Field(default=None, max_length=160)
     remember_me: bool = False
+    mfa_trust_token: str | None = None
 
 
 class VerifyMFARequest(BaseModel):
@@ -44,6 +45,7 @@ class LoginResponse(BaseModel):
     user: dict | None = None
     access_token: str | None = None
     refresh_token: str | None = None
+    mfa_trust_token: str | None = None
     token_type: str = "bearer"
     mfa_token: str | None = None
     setup_token: str | None = None
@@ -98,6 +100,7 @@ class MFASetupVerifyResponse(BaseModel):
     recovery_codes: list[str]
     access_token: str | None = None
     refresh_token: str | None = None
+    mfa_trust_token: str | None = None
     token_type: str = "bearer"
     remember_me: bool = False
 

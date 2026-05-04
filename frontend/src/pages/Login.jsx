@@ -88,7 +88,7 @@ export default function Login() {
               <h1 className="mt-3 max-w-xl text-4xl font-bold leading-tight text-white xl:text-5xl">
                 {t('heroHeadline')}
               </h1>
-              <p className="mt-4 max-w-xl text-base leading-7 text-white/88">
+              <p className="mt-4 max-w-xl text-base leading-7 text-white/90 drop-shadow-sm">
                 {t('heroBody')}
               </p>
             </div>

@@ -89,6 +89,15 @@ def create_mfa_token(user_id: int, purpose: str = "challenge") -> str:
     )
 
 
+def create_mfa_trust_token(user_id: int, *, expires_days: int | None = None) -> str:
+    return create_token(
+        subject=str(user_id),
+        token_type="mfa_trust",
+        expires_delta=timedelta(days=expires_days or settings.remember_me_expire_days),
+        extra_claims={"purpose": "trusted_device"},
+    )
+
+
 def create_refresh_token(user_id: int, role: str, *, expires_days: int | None = None, remember_me: bool = False) -> str:
     return create_token(
         subject=str(user_id),

@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.security import (
     create_access_token,
     create_mfa_token,
+    create_mfa_trust_token,
     create_refresh_token,
     decode_token,
     generate_otp,
@@ -75,6 +76,22 @@ def _is_expired(timestamp: datetime | None) -> bool:
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=UTC)
     return timestamp < datetime.now(UTC)
+
+
+def _valid_mfa_trust_token(user: User, token: str | None) -> bool:
+    if not token:
+        return False
+    try:
+        decoded = decode_token(token, "mfa_trust")
+        return int(decoded["sub"]) == user.id and decoded.get("purpose") == "trusted_device"
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _mfa_trust_token_for_response(user: User, remember_me: bool) -> str | None:
+    if not remember_me:
+        return None
+    return create_mfa_trust_token(user.id, expires_days=settings.remember_me_expire_days)
 
 
 async def _issue_token_pair(
@@ -210,17 +227,27 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
         await db.commit()
         return LoginResponse(status="mfa_setup_required", setup_token=setup_token, user=_user_payload(user), remember_me=payload.remember_me)
 
-    if mfa_enabled:
+    trusted_mfa_device = mfa_enabled and _valid_mfa_trust_token(user, payload.mfa_trust_token)
+    if mfa_enabled and not trusted_mfa_device:
         mfa_token = create_mfa_token(user.id, purpose="challenge")
         await db.commit()
         return LoginResponse(status="mfa_required", mfa_token=mfa_token, user=_user_payload(user), remember_me=payload.remember_me)
 
     access_token, refresh_token = await _issue_token_pair(db, user, request, payload.device_name, payload.remember_me)
     await send_new_login_alert(user.email, payload.device_name, ip_address)
+    if trusted_mfa_device:
+        await write_audit_log(db, request, "auth.mfa_trusted_device", actor=user, resource_type="user", resource_id=user.id)
     await write_audit_log(db, request, "auth.login_success", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
     _set_refresh_cookie(response, refresh_token, payload.remember_me)
-    return LoginResponse(status="ok", access_token=access_token, refresh_token=refresh_token, user=_user_payload(user), remember_me=payload.remember_me)
+    return LoginResponse(
+        status="ok",
+        access_token=access_token,
+        refresh_token=refresh_token,
+        mfa_trust_token=_mfa_trust_token_for_response(user, payload.remember_me) if mfa_enabled else None,
+        user=_user_payload(user),
+        remember_me=payload.remember_me,
+    )
 
 
 @router.post("/mfa/verify", response_model=LoginResponse)
@@ -242,11 +269,19 @@ async def verify_mfa(
 
     user.last_login_at = datetime.now(UTC)
     access_token, refresh_token = await _issue_token_pair(db, user, request, payload.device_name, payload.remember_me)
+    mfa_trust_token = _mfa_trust_token_for_response(user, payload.remember_me)
     await send_new_login_alert(user.email, payload.device_name, get_request_ip(request))
     await write_audit_log(db, request, "auth.mfa_success", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
     _set_refresh_cookie(response, refresh_token, payload.remember_me)
-    return LoginResponse(status="ok", access_token=access_token, refresh_token=refresh_token, user=_user_payload(user), remember_me=payload.remember_me)
+    return LoginResponse(
+        status="ok",
+        access_token=access_token,
+        refresh_token=refresh_token,
+        mfa_trust_token=mfa_trust_token,
+        user=_user_payload(user),
+        remember_me=payload.remember_me,
+    )
 
 
 @router.post("/refresh", response_model=TokenPair)
@@ -394,8 +429,10 @@ async def verify_mfa_setup(
 
     recovery_codes = await enable_mfa_and_issue_recovery_codes(db, user)
     access_token = refresh_token = None
+    mfa_trust_token = None
     if payload.setup_token:
         access_token, refresh_token = await _issue_token_pair(db, user, request, remember_me=payload.remember_me)
+        mfa_trust_token = _mfa_trust_token_for_response(user, payload.remember_me)
         _set_refresh_cookie(response, refresh_token, payload.remember_me)
     await write_audit_log(db, request, "auth.mfa_enabled", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
@@ -404,6 +441,7 @@ async def verify_mfa_setup(
         recovery_codes=recovery_codes,
         access_token=access_token,
         refresh_token=refresh_token,
+        mfa_trust_token=mfa_trust_token,
         remember_me=payload.remember_me,
     )
 

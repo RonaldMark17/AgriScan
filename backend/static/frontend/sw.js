@@ -1,6 +1,6 @@
 /* global Response */
 
-const CACHE_NAME = 'agriscan-cache-v24';
+const CACHE_NAME = 'agriscan-cache-v25';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -126,6 +126,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const isAppRoute = !requestUrl.pathname.includes('.') && !requestUrl.pathname.startsWith('/api/') && !requestUrl.pathname.startsWith('/uploads/');
+  if (isAppRoute) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => response.ok ? response : caches.match('/index.html'))
+        .catch(() => caches.match('/index.html').then((cached) => cached || caches.match('/offline.html')))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)
@@ -136,7 +146,7 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => cached || new Response('', { status: 504, statusText: 'Offline' }));
+        .catch(() => cached || new Response('', { status: 503 }));
       return cached || network;
     })
   );
