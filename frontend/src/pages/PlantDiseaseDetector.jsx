@@ -919,13 +919,13 @@ async function analyzeImageOffline(file, cropType) {
   };
 }
 
-function ResultPanel({ result, previewUrl, t }) {
+function ResultPanel({ result, previewUrl, t, panelRef }) {
   const confidence = result ? Math.round(result.confidence * 100) : 0;
   const cropLabel = result ? resolveCropLabel(result) : '--';
   const cropVerified = Boolean(result?.crop_label || result?.crop_type || inferCropLabel(result)) && cropLabel !== 'General crop leaf';
 
   return (
-    <section className="surface overflow-hidden rounded-lg">
+    <section ref={panelRef} className="surface scroll-mt-20 overflow-hidden rounded-lg sm:scroll-mt-24 lg:scroll-mt-28">
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="p-4 sm:p-6">
           <div className="flex flex-wrap items-center gap-3">
@@ -1066,6 +1066,8 @@ export default function PlantDiseaseDetector() {
   const { t } = useI18n();
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const resultPanelRef = useRef(null);
+  const pendingResultRevealRef = useRef(false);
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -1158,10 +1160,24 @@ export default function PlantDiseaseDetector() {
     };
   }, [previewUrl]);
 
+  useEffect(() => {
+    if (!result || !pendingResultRevealRef.current) return;
+    pendingResultRevealRef.current = false;
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    resultPanelRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
+  }, [result]);
+
   function saveHistory(scan) {
     const next = [scan, ...history.filter((item) => item.local_id !== scan.local_id)].slice(0, 12);
     setHistory(next);
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+  }
+
+  function queueResultReveal() {
+    pendingResultRevealRef.current = true;
   }
 
   function updateImage(nextFile) {
@@ -1253,6 +1269,7 @@ export default function PlantDiseaseDetector() {
           local_id: makeHistoryId(),
           image_name: imageFile.name,
         };
+        queueResultReveal();
         setResult(nextResult);
         saveHistory(nextResult);
         return;
@@ -1274,6 +1291,7 @@ export default function PlantDiseaseDetector() {
         image_name: imageFile.name,
       };
 
+      queueResultReveal();
       setResult(nextResult);
       saveHistory(nextResult);
     } catch (requestError) {
@@ -1299,6 +1317,7 @@ export default function PlantDiseaseDetector() {
           image_name: imageFile.name,
           analysis_mode: 'offline browser fallback',
         };
+        queueResultReveal();
         setResult(nextResult);
         saveHistory(nextResult);
         setError(scanRequestErrorMessage(requestError, 'Network or ML service was unavailable, so AgriScan used browser visual analysis.'));
@@ -1313,6 +1332,7 @@ export default function PlantDiseaseDetector() {
 
   function handleHistorySelect(scan) {
     clearImage();
+    queueResultReveal();
     setResult(scan);
   }
 
@@ -1449,7 +1469,7 @@ export default function PlantDiseaseDetector() {
         </form>
 
         <div className="space-y-6">
-          <ResultPanel result={result} previewUrl={previewUrl} t={t} />
+          <ResultPanel panelRef={resultPanelRef} result={result} previewUrl={previewUrl} t={t} />
 
           <HistoryList history={history} onSelect={handleHistorySelect} t={t} />
         </div>

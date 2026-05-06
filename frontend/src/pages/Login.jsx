@@ -1,4 +1,4 @@
-import { ArrowRight, Leaf, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Leaf, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loginHeroImage } from '../assets/visuals/index.js';
@@ -15,6 +15,7 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '', device_name: 'AgriScan PWA', remember_me: false });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const returnTo = location.state?.from?.pathname || '/';
 
   useEffect(() => {
@@ -133,13 +134,22 @@ export default function Login() {
               <div className="mt-2 flex h-14 items-center rounded-lg border border-stone-300 bg-white px-4 transition focus-within:border-leaf-600 focus-within:ring-2 focus-within:ring-leaf-100">
                 <LockKeyhole className="h-5 w-5 shrink-0 text-stone-400" />
                 <input
-                  className="ml-3 w-full border-0 bg-transparent p-0 text-[15px] text-stone-900 outline-none placeholder:text-stone-400"
-                  type="password"
+                  className="ml-3 min-w-0 flex-1 border-0 bg-transparent p-0 text-[15px] text-stone-900 outline-none placeholder:text-stone-400"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   required
                   value={form.password}
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
                 />
+                <button
+                  className="focus-ring ml-2 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-700"
+                  type="button"
+                  aria-label={t(showPassword ? 'hidePassword' : 'showPassword')}
+                  aria-pressed={showPassword}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               <div className="mt-3 flex justify-end">
                 <Link className="text-sm font-semibold text-leaf-700 hover:text-leaf-900" to="/forgot-password">
