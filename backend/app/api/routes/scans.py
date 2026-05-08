@@ -19,7 +19,14 @@ settings = get_settings()
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_UPLOAD_MB = 10
 MAX_IMAGE_UPLOAD_BYTES = MAX_IMAGE_UPLOAD_MB * 1024 * 1024
-NON_ALERT_SCAN_NAMES = {"healthy", "healthy crop", "invalid crop or leaf image", "low-confidence crop image"}
+NON_ALERT_SCAN_NAMES = {
+    "healthy",
+    "healthy crop",
+    "invalid crop or leaf image",
+    "low-confidence crop image",
+    "crop scan needs review",
+    "manual field review needed",
+}
 
 
 def _scan_alert_details(scan: Scan, crop_label: str | None, crop_type: str | None) -> tuple[str, str, dict] | None:
