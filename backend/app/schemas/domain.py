@@ -30,7 +30,7 @@ class UserUpdate(BaseModel):
     full_name: str | None = Field(default=None, max_length=160)
     phone: str | None = Field(default=None, max_length=32)
     is_active: bool | None = None
-    role: str | None = Field(default=None, pattern="^(admin|farmer|buyer|inspector)$")
+    role: str | None = Field(default=None, pattern="^(admin|farmer)$")
 
 
 class FarmCreate(BaseModel):

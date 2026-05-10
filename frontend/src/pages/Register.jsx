@@ -81,11 +81,7 @@ export default function Register() {
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-stone-700">{t('role')}</span>
-                <select className="field mt-2" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
-                  <option value="farmer">{t('farmer')}</option>
-                  <option value="buyer">{t('buyer')}</option>
-                  <option value="inspector">{t('inspector')}</option>
-                </select>
+                <input className="field mt-2" value={t('farmer')} readOnly />
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-stone-700">{t('password')}</span>

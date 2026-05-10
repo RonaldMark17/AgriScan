@@ -9,9 +9,7 @@ CREATE TABLE IF NOT EXISTS roles (
 
 INSERT INTO roles (name, description, requires_mfa) VALUES
   ('admin', 'System administrator', 1),
-  ('farmer', 'Farm owner or operator', 0),
-  ('inspector', 'Agriculture office staff or inspector', 1),
-  ('buyer', 'Harvest buyer or cooperative purchaser', 0)
+  ('farmer', 'Farm owner or operator', 0)
 ON CONFLICT(name) DO UPDATE SET
   description = excluded.description,
   requires_mfa = excluded.requires_mfa;

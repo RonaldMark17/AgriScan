@@ -89,8 +89,8 @@ Set `MYSQL_DATABASE_URL` in `backend/.env` or pass `--source-url` if the old MyS
 - JWT access tokens plus rotating refresh tokens
 - TOTP MFA with QR setup for Google Authenticator and Microsoft Authenticator
 - One-time backup recovery codes
-- Admin and inspector MFA policy
-- Role-based access control for admin, farmer, inspector, and buyer workflows
+- Admin MFA policy
+- Role-based access control for admin and farmer workflows
 - Login attempt limiter
 - Forgot password via email OTP
 - Device login history and new login alerts

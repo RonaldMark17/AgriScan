@@ -30,8 +30,6 @@ from app.models import (
 ROLE_SEED = {
     "admin": ("System administrator", True),
     "farmer": ("Farm owner or operator", False),
-    "inspector": ("Agriculture office staff or inspector", True),
-    "buyer": ("Harvest buyer or cooperative purchaser", False),
 }
 
 
@@ -390,24 +388,6 @@ async def seed_demo_data(shared_password: str) -> None:
             location_hint="Solano, Nueva Vizcaya",
             last_login_days_ago=1,
         ),
-        UserSeed(
-            full_name="Engr. Teresa Ramos",
-            email="inspector@agriscanproject.com",
-            role="inspector",
-            phone="+639171000201",
-            device_name="Inspection Laptop",
-            location_hint="Muñoz, Nueva Ecija",
-            last_login_days_ago=0,
-        ),
-        UserSeed(
-            full_name="GreenFields Cooperative",
-            email="buyer@agriscanproject.com",
-            role="buyer",
-            phone="+639171000301",
-            device_name="Buyer Operations PC",
-            location_hint="San Jose City, Nueva Ecija",
-            last_login_days_ago=2,
-        ),
     ]
 
     async with AsyncSessionLocal() as db:
@@ -419,8 +399,6 @@ async def seed_demo_data(shared_password: str) -> None:
 
         farmer_juan = seeded_users["farmer@agriscanproject.com"]
         farmer_maria = seeded_users["maria.santos@agriscanproject.com"]
-        inspector = seeded_users["inspector@agriscanproject.com"]
-        buyer = seeded_users["buyer@agriscanproject.com"]
         admin = seeded_users["admin@agriscanproject.com"]
 
         san_isidro = await upsert_farm(
@@ -581,7 +559,7 @@ async def seed_demo_data(shared_password: str) -> None:
             quantity_kg=1250,
             price_per_kg=24.5,
             harvest_date=date.today() + timedelta(days=24),
-            description="[seed:yellow-corn] Drying in crib storage and ready for cooperative buyers this month.",
+            description="[seed:yellow-corn] Drying in crib storage and ready for cooperative partners this month.",
             contact_phone=farmer_juan.phone or "",
             status="available",
         )
@@ -593,7 +571,7 @@ async def seed_demo_data(shared_password: str) -> None:
             quantity_kg=320,
             price_per_kg=48.0,
             harvest_date=date.today() + timedelta(days=10),
-            description="[seed:tomato] Fresh harvest for local buyers and restaurants in Nueva Vizcaya.",
+            description="[seed:tomato] Fresh harvest for local markets and restaurants in Nueva Vizcaya.",
             contact_phone=farmer_maria.phone or "",
             status="available",
         )
@@ -628,25 +606,6 @@ async def seed_demo_data(shared_password: str) -> None:
             is_read=False,
             payload={"best_crop": "Tomato", "seeded": True},
         )
-        await upsert_notification(
-            db,
-            user=inspector,
-            title="Inspection visit scheduled",
-            body="Field validation for San Isidro Demo Farm is scheduled tomorrow at 9:00 AM.",
-            type_="inspection",
-            is_read=True,
-            payload={"farm": "San Isidro Demo Farm", "seeded": True},
-        )
-        await upsert_notification(
-            db,
-            user=buyer,
-            title="New harvests available",
-            body="Two marketplace listings now match your buyer profile: Yellow Corn and Tomato.",
-            type_="marketplace",
-            is_read=False,
-            payload={"matches": 2, "seeded": True},
-        )
-
         await upsert_audit_log(
             db,
             actor=admin,
@@ -677,17 +636,6 @@ async def seed_demo_data(shared_password: str) -> None:
             user_agent="AgriScan PWA",
             metadata_json={"seeded": True, "disease": "Pest-related leaf damage"},
         )
-        await upsert_audit_log(
-            db,
-            actor=buyer,
-            action="marketplace.created",
-            resource_type="marketplace",
-            resource_id="seed-yellow-corn",
-            ip_address="192.168.1.55",
-            user_agent="AgriScan Buyer Portal",
-            metadata_json={"seeded": True, "crop_name": "Yellow Corn"},
-        )
-
         for seed in users_to_seed:
             user = seeded_users[seed.email]
             await upsert_device_login_history(

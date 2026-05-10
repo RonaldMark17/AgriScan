@@ -43,7 +43,7 @@ export default function SecuritySettings() {
   }));
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
   const mfaEnabled = Boolean(user?.mfa_enabled);
-  const mfaRequired = roleName === 'admin' || roleName === 'inspector';
+  const mfaRequired = roleName === 'admin';
   const isAdmin = roleName === 'admin';
 
   const fetchDevices = useCallback(async () => {
