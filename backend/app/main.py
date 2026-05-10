@@ -7,7 +7,7 @@ from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 
 from app.api.api import api_router
 from app.core.config import get_settings
@@ -47,15 +47,15 @@ async def seed_roles() -> None:
                 role.description = description
                 role.requires_mfa = requires_mfa
 
+        await db.flush()
         farmer_result = await db.execute(select(Role).where(Role.name == "farmer"))
         farmer_role = farmer_result.scalar_one()
         legacy_result = await db.execute(select(Role).where(Role.name.in_(("inspector", "buyer"))))
         legacy_roles = list(legacy_result.scalars().all())
-        for legacy_role in legacy_roles:
-            users_result = await db.execute(select(User).where(User.role_id == legacy_role.id))
-            for user in users_result.scalars().all():
-                user.role_id = farmer_role.id
-            await db.delete(legacy_role)
+        legacy_role_ids = [role.id for role in legacy_roles]
+        if legacy_role_ids:
+            await db.execute(update(User).where(User.role_id.in_(legacy_role_ids)).values(role_id=farmer_role.id))
+            await db.execute(delete(Role).where(Role.id.in_(legacy_role_ids)))
         await db.commit()
 
 
