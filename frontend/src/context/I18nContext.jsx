@@ -1,4 +1,6 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
+import { api } from '../api/client.js';
 
 const messages = {
   en: {
@@ -737,6 +739,13 @@ const messages = {
   },
 };
 
+const ONLINE_TRANSLATION_STORAGE_KEY = 'agriscan_online_translations_v1';
+const ONLINE_TRANSLATION_BATCH_SIZE = 20;
+const ONLINE_TRANSLATION_MAX_LENGTH = 500;
+const ONLINE_TRANSLATION_LANGUAGE_PAIRS = {
+  fil: { source_lang: 'en', target_lang: 'fil' },
+};
+
 const I18nContext = createContext(null);
 
 function interpolate(template, params) {
@@ -744,17 +753,147 @@ function interpolate(template, params) {
   return Object.entries(params).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, value), template);
 }
 
+function readStoredOnlineTranslations() {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const stored = window.localStorage.getItem(ONLINE_TRANSLATION_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function storeOnlineTranslations(translations) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(ONLINE_TRANSLATION_STORAGE_KEY, JSON.stringify(translations));
+  } catch {
+    // Keep the in-memory translations even when browser storage is unavailable.
+  }
+}
+
+function chunkEntries(entries, size) {
+  const chunks = [];
+  for (let index = 0; index < entries.length; index += size) {
+    chunks.push(entries.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function shouldUseOnlineTranslation(key, language) {
+  if (language === 'en' || key === 'appName') return false;
+
+  const englishText = messages.en[key];
+  const localText = messages[language]?.[key];
+  return typeof englishText === 'string' && (!localText || localText === englishText);
+}
+
+function getOnlineCandidateEntries(language, onlineTranslations) {
+  const translatedKeys = onlineTranslations[language] || {};
+
+  return Object.entries(messages.en).filter(([key, text]) => (
+    shouldUseOnlineTranslation(key, language) &&
+    !translatedKeys[key] &&
+    typeof text === 'string' &&
+    text.trim() &&
+    text.length <= ONLINE_TRANSLATION_MAX_LENGTH
+  ));
+}
+
 export function I18nProvider({ children }) {
   const [language, setLanguage] = useState(() => localStorage.getItem('agriscan_language') || 'en');
+  const [onlineTranslations, setOnlineTranslations] = useState(readStoredOnlineTranslations);
+  const onlineTranslationsRef = useRef(onlineTranslations);
+
+  useEffect(() => {
+    onlineTranslationsRef.current = onlineTranslations;
+  }, [onlineTranslations]);
+
+  useEffect(() => {
+    const languagePair = ONLINE_TRANSLATION_LANGUAGE_PAIRS[language];
+    if (!languagePair) return undefined;
+
+    const pendingEntries = getOnlineCandidateEntries(language, onlineTranslationsRef.current);
+    if (!pendingEntries.length) return undefined;
+
+    let cancelled = false;
+
+    async function loadOnlineTranslations() {
+      for (const batch of chunkEntries(pendingEntries, ONLINE_TRANSLATION_BATCH_SIZE)) {
+        const response = await api.post('/system/translate', {
+          texts: batch.map(([, text]) => text),
+          ...languagePair,
+        }, { timeout: 45000 });
+
+        if (cancelled) return;
+
+        const responseTranslations = response.data?.translations || [];
+        const batchTranslations = batch.reduce((nextTranslations, [key, sourceText], index) => {
+          const translatedText = responseTranslations[index];
+          if (typeof translatedText === 'string' && translatedText.trim() && translatedText !== sourceText) {
+            nextTranslations[key] = translatedText;
+          }
+          return nextTranslations;
+        }, {});
+
+        if (Object.keys(batchTranslations).length) {
+          setOnlineTranslations((currentTranslations) => {
+            const nextTranslations = {
+              ...currentTranslations,
+              [language]: {
+                ...(currentTranslations[language] || {}),
+                ...batchTranslations,
+              },
+            };
+            onlineTranslationsRef.current = nextTranslations;
+            storeOnlineTranslations(nextTranslations);
+            return nextTranslations;
+          });
+        }
+      }
+    }
+
+    loadOnlineTranslations().catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
 
   const value = useMemo(() => {
-    const t = (key, params) => interpolate(messages[language]?.[key] || messages.en[key] || key, params);
+    const t = (key, params) => {
+      const localTemplate = messages[language]?.[key];
+      const englishTemplate = messages.en[key];
+      const onlineTemplate = shouldUseOnlineTranslation(key, language)
+        ? onlineTranslations[language]?.[key]
+        : null;
+      return interpolate(onlineTemplate || localTemplate || englishTemplate || key, params);
+    };
+
+    const translateText = async (text, targetLanguage = language) => {
+      const languagePair = ONLINE_TRANSLATION_LANGUAGE_PAIRS[targetLanguage];
+      if (!languagePair || !text?.trim()) return text;
+
+      try {
+        const response = await api.post('/system/translate', {
+          texts: [text],
+          ...languagePair,
+        });
+        return response.data?.translations?.[0] || text;
+      } catch {
+        return text;
+      }
+    };
+
     const changeLanguage = (nextLanguage) => {
       localStorage.setItem('agriscan_language', nextLanguage);
       setLanguage(nextLanguage);
     };
-    return { language, setLanguage: changeLanguage, t };
-  }, [language]);
+    return { language, setLanguage: changeLanguage, t, translateText };
+  }, [language, onlineTranslations]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

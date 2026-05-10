@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     enable_online_disease_lookup: bool = True
     force_offline_disease_detection: bool = False
     online_disease_lookup_timeout_seconds: float = 3.0
+    translation_api_base_url: str = "https://api.mymemory.translated.net/get"
+    translation_timeout_seconds: float = 6.0
     require_admin_mfa: bool = True
 
     @property

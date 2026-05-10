@@ -151,6 +151,11 @@ const offlineDiseaseGuide = {
     cause: 'Rust-colored speckling on corn leaves can indicate common rust.',
     treatment: 'Scout nearby plants, plant resistant hybrids in future cycles, and seek local advice if rust pustules spread quickly.',
   },
+  corn_stalk_rot: {
+    disease_name: 'Corn stalk rot symptoms',
+    cause: 'The image shows browning, decay, or lesions on corn stalk tissue instead of a leaf-only disease pattern.',
+    treatment: 'Remove heavily affected stalks after harvest, improve field drainage and residue management, avoid plant stress where practical, and confirm the stalk rot cause with a local agriculture officer.',
+  },
   tomato_early_blight: {
     disease_name: 'Tomato early blight',
     cause: 'The tomato leaf has brown necrotic spotting consistent with early blight or related leaf spot symptoms.',
@@ -393,6 +398,7 @@ function inferContextFromFilename(fileName, cropType) {
   if (crop === 'mango' && text.includes('anthracnose')) return { crop: 'mango', key: 'mango_anthracnose', confidence: 0.86 };
   if (crop === 'mango' && (text.includes('canker') || text.includes('black spot'))) return { crop: 'mango', key: 'mango_bacterial_canker', confidence: 0.82 };
   if (text.includes('northern leaf blight') || (crop === 'corn' && text.includes('blight'))) return { crop: 'corn', key: 'corn_northern_leaf_blight', confidence: 0.84 };
+  if (text.includes('stalk rot') || (text.includes('stalk') && text.includes('rot'))) return { crop: crop || 'corn', key: 'corn_stalk_rot', confidence: 0.84 };
   if (text.includes('sigatoka')) return { crop: 'banana', key: text.includes('black') ? 'banana_black_sigatoka' : 'banana_yellow_sigatoka', confidence: 0.84 };
   if (crop === 'banana' && /\b(bunch|crown|closeup|close up)\b/.test(text)) return { crop: 'banana', key: 'banana_crown_rot', confidence: 0.83 };
   if (crop === 'banana' && /\b(fruit|rot|anthracnose|black|disease|spot)\b/.test(text)) return { crop: 'banana', key: 'banana_fruit_rot', confidence: 0.82 };
@@ -401,8 +407,17 @@ function inferContextFromFilename(fileName, cropType) {
 }
 
 function looksLikeBananaFruitIssue(features, crop) {
-  if (crop !== 'banana') return false;
+  if (crop && crop !== 'banana') return false;
   if (looksLikeHealthyRicePanicle(features)) return false;
+  const cornEarLike =
+    !crop &&
+    features.bananaFruitRatio >= 0.22 &&
+    features.maxFruitAreaRatio >= 0.12 &&
+    features.greenLeafRatio >= 0.06 &&
+    features.greenLeafRatio < 0.42 &&
+    features.greenComponentCount <= 5;
+  if (cornEarLike) return false;
+  if (!crop && features.greenLeafRatio >= 0.45 && features.maxGreenAreaRatio >= 0.28) return false;
   const fruitSignal =
     features.bananaFruitRatio >= 0.1 ||
     features.maxFruitAreaRatio >= 0.08 ||
@@ -417,9 +432,9 @@ function looksLikeBananaFruitIssue(features, crop) {
 function looksLikeHealthyRicePanicle(features) {
   const warmGrainRatio = features.bananaFruitRatio + features.yellowRatio;
   const warmGrainSignal =
-    features.bananaFruitRatio >= 0.035 ||
-    features.yellowRatio >= 0.045 ||
-    warmGrainRatio >= 0.05;
+    (features.bananaFruitRatio >= 0.045 && features.yellowRatio >= 0.035) ||
+    warmGrainRatio >= 0.11 ||
+    (features.fruitComponentCount >= 4 && features.maxFruitAreaRatio < 0.08 && features.bananaFruitRatio >= 0.055);
   const grassLeafStructure =
     features.greenLeafRatio >= 0.14 &&
     (features.maxGreenAspect >= 1.45 ||
@@ -457,19 +472,43 @@ function looksLikeHealthyRicePanicle(features) {
     !(features.lesionRatio >= 0.18 && features.maxAreaRatio >= 0.14);
   const spottedLeafDisease =
     features.componentCount >= 7 &&
-    features.darkLesionRatio >= 0.045 &&
-    features.lesionWithinPlant >= 0.05 &&
-    features.yellowRatio < 0.035 &&
+    features.lesionRatio >= 0.028 &&
+    features.lesionWithinPlant >= 0.045 &&
     !riceGrainCanopy;
+  const rustSpotDisease =
+    features.componentCount >= 8 &&
+    features.rustRatio >= 0.025 &&
+    features.lesionRatio >= 0.07;
   const bananaBunchLike =
     features.maxFruitAreaRatio >= 0.24 &&
     features.bananaFruitRatio >= 0.22 &&
     features.greenLeafRatio < 0.32;
+  const chewingOrMissingTissue =
+    features.adjacentNonleafRatio >= 0.18 &&
+    features.greenEdgeRatio >= 0.18 &&
+    features.lesionRatio < 0.055 &&
+    warmGrainRatio < 0.12;
+  const broadSingleLeaf =
+    features.maxGreenAreaRatio >= 0.4 &&
+    features.greenComponentCount <= 6 &&
+    warmGrainRatio < 0.13 &&
+    features.yellowRatio < 0.08;
   const mangoBlightLike =
     looksLikeMangoLeaf(features) &&
     (features.darkLesionRatio >= 0.025 || features.lesionRatio >= 0.07 || features.yellowRatio >= 0.08);
   const leafStructure = grassLeafStructure || riceCanopyWithGrain || riceGrainCanopy;
-  return warmGrainSignal && leafStructure && clusteredSmallGrains && notRotLike && !spottedLeafDisease && !bananaBunchLike && !mangoBlightLike;
+  return (
+    warmGrainSignal &&
+    leafStructure &&
+    clusteredSmallGrains &&
+    notRotLike &&
+    !spottedLeafDisease &&
+    !rustSpotDisease &&
+    !bananaBunchLike &&
+    !chewingOrMissingTissue &&
+    !broadSingleLeaf &&
+    !mangoBlightLike
+  );
 }
 
 function looksLikeHealthyBananaBunch(features) {
@@ -697,6 +736,16 @@ function shouldRejectNonCropForeground(features, crop) {
     features.centerNeutralRatio >= 0.16 &&
     features.centerFruitRatio < 0.14 &&
     features.centerNaturalGreenRatio / Math.max(features.naturalGreenRatio, 0.001) < 0.35;
+  const centeredAnimalOrPerson =
+    !crop &&
+    features.greenLeafRatio >= 0.2 &&
+    features.centerGreenRatio < 0.12 &&
+    features.maxGreenAreaRatio < 0.3 &&
+    features.lesionRatio < 0.04 &&
+    features.bananaFruitRatio < 0.08 &&
+    features.centerTanRatio >= 0.12 &&
+    features.centerNeutralRatio >= 0.1 &&
+    features.centerLesionRatio < 0.04;
   const flatGreenBackground =
     !crop &&
     features.greenLeafRatio >= 0.58 &&
@@ -713,6 +762,7 @@ function shouldRejectNonCropForeground(features, crop) {
     centeredNeutralObject ||
     centeredFurLikeObject ||
     animalOnGreenBackground ||
+    centeredAnimalOrPerson ||
     flatGreenBackground
   );
 }
@@ -726,7 +776,10 @@ function inferOfflineCrop(features, fileName = '') {
   if (looksLikeHealthyBananaBunch(features)) return 'banana';
 
   const bananaFruitLike =
-    (features.bananaFruitRatio >= 0.18 && features.darkLesionRatio >= 0.04 && features.lesionRatio >= 0.06) ||
+    (features.bananaFruitRatio >= 0.18 &&
+      features.darkLesionRatio >= 0.04 &&
+      features.lesionRatio >= 0.06 &&
+      (features.greenLeafRatio < 0.55 || features.greenComponentCount >= 6 || features.maxFruitAreaRatio >= 0.18)) ||
     (features.greenComponentCount >= 8 && features.maxGreenAspect >= 2 && features.darkLesionRatio >= 0.08 && features.yellowRatio >= 0.04);
   if (bananaFruitLike) return 'banana';
 
@@ -743,7 +796,14 @@ function inferOfflineCrop(features, fileName = '') {
     if (features.greenLeafRatio >= 0.18 || features.maxGreenAreaRatio >= 0.08) return 'corn';
     return 'rice';
   }
-  if (features.yellowRatio >= 0.2 && features.lesionRatio >= 0.08 && features.greenLeafRatio >= 0.3 && features.maxGreenAspect < 1.8) return 'banana';
+  if (
+    features.yellowRatio >= 0.2 &&
+    features.lesionRatio >= 0.08 &&
+    features.greenLeafRatio >= 0.3 &&
+    features.maxGreenAspect < 1.8 &&
+    features.rustRatio < 0.03 &&
+    features.componentCount < 12
+  ) return 'banana';
   if (features.darkLesionRatio >= 0.04 && features.greenLeafRatio < 0.55) return 'tomato';
   if (features.greenLeafRatio >= 0.2 && features.maxGreenAspect >= 2.0) return 'corn';
   if (features.yellowRatio >= 0.1) return 'rice';
@@ -1128,7 +1188,6 @@ async function analyzeImageOffline(file, cropType) {
   const cropSpecificDisease = Boolean(keyCrop && !key.endsWith('_healthy'));
   if (featureInferredOnly && cropSpecificDisease) {
     key = 'leaf_spot_or_blight';
-    analysisCrop = '';
   }
   const guide = offlineDiseaseGuide[key] || offlineDiseaseGuide.healthy;
   const usedFilenameDisease = Boolean(filenameContext.key && key === filenameContext.key);
@@ -1153,13 +1212,17 @@ async function analyzeImageOffline(file, cropType) {
     analysis_mode:
       key === 'review_needed'
         ? 'uncertain browser visual review'
-        : usedFilenameDisease
-          ? 'filename-guided browser analysis'
-          : crop
-            ? 'offline browser analysis'
-            : analysisCrop
-              ? 'offline browser crop-inferred analysis'
-              : 'offline browser visual analysis',
+        : healthyRicePanicle
+          ? 'rice panicle browser analysis'
+          : healthyBananaBunch
+            ? 'banana bunch browser analysis'
+            : usedFilenameDisease
+              ? 'filename-guided browser analysis'
+              : crop
+                ? 'offline browser analysis'
+                : analysisCrop
+                  ? 'offline browser crop-inferred analysis'
+                  : 'offline browser visual analysis',
     reference_url: null,
     reference_title: null,
     created_at: new Date().toISOString(),
@@ -1292,7 +1355,7 @@ function ResultPanel({ result, previewUrl, t, panelRef }) {
               </div>
             )}
           </div>
-          {result?.image_name && <p className="mt-3 text-sm font-semibold text-stone-700">{result.image_name}</p>}
+          {result?.image_name && <p className="mt-3 break-all text-sm font-semibold text-stone-700">{result.image_name}</p>}
           {yoloDetections.length > 0 && (
             <div className="mt-4 space-y-2">
               {yoloDetections.slice(0, 4).map((detection, index) => (
