@@ -1,5 +1,7 @@
 import {
   Camera,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   ClipboardList,
   Flag,
@@ -14,6 +16,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { api, getApiBaseUrl } from '../api/client.js';
 import { diseaseDetectorImage } from '../assets/visuals/index.js';
+import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 
@@ -22,6 +25,7 @@ const MAX_IMAGE_UPLOAD_MB = 10;
 const MAX_IMAGE_UPLOAD_BYTES = MAX_IMAGE_UPLOAD_MB * 1024 * 1024;
 const TRANSPORT_IMAGE_TARGET_BYTES = 900 * 1024;
 const TRANSPORT_IMAGE_MAX_DIMENSION = 1600;
+const CUSTOM_CROP_OPTION = '__other_crop__';
 const INVALID_CROP_IMAGE_MESSAGE =
   'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
 class CropTypeMismatchError extends Error {
@@ -62,6 +66,58 @@ const cropDisplayNamesByKey = Object.fromEntries(supportedCropFocus.map((crop) =
 const cropAliasEntries = supportedCropFocus
   .flatMap((crop) => [crop.key, crop.name, ...crop.aliases].map((alias) => [alias.toLowerCase().replace(/[_-]+/g, ' '), crop.key]))
   .sort((first, second) => second[0].length - first[0].length);
+const unsupportedCropAliasEntries = [
+  ['lettuce', 'Lettuce'],
+  ['mustard', 'Mustard'],
+  ['mustasa', 'Mustard'],
+  ['okra', 'Okra'],
+  ['lady finger', 'Okra'],
+  ['ladyfinger', 'Okra'],
+  ['jute', 'Jute'],
+  ['saluyot', 'Jute'],
+  ['kangkong', 'Water Spinach'],
+  ['water spinach', 'Water Spinach'],
+  ['spinach', 'Spinach'],
+  ['squash', 'Squash'],
+  ['kalabasa', 'Squash'],
+  ['cucumber', 'Cucumber'],
+  ['pipino', 'Cucumber'],
+  ['watermelon', 'Watermelon'],
+  ['melon', 'Melon'],
+  ['papaya', 'Papaya'],
+  ['langka', 'Jackfruit'],
+  ['jackfruit', 'Jackfruit'],
+  ['durian', 'Durian'],
+  ['rambutan', 'Rambutan'],
+  ['lanzones', 'Lanzones'],
+  ['chayote', 'Chayote'],
+  ['sayote', 'Chayote'],
+  ['sitaw', 'Yardlong Bean'],
+  ['yardlong bean', 'Yardlong Bean'],
+  ['string bean', 'String Bean'],
+  ['soybean', 'Soybean'],
+  ['peanut', 'Peanut'],
+  ['mani', 'Peanut'],
+  ['singkamas', 'Singkamas / Jicama'],
+  ['jicama', 'Singkamas / Jicama'],
+  ['yam bean', 'Singkamas / Jicama'],
+  ['mexican turnip', 'Singkamas / Jicama'],
+  ['black pepper', 'Black Pepper'],
+  ['peppercorn', 'Black Pepper'],
+  ['peppercorns', 'Black Pepper'],
+  ['pepper corns', 'Black Pepper'],
+  ['paminta', 'Black Pepper'],
+  ['sesame', 'Sesame'],
+  ['sunflower', 'Sunflower'],
+  ['strawberry', 'Strawberry'],
+  ['grape', 'Grape'],
+  ['orange', 'Orange'],
+  ['lemon', 'Lemon'],
+  ['lime', 'Lime'],
+  ['orchid', 'Orchid'],
+  ['rose', 'Rose'],
+].sort((first, second) => second[0].length - first[0].length);
+const unsupportedCropNameGuards = ['black pepper', 'peppercorn', 'peppercorns', 'pepper corns', 'paminta'];
 
 function makeHistoryId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -117,13 +173,41 @@ function historyKey(scan) {
   return scan?.local_id || `${scan?.image_name || scan?.image_path || 'scan'}-${scan?.created_at || ''}`;
 }
 
-function normalizeHistoryScan(scan) {
+function normalizeFilenameUnsupportedScan(scan) {
+  const imageName = scan?.image_name || imageNameFromPath(scan?.image_path);
+  const filenameLabel = unsupportedCropLabelFromFilename(imageName);
+  if (!filenameLabel) return scan;
+
+  const cropText = `${scan?.crop_label || ''} ${scan?.crop_type || ''}`.toLowerCase();
+  const alreadyLabeled = cropText.includes(filenameLabel.toLowerCase());
+  const wrongSupportedCrop = /\b(banana|corn|rice|tomato|mango|guava|pepper|potato)\b/.test(cropText);
+  if (alreadyLabeled && !wrongSupportedCrop) return scan;
+
+  const cropPartHint = /singkamas|jicama|yam bean|mexican turnip/i.test(filenameLabel)
+    ? 'singkamas root, leaf, or stem'
+    : 'affected leaf, fruit, stem, or plant part';
+
   return {
+    ...scan,
+    crop_type: `Possible ${filenameLabel}`,
+    crop_label: `Possible ${filenameLabel}`,
+    disease_name: 'Crop scan needs review',
+    confidence: Math.min(Number(scan?.confidence) || 0.58, 0.62),
+    cause: `AgriScan recognized ${filenameLabel} from the file name, but this crop is not in the trained crop list. The previous crop-specific result should be reviewed instead of treated as banana, corn, rice, or another listed crop.`,
+    treatment: `Retake a close photo of the ${cropPartHint}, compare it with an online crop reference, and confirm with a local agriculture officer before applying any treatment.`,
+    analysis_mode: 'filename unsupported crop review',
+    reference_url: onlineReferenceSearchUrl('healthy', filenameLabel),
+    reference_title: 'Search online crop disease reference',
+  };
+}
+
+function normalizeHistoryScan(scan) {
+  return normalizeFilenameUnsupportedScan({
     ...scan,
     local_id: scan.local_id || (scan.id ? `scan-${scan.id}` : makeHistoryId()),
     image_name: scan.image_name || imageNameFromPath(scan.image_path),
     crop_label: scan.crop_label || scan.crop_type || inferCropLabel(scan),
-  };
+  });
 }
 
 function mergeHistory(serverHistory, localHistory) {
@@ -173,6 +257,28 @@ function inferCropLabel(scan) {
 
 function resolveCropLabel(scan) {
   return scan?.crop_label || scan?.crop_type || inferCropLabel(scan) || 'General crop leaf';
+}
+
+function translateCropLabel(label, t) {
+  if (label === 'General crop leaf') return t('generalCropLeaf');
+  return label;
+}
+
+function translateDiseaseName(name, t) {
+  const key = String(name || '').trim().toLowerCase();
+  const labels = {
+    'healthy crop': 'healthyCrop',
+    'leaf spot or blight symptoms': 'leafSpotOrBlightSymptoms',
+    'pest-related leaf damage': 'pestRelatedLeafDamage',
+    'pest or physical leaf damage': 'pestOrPhysicalLeafDamage',
+    'crop scan needs review': 'cropScanNeedsReview',
+    'possible healthy crop': 'possibleHealthyCrop',
+    'possible leaf spot or blight symptoms': 'possibleLeafSpotOrBlightSymptoms',
+    'possible pest-related leaf damage': 'possiblePestRelatedLeafDamage',
+    'not a crop image': 'notCropImage',
+    'invalid crop or leaf image': 'invalidCropOrLeafImage',
+  };
+  return labels[key] ? t(labels[key]) : name;
 }
 
 const offlineDiseaseGuide = {
@@ -560,9 +666,16 @@ function normalizeCrop(value) {
   return (value || '').trim().toLowerCase();
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function normalizeCropKey(value) {
   const normalized = normalizeCrop(value).replace(/[_-]+/g, ' ');
   if (!normalized) return '';
+  if (unsupportedCropNameGuards.some((term) => new RegExp(`\\b${escapeRegExp(term)}\\b`).test(normalized))) {
+    return normalized.replace(/\s+/g, '_');
+  }
   for (const [alias, cropKey] of cropAliasEntries) {
     if (new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(normalized)) {
       return cropKey;
@@ -659,6 +772,129 @@ function hasNonCropFilenameContext(fileName) {
   if (text.includes('spider mite')) return false;
   const tokens = new Set(text.split(/\s+/));
   return nonCropFilenameTerms.some((term) => tokens.has(term));
+}
+
+function freeformUnsupportedCropLabel(cropType) {
+  const cropKey = normalizeCropKey(cropType);
+  if (!cropType || cropDisplayNamesByKey[cropKey]) return '';
+  const text = normalizeContextText(cropType);
+  if (!text || ['auto detect', 'auto detect crop', 'select crop', 'unknown'].includes(text)) return '';
+  const tokens = new Set(text.split(/\s+/));
+  if (nonCropFilenameTerms.some((term) => tokens.has(term))) return '';
+  for (const [alias, label] of unsupportedCropAliasEntries) {
+    if (new RegExp(`\\b${escapeRegExp(alias)}\\b`).test(text)) return label;
+  }
+  const words = text.split(/\s+/).filter((word) => !['crop', 'plant', 'leaf'].includes(word));
+  return words.length ? words.slice(0, 4).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : '';
+}
+
+function unsupportedCropLabelFromFilename(fileName) {
+  const text = normalizeContextText(fileName);
+  if (!text) return '';
+  for (const [alias, label] of unsupportedCropAliasEntries) {
+    if (new RegExp(`\\b${escapeRegExp(alias)}\\b`).test(text)) return label;
+  }
+  return '';
+}
+
+function possibleCropGroupLabel(features) {
+  const hasLeafOrPlantSubject =
+    hasCropSubjectInForeground(features, '') ||
+    (features.greenLeafRatio >= 0.16 && (features.maxGreenAreaRatio >= 0.08 || features.lesionRatio >= 0.035));
+  if (!hasLeafOrPlantSubject) return '';
+  if (features.bananaFruitRatio >= 0.12 || features.maxFruitAreaRatio >= 0.1) return 'Unlisted fruit crop';
+  if (
+    features.maxGreenAspect >= 2.3 ||
+    (features.greenComponentCount >= 3 && features.maxGreenAspect >= 1.9 && features.maxGreenAreaRatio < 0.22)
+  ) {
+    return 'Unlisted grass-like crop';
+  }
+  if (features.greenLeafRatio >= 0.22 || features.maxGreenAreaRatio >= 0.12) return 'Unlisted leafy crop';
+  return 'Unlisted crop';
+}
+
+function possibleUnsupportedCropLabel(features, { fileName = '', cropType = '', supportedInference = '' } = {}) {
+  const selectedCropKey = normalizeCropKey(cropType);
+  const filenameLabel = unsupportedCropLabelFromFilename(fileName);
+  if (filenameLabel) {
+    if (
+      selectedCropKey &&
+      supportedInference === selectedCropKey &&
+      isReliableVisualCropInference(features, supportedInference)
+    ) {
+      return '';
+    }
+    return filenameLabel;
+  }
+  if (cropDisplayNamesByKey[selectedCropKey]) return '';
+
+  const freeformLabel = freeformUnsupportedCropLabel(cropType);
+  if (freeformLabel) {
+    if (supportedInference && isReliableVisualCropInference(features, supportedInference)) return '';
+    return freeformLabel;
+  }
+
+  const filenameContext = inferContextFromFilename(fileName, cropType);
+  if (cropDisplayNamesByKey[filenameContext.crop]) return '';
+  if (supportedInference && isReliableVisualCropInference(features, supportedInference)) return '';
+  return possibleCropGroupLabel(features);
+}
+
+function onlineReferenceSearchUrl(referenceKey, cropLabel) {
+  const query =
+    referenceKey === 'healthy'
+      ? `${cropLabel} healthy plant leaf disease diagnosis extension`
+      : referenceKey === 'pest_leaf_damage'
+        ? `${cropLabel} leaf chewing holes insect damage integrated pest management extension`
+        : `${cropLabel} leaf spot blight symptoms disease management extension`;
+  return `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+}
+
+function buildPossibleUnsupportedResult(features, cropLabel) {
+  const key = pickOfflineDiseaseKey('', features);
+  const strongDiseaseSignal = hasStrongVisualDiseaseSignal(features, '');
+  const classKey = key || 'review_needed';
+  const possibleCropLabel = cropLabel.startsWith('Possible ') ? cropLabel : `Possible ${cropLabel}`;
+  let diseaseName = 'Possible healthy crop';
+  let cause = `AgriScan does not have ${cropLabel} in the trained crop list. The visible plant tissue does not show strong disease markers, so it may be healthy.`;
+  let treatment = 'Keep monitoring new leaves or fruit, compare with a trusted crop guide, and retake a close photo if spots, yellowing, wilting, or rot appears.';
+  let referenceKey = 'healthy';
+  let confidence = classKey === 'review_needed' ? 0.58 : Math.min(Math.max(computeOfflineConfidence(features, ''), 0.54), 0.72);
+
+  if (!['healthy', 'review_needed'].includes(classKey) && !classKey.endsWith('_healthy') && strongDiseaseSignal) {
+    if (classKey === 'pest_leaf_damage') {
+      diseaseName = 'Possible pest-related leaf damage';
+      cause = `AgriScan does not have ${cropLabel} in the trained crop list. The visible subject shows chewing, edge damage, holes, or discoloration that can match pest or physical damage.`;
+      treatment = 'Inspect both sides of nearby leaves for insects or larvae, remove badly damaged tissue when practical, and confirm the crop and pest before using pesticide.';
+      referenceKey = 'pest_leaf_damage';
+      confidence = Math.min(Math.max(computeOfflineConfidence(features, ''), 0.58), 0.76);
+    } else {
+      diseaseName = 'Possible leaf spot or blight symptoms';
+      cause = `AgriScan does not have ${cropLabel} in the trained crop list. Visible spots, blighting, rust, or necrotic tissue suggest a possible crop disease.`;
+      treatment = 'Remove heavily affected tissue, improve airflow, avoid wetting foliage, and use the linked crop reference or a local agriculture officer to confirm the exact crop disease before treatment.';
+      referenceKey = 'leaf_spot_or_blight';
+      confidence = Math.min(Math.max(computeOfflineConfidence(features, ''), 0.58), 0.78);
+    }
+  }
+
+  return {
+    id: Date.now(),
+    user_id: 0,
+    farm_id: null,
+    crop_id: null,
+    crop_type: possibleCropLabel,
+    crop_label: possibleCropLabel,
+    disease_name: diseaseName,
+    confidence,
+    cause,
+    treatment,
+    status: 'offline',
+    image_path: 'offline-browser-analysis',
+    analysis_mode: 'unsupported crop browser analysis',
+    reference_url: onlineReferenceSearchUrl(referenceKey, cropLabel),
+    reference_title: 'Search online crop disease reference',
+    created_at: new Date().toISOString(),
+  };
 }
 
 function inferContextFromFilename(fileName, cropType) {
@@ -1009,7 +1245,7 @@ function isReliableVisualCropInference(features, crop) {
 
 function validateSelectedCropAgainstImage(features, selectedCrop) {
   const selectedCropKey = normalizeCropKey(selectedCrop);
-  if (!selectedCropKey) return;
+  if (!selectedCropKey || !cropDisplayNamesByKey[selectedCropKey]) return;
 
   const visualCropKey = inferOfflineCrop(features, '');
   if (!visualCropKey || visualCropKey === selectedCropKey || !isReliableVisualCropInference(features, visualCropKey)) return;
@@ -1833,6 +2069,16 @@ async function analyzeImageOffline(file, cropType) {
     throw new Error(INVALID_CROP_IMAGE_MESSAGE);
   }
 
+  const featureCrop = inferOfflineCrop(features, '');
+  const possibleUnsupportedLabel = possibleUnsupportedCropLabel(features, {
+    fileName: file.name,
+    cropType,
+    supportedInference: featureCrop,
+  });
+  if (possibleUnsupportedLabel) {
+    return buildPossibleUnsupportedResult(features, possibleUnsupportedLabel);
+  }
+
   const filenameContext = inferContextFromFilename(file.name, crop);
   const contextCrop = crop || filenameContext.crop;
   const cornEarIssue = looksLikeCornEarIssue(features, contextCrop);
@@ -1900,14 +2146,15 @@ function getYoloDetections(result) {
 function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
   const confidence = result ? Math.round(result.confidence * 100) : 0;
   const cropLabel = result ? resolveCropLabel(result) : '--';
+  const translatedCropLabel = translateCropLabel(cropLabel, t);
   const displayPreviewUrl = previewUrl || getScanImageUrl(result);
   const yoloDetections = getYoloDetections(result);
   const cropVerified = Boolean(result?.crop_label || result?.crop_type || inferCropLabel(result)) && cropLabel !== 'General crop leaf';
   const needsReview = /review/i.test(result?.disease_name || '');
   const statusClass = needsReview ? 'bg-amber-50 text-amber-700' : 'bg-leaf-50 text-leaf-700';
-  const confidenceClass = needsReview ? 'border-amber-100 bg-amber-50' : 'border-leaf-100 bg-leaf-50';
-  const confidenceLabelClass = needsReview ? 'text-amber-700' : 'text-leaf-700';
-  const confidenceTextClass = needsReview ? 'text-amber-900' : 'text-leaf-900';
+  const confidenceClass = !result ? 'border-stone-200 bg-white' : needsReview ? 'border-amber-100 bg-amber-50' : 'border-leaf-100 bg-leaf-50';
+  const confidenceLabelClass = !result ? 'text-stone-500' : needsReview ? 'text-amber-700' : 'text-leaf-700';
+  const confidenceTextClass = !result ? 'text-stone-400' : needsReview ? 'text-amber-900' : 'text-leaf-900';
   const confidenceBarClass = needsReview ? 'bg-amber-500' : 'bg-leaf-600';
   const canGiveFeedback = Boolean(result?.id) && result?.image_path !== 'manual-entry' && result?.image_path !== 'offline-browser-analysis';
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -1963,13 +2210,13 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           status: isNotCropCorrection ? 'rejected' : 'corrected',
         };
         onFeedbackApplied?.(updatedResult);
-        setFeedbackMessage('Verified and learned. Similar future scans will use this correction.');
+        setFeedbackMessage(t('correctionVerifiedLearned'));
         setFeedbackOpen(false);
         return;
       }
-      setFeedbackMessage(feedback.verification_reason || 'Saved for admin review before the detector learns from it.');
+      setFeedbackMessage(feedback.verification_reason || t('correctionSavedForReview'));
     } catch (feedbackRequestError) {
-      setFeedbackError(getApiErrorMessage(feedbackRequestError, 'Could not save this correction yet.'));
+      setFeedbackError(getApiErrorMessage(feedbackRequestError, t('correctionSaveFailed')));
     } finally {
       setFeedbackSubmitting(false);
     }
@@ -1977,22 +2224,22 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
 
   return (
     <section ref={panelRef} className="surface scroll-mt-20 overflow-hidden rounded-lg sm:scroll-mt-24 lg:scroll-mt-28">
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="p-4 sm:p-6">
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="p-5 sm:p-7">
           <div className="flex flex-wrap items-center gap-3">
             <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold sm:px-4 ${statusClass}`}>
               <FlaskConical className="h-4 w-4" />
-              {needsReview ? 'Review needed' : t('analysisReady')}
+              {needsReview ? t('reviewNeeded') : t('analysisReady')}
             </span>
             {cropLabel !== '--' && (
               <span className="rounded-full bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700 sm:px-4">
-                {cropLabel}
+                {translatedCropLabel}
               </span>
             )}
           </div>
 
           <h2 className="mt-5 break-words text-2xl font-bold text-stone-950 sm:text-3xl">
-            {result?.disease_name || t('readyForDiseaseAnalysis')}
+            {result?.disease_name ? translateDiseaseName(result.disease_name, t) : t('readyForDiseaseAnalysis')}
           </h2>
           {!result ? (
             <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
@@ -2003,16 +2250,16 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('detectedCrop')}</p>
-              <p className="mt-2 text-lg font-bold text-stone-950">{cropLabel}</p>
+              <p className="mt-2 text-lg font-bold text-stone-950">{translatedCropLabel}</p>
               <p className="mt-1 text-sm text-stone-500">
-                {cropVerified ? 'Estimated from the uploaded crop image' : 'Analyzed as a general crop leaf from visible disease or pest patterns'}
+                {!result ? t('diseaseAnalysisPrompt') : cropVerified ? t('estimatedFromUploadedCropImage') : t('analyzedGeneralCropLeaf')}
               </p>
             </article>
             <article className={`rounded-lg border p-4 ${confidenceClass}`}>
-              <p className={`text-xs font-bold uppercase tracking-wide ${confidenceLabelClass}`}>{needsReview ? 'Scan certainty' : t('confidence')}</p>
+              <p className={`text-xs font-bold uppercase tracking-wide ${confidenceLabelClass}`}>{needsReview ? t('scanCertainty') : t('confidence')}</p>
               <p className={`mt-2 text-3xl font-bold ${confidenceTextClass}`}>{confidence || '--'}%</p>
-              <div className="mt-3 h-2 rounded-full bg-white">
-                <div className={`h-2 rounded-full ${confidenceBarClass}`} style={{ width: `${confidence}%` }} />
+              <div className="mt-3 h-2 rounded-full bg-stone-100">
+                <div className={`h-2 rounded-full ${confidenceBarClass}`} style={{ width: result ? `${confidence}%` : '0%' }} />
               </div>
             </article>
           </div>
@@ -2021,24 +2268,24 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
             <div className="mt-6 space-y-4">
               <article className="rounded-lg border border-stone-200 bg-white p-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('likelyCause')}</p>
-                <p className="mt-2 text-sm leading-6 text-stone-700">{result.cause}</p>
+                <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={result.cause} />
               </article>
               <article className="rounded-lg border border-stone-200 bg-white p-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('treatmentSuggestion')}</p>
-                <p className="mt-2 text-sm leading-6 text-stone-700">{result.treatment}</p>
+                <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={result.treatment} />
               </article>
               <article className="rounded-lg border border-sky-100 bg-sky-50 p-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('modelBasis')}</p>
                 <p className="mt-2 text-sm leading-6 text-stone-700">
                   {yoloDetections.length > 0
-                    ? 'Ultralytics YOLO detected crop disease regions and AgriScan matched the labels to treatment guidance.'
+                    ? t('yoloModelBasis')
                     : isLocalVisualAnalysisMode(result.analysis_mode)
-                    ? 'Local visual analysis used image features plus the selected or estimated crop. Confirm severe cases with a local agriculture officer.'
+                    ? t('localVisualModelBasis')
                     : t('modelBasisBody')}
                 </p>
                 {result.reference_url && (
                   <a className="mt-3 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900" href={result.reference_url} rel="noreferrer" target="_blank">
-                    {result.reference_title || 'Open crop disease reference'}
+                    {result.reference_title || t('openCropDiseaseReference')}
                   </a>
                 )}
               </article>
@@ -2046,9 +2293,9 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                 <article className="rounded-lg border border-stone-200 bg-white p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Correction learning</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctionLearning')}</p>
                       <p className="mt-1 text-sm leading-6 text-stone-600">
-                        Mark this scan wrong so AgriScan can verify the correction and learn from it.
+                        {t('correctionLearningBody')}
                       </p>
                     </div>
                     <button
@@ -2057,21 +2304,21 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                       onClick={() => setFeedbackOpen((open) => !open)}
                     >
                       <Flag className="h-4 w-4" />
-                      Flag wrong
+                      {t('flagWrong')}
                     </button>
                   </div>
 
                   {feedbackOpen && (
                     <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={submitFeedback}>
                       <label className="block">
-                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Correct crop</span>
+                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctCrop')}</span>
                         <select
                           className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
                           disabled={isNotCropCorrection}
                           value={feedbackCrop}
                           onChange={(event) => setFeedbackCrop(event.target.value)}
                         >
-                          <option value="">{isNotCropCorrection ? 'Not applicable' : 'Select crop'}</option>
+                          <option value="">{isNotCropCorrection ? t('notApplicable') : t('selectCrop')}</option>
                           {quickCropOptions.map((crop) => (
                             <option key={crop} value={crop}>
                               {crop}
@@ -2080,7 +2327,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                         </select>
                       </label>
                       <label className="block">
-                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Correct result</span>
+                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctResult')}</span>
                         <select
                           className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
                           value={feedbackCondition}
@@ -2088,19 +2335,19 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                         >
                           {feedbackConditionOptions.map((condition) => (
                             <option key={condition} value={condition}>
-                              {condition}
+                              {translateDiseaseName(condition, t)}
                             </option>
                           ))}
                         </select>
                       </label>
                       <label className="block sm:col-span-2">
-                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Note</span>
+                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('note')}</span>
                         <textarea
                           className="mt-2 min-h-20 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
                           maxLength={500}
                           value={feedbackNote}
                           onChange={(event) => setFeedbackNote(event.target.value)}
-                          placeholder="Example: This is healthy banana fruit, not corn blight."
+                          placeholder={t('correctionExample')}
                         />
                       </label>
                       <button
@@ -2109,7 +2356,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                         type="submit"
                       >
                         {feedbackSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        Submit correction
+                        {t('submitCorrection')}
                       </button>
                     </form>
                   )}
@@ -2121,12 +2368,12 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           )}
         </div>
 
-        <div className="border-t border-stone-100 bg-stone-50 p-4 sm:p-5 lg:border-l lg:border-t-0">
+        <div className="border-t border-stone-100 bg-stone-50 p-5 lg:border-l lg:border-t-0">
           <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('uploadCropImage')}</p>
           <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
             {displayPreviewUrl ? (
               <div className="relative h-52 w-full bg-stone-950 sm:h-64">
-                <img src={displayPreviewUrl} alt="Crop preview" className="h-full w-full object-fill" />
+                <img src={displayPreviewUrl} alt={t('uploadCropImage')} className="h-full w-full object-fill" />
                 {yoloDetections.map((detection, index) => {
                   const box = detection.box;
                   return (
@@ -2141,19 +2388,21 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                       }}
                     >
                       <span className={`absolute left-0 top-0 max-w-full truncate px-2 py-1 text-[10px] font-bold text-stone-950 ${detection.selected ? 'bg-leaf-300' : 'bg-amber-300'}`}>
-                        {detection.label} {Math.round(Number(detection.confidence) * 100)}%
+                        {translateDiseaseName(detection.label, t)} {Math.round(Number(detection.confidence) * 100)}%
                       </span>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="relative h-52 overflow-hidden bg-stone-100 sm:h-64">
-                <img src={diseaseDetectorImage} alt="Sample crop disease leaves" className="h-full w-full object-cover opacity-45" />
-                <div className="absolute inset-0 grid place-items-center bg-white/50 text-stone-500">
-                  <div className="text-center">
-                    <ImagePlus className="mx-auto h-10 w-10" />
-                    <p className="mt-3 text-sm font-semibold">{t('diseaseAnalysisPrompt')}</p>
+              <div className="relative h-52 overflow-hidden bg-leaf-50 sm:h-64">
+                <img src={diseaseDetectorImage} alt={t('uploadCropImage')} className="h-full w-full object-cover opacity-25" />
+                <div className="absolute inset-0 grid place-items-center bg-white/45 p-5 text-stone-600">
+                  <div className="max-w-56 text-center">
+                    <span className="mx-auto grid h-14 w-14 place-items-center rounded-lg border border-stone-200 bg-white/90 text-leaf-700 shadow-sm">
+                      <ImagePlus className="h-7 w-7" />
+                    </span>
+                    <p className="mt-3 text-sm font-semibold leading-6">{t('diseaseAnalysisPrompt')}</p>
                   </div>
                 </div>
               </div>
@@ -2164,8 +2413,8 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
             <div className="mt-4 space-y-2">
               {yoloDetections.slice(0, 4).map((detection, index) => (
                 <div key={`${detection.raw_label || detection.label}-summary-${index}`} className="rounded-lg border border-stone-200 bg-white p-3">
-                  <p className="truncate text-sm font-bold text-stone-900">{detection.label}</p>
-                  <p className="mt-1 text-xs font-semibold text-stone-500">{Math.round(Number(detection.confidence) * 100)}% confidence</p>
+                  <p className="truncate text-sm font-bold text-stone-900">{translateDiseaseName(detection.label, t)}</p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">{Math.round(Number(detection.confidence) * 100)}% {t('confidence')}</p>
                 </div>
               ))}
             </div>
@@ -2178,6 +2427,9 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
 
 function HistoryList({ history, onSelect, t }) {
   const visibleHistory = history.filter((scan) => scan?.status !== 'rejected' && scan?.disease_name !== 'Invalid crop or leaf image');
+  const [showAll, setShowAll] = useState(false);
+  const displayedHistory = showAll ? visibleHistory : visibleHistory.slice(0, 6);
+
   return (
     <section>
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -2185,23 +2437,35 @@ function HistoryList({ history, onSelect, t }) {
           <h2 className="text-2xl font-bold text-stone-950">{t('recentDiseaseScans')}</h2>
           <p className="text-sm text-stone-500">{t('savedDiseaseDetections')}</p>
         </div>
-        <span className="w-fit rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-700">
-          {visibleHistory.length} {t('total')}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {visibleHistory.length > 6 && (
+            <button
+              className="btn-secondary h-10 px-4 text-sm"
+              onClick={() => setShowAll((current) => !current)}
+              type="button"
+            >
+              {showAll ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {showAll ? t('showLess') : t('showAll')}
+            </button>
+          )}
+          <span className="w-fit rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-700">
+            {visibleHistory.length} {t('total')}
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {visibleHistory.slice(0, 6).map((scan) => (
+        {displayedHistory.map((scan) => (
           <button
             key={scan.local_id}
-            className="surface rounded-lg p-4 text-left transition hover:border-leaf-200 hover:bg-leaf-50"
+            className="surface min-h-[132px] rounded-lg p-4 text-left transition hover:border-leaf-200 hover:bg-leaf-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300"
             onClick={() => onSelect(scan)}
             type="button"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-400">{resolveCropLabel(scan)}</p>
-                <h3 className="mt-2 text-lg font-bold text-stone-950">{scan.disease_name}</h3>
+                <p className="text-xs font-bold uppercase tracking-wide text-stone-400">{translateCropLabel(resolveCropLabel(scan), t)}</p>
+                <h3 className="mt-2 text-lg font-bold text-stone-950">{translateDiseaseName(scan.disease_name, t)}</h3>
                 <p className="mt-1 text-sm text-stone-500">{new Date(scan.created_at).toLocaleString()}</p>
               </div>
               <span className="rounded-full bg-leaf-50 px-3 py-1 text-xs font-bold text-leaf-700">
@@ -2237,13 +2501,15 @@ export default function PlantDiseaseDetector() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedCrop, setSelectedCrop] = useState('');
+  const [customCrop, setCustomCrop] = useState('');
   const [detectorConnection, setDetectorConnection] = useState(() => ({
     browserOnline: window.navigator.onLine,
     backendOnline: null,
     checking: false,
   }));
 
-  const canSubmit = Boolean(imageFile);
+  const activeCropInput = selectedCrop === CUSTOM_CROP_OPTION ? customCrop.trim() : selectedCrop;
+  const canSubmit = Boolean(imageFile) && (selectedCrop !== CUSTOM_CROP_OPTION || customCrop.trim().length >= 2);
   const detectorMode = !detectorConnection.browserOnline
     ? 'offline'
     : detectorConnection.backendOnline === false
@@ -2434,8 +2700,9 @@ export default function PlantDiseaseDetector() {
 
     let preflightOfflineResult = null;
     let preflightValidationError = null;
+    const cropInput = activeCropInput;
     try {
-      preflightOfflineResult = await analyzeImageOffline(imageFile, selectedCrop);
+      preflightOfflineResult = await analyzeImageOffline(imageFile, cropInput);
     } catch (validationError) {
       if (validationError?.name === 'CropTypeMismatchError') {
         setResult(null);
@@ -2457,9 +2724,10 @@ export default function PlantDiseaseDetector() {
       const uploadImageFile = useOfflineAnalysis ? imageFile : await prepareImageForUpload(imageFile);
       const preflightDiseaseName = (preflightOfflineResult?.disease_name || '').toLowerCase();
       const preflightAnalysisMode = (preflightOfflineResult?.analysis_mode || '').toLowerCase();
+      const preflightCropKey = normalizeCropKey(preflightOfflineResult?.crop_label);
+      const preflightSupportedCropLabel = cropDisplayNamesByKey[preflightCropKey] || '';
       const canTrustPreflightCrop =
-        preflightOfflineResult?.crop_label &&
-        preflightOfflineResult.crop_label !== 'General crop leaf' &&
+        Boolean(preflightSupportedCropLabel) &&
         !preflightDiseaseName.includes('review') &&
         preflightOfflineResult.confidence >= 0.72 &&
         (
@@ -2469,21 +2737,21 @@ export default function PlantDiseaseDetector() {
           preflightAnalysisMode.includes('filename-guided')
         );
       const inferredCropType =
-        !selectedCrop && canTrustPreflightCrop
-          ? preflightOfflineResult.crop_label
+        !cropInput && canTrustPreflightCrop
+          ? preflightSupportedCropLabel
           : '';
-      const requestCropType = selectedCrop || inferredCropType;
+      const requestCropType = cropInput || inferredCropType;
       const payload = new FormData();
       payload.append('image', uploadImageFile, uploadImageFile.name);
       payload.append('crop_type', requestCropType);
       payload.append('offline_mode', useOfflineAnalysis ? 'true' : 'false');
 
       if (useOfflineAnalysis) {
-        const nextResult = {
+        const nextResult = normalizeHistoryScan({
           ...preflightOfflineResult,
           local_id: makeHistoryId(),
           image_name: imageFile.name,
-        };
+        });
         queueResultReveal();
         setResult(nextResult);
         saveHistory(nextResult);
@@ -2497,14 +2765,14 @@ export default function PlantDiseaseDetector() {
         },
       });
 
-      const nextResult = {
+      const nextResult = normalizeHistoryScan({
         ...response.data,
         local_id: makeHistoryId(),
         created_at: new Date().toISOString(),
         crop_type: response.data.crop_type || requestCropType,
         crop_label: response.data.crop_label || requestCropType || inferCropLabel(response.data),
         image_name: imageFile.name,
-      };
+      });
 
       queueResultReveal();
       setResult(nextResult);
@@ -2525,13 +2793,13 @@ export default function PlantDiseaseDetector() {
       }
 
       try {
-        const offlineResult = await analyzeImageOffline(imageFile, selectedCrop);
-        const nextResult = {
+        const offlineResult = await analyzeImageOffline(imageFile, cropInput);
+        const nextResult = normalizeHistoryScan({
           ...offlineResult,
           local_id: makeHistoryId(),
           image_name: imageFile.name,
           analysis_mode: 'offline browser fallback',
-        };
+        });
         queueResultReveal();
         setResult(nextResult);
         saveHistory(nextResult);
@@ -2555,18 +2823,18 @@ export default function PlantDiseaseDetector() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="eyebrow">Image diagnosis</p>
+          <p className="eyebrow">{t('imageDiagnosis')}</p>
           <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">
             {t('plantDiseaseDetector')}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-            Upload a crop image and review the model diagnosis, confidence, and treatment guidance.
+            {t('plantDiseaseDetectorBody')}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <span className="status-pill border border-stone-200 bg-white text-stone-700">{quickCropOptions.length} crops</span>
+          <span className="status-pill border border-stone-200 bg-white text-stone-700">{quickCropOptions.length} {t('crops')}</span>
           <span className={`status-pill ${detectorMode === 'online' ? 'bg-leaf-50 text-leaf-800' : detectorMode === 'offline' ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-700'}`}>
-            {detectorMode === 'online' ? 'ML online' : detectorMode === 'offline' ? 'Device mode' : 'Checking'}
+            {detectorMode === 'online' ? t('mlOnline') : detectorMode === 'offline' ? t('deviceMode') : t('checkingStatus')}
           </span>
         </div>
       </header>
@@ -2576,7 +2844,7 @@ export default function PlantDiseaseDetector() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-stone-950">{t('uploadCropImage')}</h2>
-              <p className="mt-1 text-sm text-stone-500">Upload a clear crop image.</p>
+              <p className="mt-1 text-sm text-stone-500">{t('uploadClearCropImage')}</p>
             </div>
             <button className="btn-icon" type="button" onClick={resetForm} title={t('resetForm')}>
               <RotateCcw className="h-4 w-4" />
@@ -2585,13 +2853,30 @@ export default function PlantDiseaseDetector() {
 
           <div className="mt-6 space-y-5">
             <label className="block">
-              <span className="text-sm font-bold text-stone-700">Crop type</span>
-              <select className="field mt-2 h-12" value={selectedCrop} onChange={(event) => setSelectedCrop(event.target.value)}>
-                <option value="">Auto detect crop</option>
+              <span className="text-sm font-bold text-stone-700">{t('cropType')}</span>
+              <select
+                className="field mt-2 h-12"
+                value={selectedCrop}
+                onChange={(event) => {
+                  setSelectedCrop(event.target.value);
+                  if (event.target.value !== CUSTOM_CROP_OPTION) setCustomCrop('');
+                }}
+              >
+                <option value="">{t('autoDetectCrop')}</option>
                 {quickCropOptions.map((crop) => (
                   <option key={crop} value={crop}>{crop}</option>
                 ))}
+                <option value={CUSTOM_CROP_OPTION}>{t('otherNotListed')}</option>
               </select>
+              {selectedCrop === CUSTOM_CROP_OPTION && (
+                <input
+                  className="field mt-3 h-12"
+                  maxLength={80}
+                  placeholder={t('cropName')}
+                  value={customCrop}
+                  onChange={(event) => setCustomCrop(event.target.value)}
+                />
+              )}
             </label>
 
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
@@ -2618,20 +2903,20 @@ export default function PlantDiseaseDetector() {
                 onClick={() => setShowImageSourcePicker(true)}
               >
                 {previewUrl ? (
-                  <img src={previewUrl} alt="Crop preview" className="h-48 w-full rounded-lg object-cover sm:h-56" />
+                  <img src={previewUrl} alt={t('uploadCropImage')} className="h-48 w-full rounded-lg object-cover sm:h-56" />
                 ) : (
                   <>
                     <Upload className="h-10 w-10 text-leaf-600" />
                     <p className="mt-4 text-base font-bold text-stone-900">{t('takeOrUploadPhoto')}</p>
                     <p className="mt-2 max-w-xs text-sm leading-6 text-stone-500">
-                      Take a clear crop or leaf photo with one main subject and natural light when possible.
+                      {t('takeClearCropPhoto')}
                     </p>
                   </>
                 )}
               </button>
 
               {showImageSourcePicker && (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2" role="dialog" aria-label="Choose image source">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2" role="dialog" aria-label={t('chooseImageSource')}>
                   <button
                     className="flex min-h-20 items-center gap-3 rounded-lg border border-stone-200 bg-white p-4 text-left transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
                     type="button"
@@ -2641,8 +2926,8 @@ export default function PlantDiseaseDetector() {
                       <ImagePlus className="h-5 w-5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-bold text-stone-950">Upload from gallery</span>
-                      <span className="mt-1 block text-xs font-medium text-stone-500">Choose an existing photo</span>
+                      <span className="block text-sm font-bold text-stone-950">{t('uploadFromGallery')}</span>
+                      <span className="mt-1 block text-xs font-medium text-stone-500">{t('chooseExistingPhoto')}</span>
                     </span>
                   </button>
                   <button
@@ -2654,8 +2939,8 @@ export default function PlantDiseaseDetector() {
                       <Camera className="h-5 w-5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-bold text-stone-950">Use camera</span>
-                      <span className="mt-1 block text-xs font-medium text-stone-500">Take a new photo</span>
+                      <span className="block text-sm font-bold text-stone-950">{t('useCamera')}</span>
+                      <span className="mt-1 block text-xs font-medium text-stone-500">{t('takeNewPhoto')}</span>
                     </span>
                   </button>
                 </div>

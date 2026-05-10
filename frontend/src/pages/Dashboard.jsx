@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api/client.js';
+import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 
@@ -110,17 +111,17 @@ function getAlertToneClasses(tone) {
   };
 }
 
-function buildGpsErrorMessage(error) {
-  if (!error) return 'Could not access your current location.';
-  if (error.code === error.PERMISSION_DENIED) return 'Location access was blocked. Showing your registered farm weather instead.';
-  if (error.code === error.POSITION_UNAVAILABLE) return 'Your current location is unavailable right now.';
-  if (error.code === error.TIMEOUT) return 'Location lookup timed out. Please try again.';
-  return 'Could not access your current location.';
+function buildGpsErrorMessage(error, t) {
+  if (!error) return t('couldNotAccessLocation');
+  if (error.code === error.PERMISSION_DENIED) return t('locationAccessBlocked');
+  if (error.code === error.POSITION_UNAVAILABLE) return t('locationUnavailable');
+  if (error.code === error.TIMEOUT) return t('locationTimedOut');
+  return t('couldNotAccessLocation');
 }
 
-function formatLocationMeta(location) {
+function formatLocationMeta(location, t) {
   if (location?.latitude == null || location?.longitude == null) {
-    return 'Allow GPS access or register a farm with coordinates for precise weather.';
+    return t('allowGpsOrRegisterFarm');
   }
 
   const coords = `${Number(location.latitude).toFixed(5)}, ${Number(location.longitude).toFixed(5)}`;
@@ -130,11 +131,11 @@ function formatLocationMeta(location) {
   return coords;
 }
 
-function formatObservedAt(observedAt) {
-  if (!observedAt) return 'Updated with the latest available weather data.';
+function formatObservedAt(observedAt, t) {
+  if (!observedAt) return t('updatedLatestWeather');
   const parsed = new Date(observedAt);
-  if (Number.isNaN(parsed.getTime())) return 'Updated with the latest available weather data.';
-  return `Updated ${parsed.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
+  if (Number.isNaN(parsed.getTime())) return t('updatedLatestWeather');
+  return t('updatedAt', { time: parsed.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) });
 }
 
 function roundMetric(value, fallbackValue = '--') {
@@ -165,22 +166,22 @@ function getTextScanValue(scan, key) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function formatScanTimestamp(createdAt) {
-  if (!createdAt) return 'No scan time recorded.';
+function formatScanTimestamp(createdAt, t) {
+  if (!createdAt) return t('noScanTimeRecorded');
   const parsed = new Date(createdAt);
-  if (Number.isNaN(parsed.getTime())) return 'No scan time recorded.';
+  if (Number.isNaN(parsed.getTime())) return t('noScanTimeRecorded');
   return parsed.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function buildMoistureMetric(scan) {
+function buildMoistureMetric(scan, t) {
   const moisture = getNumericScanValue(scan, 'moisture_percent');
   if (moisture == null) {
     return {
       value: '--',
       unit: '%',
-      status: 'No Scan',
+      status: t('noScan'),
       tone: 'green',
-      helper: 'Run a manual soil scan to capture real field moisture.',
+      helper: t('runManualSoilScanMoisture'),
     };
   }
 
@@ -188,9 +189,9 @@ function buildMoistureMetric(scan) {
     return {
       value: roundMetric(moisture),
       unit: '%',
-      status: 'Low',
+      status: t('low'),
       tone: 'amber',
-      helper: `Latest soil scan recorded dry field conditions on ${formatScanTimestamp(scan?.created_at)}.`,
+      helper: t('latestDryMoisture', { time: formatScanTimestamp(scan?.created_at, t) }),
     };
   }
 
@@ -198,40 +199,40 @@ function buildMoistureMetric(scan) {
     return {
       value: roundMetric(moisture),
       unit: '%',
-      status: 'High',
+      status: t('high'),
       tone: 'lime',
-      helper: `Latest soil scan recorded high moisture on ${formatScanTimestamp(scan?.created_at)}.`,
+      helper: t('latestHighMoisture', { time: formatScanTimestamp(scan?.created_at, t) }),
     };
   }
 
   return {
     value: roundMetric(moisture),
     unit: '%',
-    status: 'Optimal',
+    status: t('optimal'),
     tone: 'green',
-    helper: `Measured from your latest field scan on ${formatScanTimestamp(scan?.created_at)}.`,
+    helper: t('measuredLatestFieldScan', { time: formatScanTimestamp(scan?.created_at, t) }),
   };
 }
 
-function buildTemperatureMetric(scan, weatherTemperature) {
+function buildTemperatureMetric(scan, weatherTemperature, t) {
   const soilTemperature = getNumericScanValue(scan, 'soil_temperature_c');
   if (soilTemperature == null) {
     if (Number.isFinite(weatherTemperature)) {
       return {
         value: roundMetric(weatherTemperature),
         unit: 'C',
-        status: 'Estimated',
+        status: t('estimated'),
         tone: 'amber',
-        helper: 'Using current weather as a temporary field estimate. Add soil temperature in Manual Scan for a direct reading.',
+        helper: t('weatherTempEstimate'),
       };
     }
 
     return {
       value: '--',
       unit: 'C',
-      status: 'No Scan',
+      status: t('noScan'),
       tone: 'amber',
-      helper: 'Add soil temperature in Manual Scan to replace this placeholder with a direct field reading.',
+      helper: t('addSoilTemperature'),
     };
   }
 
@@ -239,9 +240,9 @@ function buildTemperatureMetric(scan, weatherTemperature) {
     return {
       value: roundMetric(soilTemperature),
       unit: 'C',
-      status: 'Cool',
+      status: t('cool'),
       tone: 'amber',
-      helper: `Measured from your latest soil scan on ${formatScanTimestamp(scan?.created_at)}.`,
+      helper: t('measuredLatestSoilScan', { time: formatScanTimestamp(scan?.created_at, t) }),
     };
   }
 
@@ -249,18 +250,18 @@ function buildTemperatureMetric(scan, weatherTemperature) {
     return {
       value: roundMetric(soilTemperature),
       unit: 'C',
-      status: 'Hot',
+      status: t('hot'),
       tone: 'amber',
-      helper: `Measured from your latest soil scan on ${formatScanTimestamp(scan?.created_at)}.`,
+      helper: t('measuredLatestSoilScan', { time: formatScanTimestamp(scan?.created_at, t) }),
     };
   }
 
   return {
     value: roundMetric(soilTemperature),
     unit: 'C',
-    status: 'Optimal',
+    status: t('optimal'),
     tone: 'amber',
-    helper: `Measured from your latest soil scan on ${formatScanTimestamp(scan?.created_at)}.`,
+    helper: t('measuredLatestSoilScan', { time: formatScanTimestamp(scan?.created_at, t) }),
   };
 }
 
@@ -269,12 +270,12 @@ function nutrientShortLabel(level) {
   return level.charAt(0).toUpperCase();
 }
 
-function nutrientFullLabel(level) {
-  if (!level) return 'not set';
-  return level;
+function nutrientFullLabel(level, t) {
+  if (!level) return t('notSet');
+  return t(level);
 }
 
-function buildNutrientMetric(scan) {
+function buildNutrientMetric(scan, t) {
   const nitrogen = getTextScanValue(scan, 'nitrogen_level');
   const phosphorus = getTextScanValue(scan, 'phosphorus_level');
   const potassium = getTextScanValue(scan, 'potassium_level');
@@ -284,25 +285,29 @@ function buildNutrientMetric(scan) {
     return {
       value: '--',
       unit: 'NPK',
-      status: 'No Scan',
+      status: t('noScan'),
       tone: 'lime',
-      helper: 'Run a manual soil scan to record real nutrient levels.',
+      helper: t('runManualSoilScanNutrients'),
     };
   }
 
   const lowCount = levels.filter((level) => level === 'low').length;
   const highCount = levels.filter((level) => level === 'high').length;
-  let status = 'Balanced';
-  if (lowCount >= 2) status = 'Low';
-  else if (lowCount >= 1) status = 'Requires Mix';
-  else if (highCount >= 2) status = 'Rich';
+  let status = t('balanced');
+  if (lowCount >= 2) status = t('low');
+  else if (lowCount >= 1) status = t('requiresMix');
+  else if (highCount >= 2) status = t('rich');
 
   return {
     value: `${nutrientShortLabel(nitrogen)}/${nutrientShortLabel(phosphorus)}/${nutrientShortLabel(potassium)}`,
     unit: 'NPK',
     status,
     tone: 'lime',
-    helper: `Latest NPK reading: N ${nutrientFullLabel(nitrogen)}, P ${nutrientFullLabel(phosphorus)}, K ${nutrientFullLabel(potassium)}.`,
+    helper: t('latestNpkReading', {
+      nitrogen: nutrientFullLabel(nitrogen, t),
+      phosphorus: nutrientFullLabel(phosphorus, t),
+      potassium: nutrientFullLabel(potassium, t),
+    }),
   };
 }
 
@@ -321,6 +326,28 @@ function buildPhChartData(scans) {
         ph: getNumericScanValue(scan, 'ph_level'),
       };
     });
+}
+
+function translateDiseaseLabel(value, t) {
+  const key = String(value || '').trim().toLowerCase();
+  const labels = {
+    'healthy crop': 'healthyCrop',
+    'leaf spot or blight symptoms': 'leafSpotOrBlightSymptoms',
+    'pest-related leaf damage': 'pestRelatedLeafDamage',
+    'pest or physical leaf damage': 'pestOrPhysicalLeafDamage',
+    'crop scan needs review': 'cropScanNeedsReview',
+  };
+  return labels[key] ? t(labels[key]) : value;
+}
+
+function translateAlertBody(body, t) {
+  const match = String(body || '').match(/^(.+?):\s(.+?) detected with (\d+)% confidence\./i);
+  if (!match) return body;
+  return t('scanAlertBody', {
+    crop: match[1],
+    disease: translateDiseaseLabel(match[2], t),
+    confidence: match[3],
+  });
 }
 
 export default function Dashboard() {
@@ -344,7 +371,7 @@ export default function Dashboard() {
 
   const requestPreciseLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setGpsState({ locating: false, error: 'Geolocation is not supported on this device.', attempted: true });
+      setGpsState({ locating: false, error: t('geolocationUnsupported'), attempted: true });
       return;
     }
 
@@ -356,15 +383,15 @@ export default function Dashboard() {
             latitude: Number(position.coords.latitude.toFixed(6)),
             longitude: Number(position.coords.longitude.toFixed(6)),
             accuracy_m: Math.round(position.coords.accuracy),
-            location_label: 'Current device location',
+            location_label: t('currentDeviceLocation'),
           });
           setGpsState({ locating: false, error: '', attempted: true });
         } catch {
-          setGpsState({ locating: false, error: 'Could not update live weather right now.', attempted: true });
+          setGpsState({ locating: false, error: t('couldNotUpdateLiveWeather'), attempted: true });
         }
       },
       (error) => {
-        setGpsState({ locating: false, error: buildGpsErrorMessage(error), attempted: true });
+        setGpsState({ locating: false, error: buildGpsErrorMessage(error, t), attempted: true });
       },
       {
         enableHighAccuracy: true,
@@ -372,7 +399,7 @@ export default function Dashboard() {
         maximumAge: 300000,
       }
     );
-  }, [loadSummary]);
+  }, [loadSummary, t]);
 
   useEffect(() => {
     if (initialLoadRef.current) return;
@@ -396,26 +423,30 @@ export default function Dashboard() {
   const precipitation = Number.isFinite(summary.weather.precipitation_mm) ? summary.weather.precipitation_mm.toFixed(1) : '0.0';
   const locationSourceLabel =
     summary.location.source === 'device'
-      ? 'Using device GPS'
+      ? t('usingDeviceGps')
       : summary.location.source === 'farm'
-        ? 'Using registered farm GPS'
-        : 'Location not set';
+        ? t('usingFarmGps')
+        : t('locationNotSet');
   const latestSoilScan = soilScans[0] || null;
-  const moistureMetric = useMemo(() => buildMoistureMetric(latestSoilScan), [latestSoilScan]);
+  const moistureMetric = useMemo(() => buildMoistureMetric(latestSoilScan, t), [latestSoilScan, t]);
   const temperatureMetric = useMemo(
-    () => buildTemperatureMetric(latestSoilScan, Number(summary.weather.temperature_c)),
-    [latestSoilScan, summary.weather.temperature_c]
+    () => buildTemperatureMetric(latestSoilScan, Number(summary.weather.temperature_c), t),
+    [latestSoilScan, summary.weather.temperature_c, t]
   );
-  const nutrientMetric = useMemo(() => buildNutrientMetric(latestSoilScan), [latestSoilScan]);
+  const nutrientMetric = useMemo(() => buildNutrientMetric(latestSoilScan, t), [latestSoilScan, t]);
   const phChartData = useMemo(() => buildPhChartData(soilScans), [soilScans]);
   const featuredAlert = summary.featured_alert;
   const alertToneClasses = getAlertToneClasses(featuredAlert?.tone || 'green');
+  const featuredAlertTitle = featuredAlert?.title === 'Crop disease alert' ? t('cropDiseaseAlert') : featuredAlert?.title;
+  const featuredAlertBody = translateAlertBody(featuredAlert?.body, t);
+  const featuredAlertAction =
+    featuredAlert?.action_label === 'Open Disease Detector' ? t('openDiseaseDetector') : featuredAlert?.action_label;
 
   return (
     <div>
       <div className="mb-5 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="eyebrow">Overview</p>
+          <p className="eyebrow">{t('overview')}</p>
           <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">{t('dashboardGreeting', { name: firstName })}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">{t('dashboardSubtitle')}</p>
         </div>
@@ -432,16 +463,16 @@ export default function Dashboard() {
           </div>
           <div className="min-w-0">
             <p className="text-lg font-bold">
-              {featuredAlert?.title || 'No active field alerts'}
+              {featuredAlertTitle || t('noActiveFieldAlerts')}
             </p>
             <p className={`text-sm ${alertToneClasses.body}`}>
-              {featuredAlert?.body || 'Live scan, weather, and notification alerts will appear here when available.'}
+              {featuredAlertBody || t('liveAlertsPlaceholder')}
             </p>
           </div>
         </div>
         {featuredAlert?.action_to ? (
           <Link to={featuredAlert.action_to} className={`btn-secondary ${alertToneClasses.button}`}>
-            {featuredAlert.action_label || 'View details'}
+            {featuredAlertAction || t('viewDetails')}
           </Link>
         ) : null}
       </section>
@@ -449,21 +480,21 @@ export default function Dashboard() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <MetricCard icon={Droplets} label="Soil Moisture" value={moistureMetric.value} unit={moistureMetric.unit} status={moistureMetric.status} tone={moistureMetric.tone} helper={moistureMetric.helper} to="/scan" />
-            <MetricCard icon={Thermometer} label="Soil Temp" value={temperatureMetric.value} unit={temperatureMetric.unit} status={temperatureMetric.status} tone={temperatureMetric.tone} helper={temperatureMetric.helper} to="/scan" />
-            <MetricCard icon={Zap} label="Nutrient Level" value={nutrientMetric.value} unit={nutrientMetric.unit} status={nutrientMetric.status} tone={nutrientMetric.tone} helper={nutrientMetric.helper} to="/scan" />
+            <MetricCard icon={Droplets} label={t('soilMoisture')} value={moistureMetric.value} unit={moistureMetric.unit} status={moistureMetric.status} tone={moistureMetric.tone} helper={moistureMetric.helper} to="/scan" />
+            <MetricCard icon={Thermometer} label={t('soilTemp')} value={temperatureMetric.value} unit={temperatureMetric.unit} status={temperatureMetric.status} tone={temperatureMetric.tone} helper={temperatureMetric.helper} to="/scan" />
+            <MetricCard icon={Zap} label={t('nutrientLevel')} value={nutrientMetric.value} unit={nutrientMetric.unit} status={nutrientMetric.status} tone={nutrientMetric.tone} helper={nutrientMetric.helper} to="/scan" />
           </div>
 
           <section className="surface rounded-lg p-5 sm:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-stone-950">Soil pH Trend</h2>
+                <h2 className="text-2xl font-bold text-stone-950">{t('soilPhTrend')}</h2>
                 <p className="mt-1 text-sm text-stone-500">
-                  {phChartData.length > 0 ? 'Historical data from your last 7 soil scans' : 'No real pH scan history yet'}
+                  {phChartData.length > 0 ? t('historicalSevenScans') : t('noPhScanHistory')}
                 </p>
               </div>
               <Link to="/reports" className="inline-flex items-center gap-2 text-sm font-bold text-leaf-700">
-                Full Report <ArrowRight className="h-4 w-4" />
+                {t('fullReport')} <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
             {phChartData.length > 0 ? (
@@ -480,14 +511,14 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                 </div>
                 <div className="mt-2 flex justify-center text-sm font-semibold text-stone-500">
-                  <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-leaf-500" /> Soil pH Level</span>
+                  <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-leaf-500" /> {t('soilPhLevel')}</span>
                 </div>
               </>
             ) : (
               <div className="mt-8 grid min-h-56 place-items-center rounded-lg border border-dashed border-stone-300 bg-stone-50 p-6 text-center">
                 <div>
-                  <p className="text-lg font-bold text-stone-900">No pH scan history yet</p>
-                  <p className="mt-2 text-sm text-stone-500">Complete a manual soil scan and enter pH data to build this chart from real field readings.</p>
+                  <p className="text-lg font-bold text-stone-900">{t('noPhScanHistoryTitle')}</p>
+                  <p className="mt-2 text-sm text-stone-500">{t('noPhScanHistoryBody')}</p>
                 </div>
               </div>
             )}
@@ -498,13 +529,13 @@ export default function Dashboard() {
           <section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-bold uppercase tracking-wide text-sky-500">Current Weather</p>
+                <p className="text-sm font-bold uppercase tracking-wide text-sky-500">{t('currentWeather')}</p>
                 <div className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-stone-900">
                   <MapPin className="h-4 w-4 text-sky-500" />
                   <span>{summary.location.label}</span>
                 </div>
                 <p className="mt-1 text-xs font-semibold text-stone-500">{locationSourceLabel}</p>
-                <p className="mt-1 text-xs text-stone-500">{formatLocationMeta(summary.location)}</p>
+                <p className="mt-1 text-xs text-stone-500">{formatLocationMeta(summary.location, t)}</p>
               </div>
               <CloudSun className="h-7 w-7 text-sky-400" />
             </div>
@@ -512,11 +543,11 @@ export default function Dashboard() {
             <div className="mt-5 flex flex-wrap gap-2">
               <button className="btn-secondary h-10 px-4 text-sm" type="button" onClick={requestPreciseLocation} disabled={gpsState.locating}>
                 {gpsState.locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
-                {gpsState.locating ? 'Locating...' : 'Use Current GPS'}
+                {gpsState.locating ? t('locating') : t('useCurrentGps')}
               </button>
               <Link to="/farms" className="btn-secondary h-10 px-4 text-sm">
                 <MapPin className="h-4 w-4" />
-                Farm Map
+                {t('farmMap')}
               </Link>
             </div>
 
@@ -525,36 +556,36 @@ export default function Dashboard() {
             <div className="mt-6 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:gap-5">
               <span className="text-3xl font-bold text-stone-950 sm:text-4xl">{weatherTemperature}C</span>
               <div className="border-t border-sky-200 pt-3 text-sm text-stone-700 min-[420px]:border-l min-[420px]:border-t-0 min-[420px]:pl-5 min-[420px]:pt-0">
-                <p>Humidity: {weatherHumidity}%</p>
-                <p>Wind: {weatherWind} km/h</p>
-                <p>Feels like: {feelsLike}C</p>
+                <p>{t('humidity')}: {weatherHumidity}%</p>
+                <p>{t('wind')}: {weatherWind} km/h</p>
+                <p>{t('feelsLike')}: {feelsLike}C</p>
               </div>
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg bg-white/70 p-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Rainfall</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('rainfall')}</p>
                 <p className="mt-1 text-lg font-bold text-stone-950">{precipitation} mm</p>
               </div>
               <div className="rounded-lg bg-white/70 p-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Status</p>
-                <p className="mt-1 text-sm font-semibold text-stone-900">{formatObservedAt(summary.weather.observed_at)}</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('status')}</p>
+                <p className="mt-1 text-sm font-semibold text-stone-900">{formatObservedAt(summary.weather.observed_at, t)}</p>
               </div>
             </div>
 
-            <p className="mt-5 text-sm leading-6 text-stone-600">{summary.weather.summary}</p>
+            <TranslatedText as="p" className="mt-5 text-sm leading-6 text-stone-600" text={summary.weather.summary} />
           </section>
 
           <section className="surface rounded-lg p-5">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="section-title">Quick actions</h2>
-              <span className="status-pill border border-stone-200 bg-stone-50 text-stone-600">Field tools</span>
+              <h2 className="section-title">{t('quickActions')}</h2>
+              <span className="status-pill border border-stone-200 bg-stone-50 text-stone-600">{t('fieldTools')}</span>
             </div>
             <div className="mt-4 space-y-2">
               {[
-                [ScanLine, 'Manual scan', 'Record soil readings', '/scan'],
-                [FlaskConical, 'Disease detector', 'Analyze crop images', '/disease-detector'],
-                [MapPin, 'Farm map', 'Review field locations', '/farms'],
+                [ScanLine, t('manualScan'), t('recordSoilReadings'), '/scan'],
+                [FlaskConical, t('diseaseDetector'), t('analyzeCropImages'), '/disease-detector'],
+                [MapPin, t('farmMap'), t('reviewFieldLocations'), '/farms'],
               ].map(([Icon, label, helper, to]) => (
                 <Link
                   key={label}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client.js';
 import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
+import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 import { reverseGeocodeLocation } from '../utils/openStreetMap.js';
 
@@ -32,8 +33,8 @@ function hasCoordinates(item) {
   return parseCoordinate(item?.latitude) !== null && parseCoordinate(item?.longitude) !== null;
 }
 
-function formatFarmLocation(farm) {
-  return [farm.barangay, farm.municipality, farm.province].filter(Boolean).join(', ') || 'Location details not set';
+function formatFarmLocation(farm, t) {
+  return [farm.barangay, farm.municipality, farm.province].filter(Boolean).join(', ') || t('locationDetailsNotSet');
 }
 
 function escapeHtml(value = '') {
@@ -155,15 +156,16 @@ function buildLeafletMarkerOptions(isSelected, status) {
   };
 }
 
-function buildGpsErrorMessage(error) {
-  if (!error) return 'Could not get your current location.';
-  if (error.code === error.PERMISSION_DENIED) return 'Location access was blocked on this device.';
-  if (error.code === error.POSITION_UNAVAILABLE) return 'Your current location is unavailable right now.';
-  if (error.code === error.TIMEOUT) return 'Location lookup timed out. Please try again.';
-  return 'Could not get your current location.';
+function buildGpsErrorMessage(error, t) {
+  if (!error) return t('couldNotAccessLocation');
+  if (error.code === error.PERMISSION_DENIED) return t('locationAccessBlocked');
+  if (error.code === error.POSITION_UNAVAILABLE) return t('locationUnavailable');
+  if (error.code === error.TIMEOUT) return t('locationTimedOut');
+  return t('couldNotAccessLocation');
 }
 
 export default function Farms() {
+  const { t } = useI18n();
   const [farms, setFarms] = useState([]);
   const [selectedFarmId, setSelectedFarmId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -259,12 +261,12 @@ export default function Farms() {
       console.error('Map initialization failed.', mapError);
       setMapState({
         loading: false,
-        error: 'Could not load the OpenStreetMap view on this device.',
+        error: t('mapCouldNotBeShown'),
         notice: '',
       });
     }
     return undefined;
-  }, [initializeLeafletMap]);
+  }, [initializeLeafletMap, t]);
 
   useEffect(() => {
     return () => destroyLeafletMapArtifacts();
@@ -301,7 +303,7 @@ export default function Farms() {
   const locate = useCallback(({ silent = false } = {}) => {
     if (!navigator.geolocation) {
       if (!silent) {
-        setError('Geolocation is not supported on this device.');
+        setError(t('geolocationUnsupported'));
       }
       return;
     }
@@ -319,7 +321,7 @@ export default function Farms() {
       (gpsError) => {
         setGpsLocating(false);
         if (!silent) {
-          setError(buildGpsErrorMessage(gpsError));
+          setError(buildGpsErrorMessage(gpsError, t));
         }
       },
       {
@@ -328,7 +330,7 @@ export default function Farms() {
         maximumAge: 300000,
       }
     );
-  }, [applyDetectedLocation]);
+  }, [applyDetectedLocation, t]);
 
   useEffect(() => {
     if (autoLocateAttemptedRef.current) return;
@@ -358,9 +360,9 @@ export default function Farms() {
         marker.bindPopup(
           `<div style="min-width:220px;padding:4px 2px;font-family:Inter,Segoe UI,sans-serif;">
             <div style="font-size:15px;font-weight:700;color:#1c1917;">${escapeHtml(farm.name)}</div>
-            <div style="margin-top:6px;font-size:12px;color:#57534e;">${escapeHtml(formatFarmLocation(farm))}</div>
-            <div style="margin-top:10px;font-size:12px;color:#44403c;">Status: ${escapeHtml(farm.status)}</div>
-            <div style="margin-top:4px;font-size:12px;color:#44403c;">Area: ${farm.area_hectares || '-'} ha</div>
+            <div style="margin-top:6px;font-size:12px;color:#57534e;">${escapeHtml(formatFarmLocation(farm, t))}</div>
+            <div style="margin-top:10px;font-size:12px;color:#44403c;">${escapeHtml(t('statusLabel'))}: ${escapeHtml(farm.status)}</div>
+            <div style="margin-top:4px;font-size:12px;color:#44403c;">${escapeHtml(t('area'))}: ${farm.area_hectares || '-'} ha</div>
           </div>`
         );
         marker.on('click', () => {
@@ -445,7 +447,7 @@ export default function Farms() {
     }
 
     return undefined;
-  }, [draftBoundaryGeoJson, farms, form.latitude, form.longitude, selectedFarm, selectedFarmId]);
+  }, [draftBoundaryGeoJson, farms, form.latitude, form.longitude, selectedFarm, selectedFarmId, t]);
 
   async function submit(event) {
     event.preventDefault();
@@ -461,7 +463,7 @@ export default function Farms() {
       };
 
       if (hasDuplicateFarm(farms, payload)) {
-        setError('A farm with the same details already exists.');
+        setError(t('duplicateFarm'));
         return;
       }
 
@@ -469,60 +471,60 @@ export default function Farms() {
       setForm(EMPTY_FORM);
       await loadFarms(createdFarm.id);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Could not save farm.'));
+      setError(getApiErrorMessage(requestError, t('couldNotSaveFarm')));
     }
   }
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Farm mapping"
-        title="Farm registry"
-        body="Register farm locations and keep boundaries ready for scans and weather alerts."
+        eyebrow={t('farmMapping')}
+        title={t('farmRegistry')}
+        body={t('farmRegistryBody')}
       />
       <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
         <form className="surface rounded-lg p-4 sm:p-5" onSubmit={submit}>
           <h2 className="section-title flex items-center gap-2">
             <Plus className="h-5 w-5 text-leaf-700" />
-            Register farm
+            {t('registerFarm')}
           </h2>
           {error && <div className="danger-message mt-4">{error}</div>}
           <div className="mt-4 grid gap-3">
             <label className="block">
-              <span className="text-sm font-semibold text-stone-700">Farm name</span>
+              <span className="text-sm font-semibold text-stone-700">{t('farmName')}</span>
               <input className="field mt-2" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-stone-700">Barangay</span>
+              <span className="text-sm font-semibold text-stone-700">{t('barangay')}</span>
               <input className="field mt-2" value={form.barangay} onChange={(event) => setForm({ ...form, barangay: event.target.value })} />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-stone-700">Municipality / City</span>
+              <span className="text-sm font-semibold text-stone-700">{t('municipalityCity')}</span>
               <input className="field mt-2" value={form.municipality} onChange={(event) => setForm({ ...form, municipality: event.target.value })} />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-stone-700">Province</span>
+              <span className="text-sm font-semibold text-stone-700">{t('province')}</span>
               <input className="field mt-2" value={form.province} onChange={(event) => setForm({ ...form, province: event.target.value })} />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-semibold text-stone-700">Latitude</span>
+                <span className="text-sm font-semibold text-stone-700">{t('latitude')}</span>
                 <input className="field mt-2" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} />
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-stone-700">Longitude</span>
+                <span className="text-sm font-semibold text-stone-700">{t('longitude')}</span>
                 <input className="field mt-2" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} />
               </label>
             </div>
             <label className="block">
-              <span className="text-sm font-semibold text-stone-700">Area in hectares</span>
+              <span className="text-sm font-semibold text-stone-700">{t('areaHectares')}</span>
               <input className="field mt-2" value={form.area_hectares} onChange={(event) => setForm({ ...form, area_hectares: event.target.value })} />
             </label>
             <button type="button" className="btn-secondary" onClick={() => locate()} disabled={gpsLocating}>
               {gpsLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
-              {gpsLocating ? 'Locating...' : 'Use GPS location'}
+              {gpsLocating ? t('locating') : t('useGpsLocation')}
             </button>
-            <button className="btn-primary">Save farm</button>
+            <button className="btn-primary">{t('saveFarm')}</button>
           </div>
         </form>
 
@@ -532,16 +534,16 @@ export default function Farms() {
               <div>
                 <div className="section-title flex items-center gap-2">
                   <MapPinned className="h-5 w-5 text-leaf-700" />
-                  GPS boundary map
+                  {t('gpsBoundaryMap')}
                 </div>
                 <p className="mt-2 text-sm text-stone-500">
-                  Farm pins, saved boundaries, and draft locations.
+                  {t('farmPinsBody')}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs font-bold uppercase tracking-wide text-stone-500">
-                <span className="rounded-full border border-stone-200 bg-white px-3 py-1">{farms.length} farms</span>
+                <span className="rounded-full border border-stone-200 bg-white px-3 py-1">{farms.length} {t('farms')}</span>
                 <span className="rounded-full border border-stone-200 bg-white px-3 py-1">OpenStreetMap</span>
-                {selectedFarm && <span className="rounded-full border border-leaf-200 bg-leaf-50 px-3 py-1 text-leaf-700">Focused: {selectedFarm.name}</span>}
+                {selectedFarm && <span className="rounded-full border border-leaf-200 bg-leaf-50 px-3 py-1 text-leaf-700">{t('focusedFarm', { farm: selectedFarm.name })}</span>}
               </div>
             </div>
             {mapState.notice && (
@@ -557,11 +559,11 @@ export default function Farms() {
                   <div>
                     {mapState.loading ? <Loader2 className="mx-auto h-6 w-6 animate-spin text-leaf-700" /> : null}
                     <p className="mt-3 font-semibold text-stone-900">
-                      {mapState.loading ? 'Loading farm map...' : 'Map could not be shown'}
+                      {mapState.loading ? t('loadingFarmMap') : t('mapCouldNotBeShown')}
                     </p>
                     <p className="mt-1 max-w-md text-sm text-stone-500">
                       {mapState.loading
-                        ? 'Preparing farm pins, GPS boundaries, and location capture.'
+                        ? t('preparingFarmMap')
                         : mapState.error}
                     </p>
                   </div>
@@ -571,7 +573,7 @@ export default function Farms() {
           </div>
 
           {farms.length === 0 ? (
-            <EmptyState title="No farms yet" body="Register a farm to unlock weather, predictions, scans, marketplace listings, and inspection workflows." />
+            <EmptyState title={t('noFarmsYet')} body={t('noFarmsBody')} />
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {farms.map((farm) => {
@@ -588,13 +590,13 @@ export default function Farms() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h3 className="break-words font-bold text-stone-950">{farm.name}</h3>
-                        <p className="mt-1 text-sm text-stone-500">{formatFarmLocation(farm)}</p>
+                        <p className="mt-1 text-sm text-stone-500">{formatFarmLocation(farm, t)}</p>
                       </div>
                       <span className="shrink-0 rounded-full bg-leaf-100 px-2 py-1 text-xs font-bold uppercase text-leaf-800">{farm.status}</span>
                     </div>
                     <dl className="mt-4 grid gap-2 text-sm min-[420px]:grid-cols-2">
                       <div>
-                        <dt className="text-stone-500">Area</dt>
+                        <dt className="text-stone-500">{t('area')}</dt>
                         <dd className="font-semibold">{farm.area_hectares || '-'} ha</dd>
                       </div>
                       <div>
@@ -604,10 +606,10 @@ export default function Farms() {
                     </dl>
                     <p className="mt-4 text-xs font-medium text-stone-500">
                       {farm.boundary_geojson
-                        ? 'Saved farm boundary loaded on the map.'
+                        ? t('savedFarmBoundaryLoaded')
                         : farm.area_hectares && farm.latitude
-                          ? 'Boundary estimated from saved area and GPS center.'
-                          : 'Add GPS and area data for a visible boundary.'}
+                          ? t('boundaryEstimated')
+                          : t('addGpsAreaBoundary')}
                     </p>
                   </button>
                 );

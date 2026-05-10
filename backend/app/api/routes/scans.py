@@ -38,6 +38,8 @@ def _resolve_scan_image_path(image_path: str) -> Path:
 
 
 def _scan_crop_label(scan: Scan) -> str | None:
+    if scan.crop_label:
+        return scan.crop_label
     direct_label = detector._crop_label_from_key(scan.disease_name)
     if direct_label:
         return direct_label
@@ -177,6 +179,11 @@ async def create_scan(
         confidence=detection.confidence,
         cause=detection.cause,
         treatment=detection.treatment,
+        crop_label=detection.crop_label,
+        analysis_mode=detection.analysis_mode,
+        reference_url=detection.reference_url,
+        reference_title=detection.reference_title,
+        detections=detection.detections,
     )
     db.add(scan)
     await db.flush()

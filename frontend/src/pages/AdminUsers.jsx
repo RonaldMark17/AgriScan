@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
+import { useI18n } from '../context/I18nContext.jsx';
 
 export default function AdminUsers() {
+  const { t } = useI18n();
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [farms, setFarms] = useState([]);
@@ -44,13 +46,13 @@ export default function AdminUsers() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Administration"
-        title="Users and approvals"
-        body="Manage staff access, review pending farm records, and monitor key account activity."
+        eyebrow={t('administration')}
+        title={t('usersAndApprovals')}
+        body={t('usersAndApprovalsBody')}
         actions={
           <button className="btn-secondary" onClick={load} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Refresh
+            {t('refresh')}
           </button>
         }
       />
@@ -58,16 +60,16 @@ export default function AdminUsers() {
         <section className="surface rounded-lg p-4 sm:p-5">
           <h2 className="section-title flex items-center gap-2">
             <UserRoundCheck className="h-5 w-5 text-leaf-700" />
-            User management
+            {t('userManagement')}
           </h2>
           <div className="table-shell mt-4">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase text-stone-500">
                 <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Last login</th>
+                  <th className="px-4 py-3">{t('name')}</th>
+                  <th className="px-4 py-3">{t('role')}</th>
+                  <th className="px-4 py-3">{t('status')}</th>
+                  <th className="px-4 py-3">{t('lastLogin')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -82,7 +84,7 @@ export default function AdminUsers() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`status-pill ${user.is_active ? 'bg-leaf-50 text-leaf-800' : 'bg-red-50 text-red-700'}`}>
-                        {user.is_active ? 'Active' : 'Disabled'}
+                        {user.is_active ? t('active') : t('disabled')}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-stone-600">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '-'}</td>
@@ -92,7 +94,7 @@ export default function AdminUsers() {
             </table>
             {users.length === 0 ? (
               <div className="p-4">
-                <EmptyState title="No users found" body="User accounts will appear here after registration." />
+                <EmptyState title={t('noUsersFound')} body={t('usersAppearAfterRegistration')} />
               </div>
             ) : null}
           </div>
@@ -102,11 +104,11 @@ export default function AdminUsers() {
           <div className="surface rounded-lg p-4 sm:p-5">
             <h2 className="section-title flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-leaf-700" />
-              Pending farms
+              {t('pendingFarms')}
             </h2>
             {farms.length === 0 ? (
               <div className="mt-4">
-                <EmptyState title="No pending approvals" body="New farmer farm records will appear here for agriculture office review." />
+                <EmptyState title={t('noPendingApprovals')} body={t('pendingFarmsBody')} />
               </div>
             ) : (
               <div className="mt-4 space-y-3">
@@ -116,7 +118,7 @@ export default function AdminUsers() {
                     <p className="text-sm text-stone-500">{farm.municipality}, {farm.province}</p>
                     <button className="btn-primary mt-3 w-full sm:w-auto" onClick={() => approveFarm(farm.id)} disabled={approvingId === farm.id}>
                       {approvingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                      Approve
+                      {t('approve')}
                     </button>
                   </div>
                 ))}
@@ -127,11 +129,11 @@ export default function AdminUsers() {
           <div className="surface rounded-lg p-4 sm:p-5">
             <h2 className="section-title flex items-center gap-2">
               <Clock3 className="h-5 w-5 text-leaf-700" />
-              Audit logs
+              {t('auditLogs')}
             </h2>
             <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
               {logs.length === 0 ? (
-                <EmptyState title="No audit activity" body="Recent administrative actions will be listed here." />
+                <EmptyState title={t('noAuditActivity')} body={t('auditActivityBody')} />
               ) : (
                 logs.slice(0, 20).map((log) => (
                   <div key={log.id} className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm">

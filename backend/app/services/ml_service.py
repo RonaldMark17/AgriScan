@@ -13,6 +13,52 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+VISUAL_MEMORY_FEATURE_KEYS = (
+    "green_leaf_ratio",
+    "lesion_ratio",
+    "lesion_within_plant",
+    "yellow_ratio",
+    "rust_ratio",
+    "dark_lesion_ratio",
+    "edge_lesion_ratio",
+    "component_count",
+    "max_component_area_ratio",
+    "max_component_aspect",
+    "green_component_count",
+    "max_green_area_ratio",
+    "max_green_aspect",
+    "green_edge_ratio",
+    "adjacent_nonleaf_ratio",
+    "banana_fruit_ratio",
+    "fruit_component_count",
+    "max_fruit_area_ratio",
+    "max_fruit_aspect",
+    "chroma_green_ratio",
+    "natural_green_ratio",
+    "center_green_ratio",
+    "center_chroma_green_ratio",
+    "center_natural_green_ratio",
+    "center_lesion_ratio",
+    "center_fruit_ratio",
+    "center_neutral_ratio",
+    "center_tan_ratio",
+    "contrast",
+)
+
+VISUAL_MEMORY_DISTANCE_SCALES = {
+    "contrast": 80.0,
+    "component_count": 35.0,
+    "green_component_count": 25.0,
+    "fruit_component_count": 25.0,
+    "max_component_aspect": 8.0,
+    "max_green_aspect": 8.0,
+    "max_fruit_aspect": 8.0,
+}
+
+VISUAL_MEMORY_STRICT_DISTANCE = 0.055
+VISUAL_MEMORY_HINTED_DISTANCE = 0.16
 
 
 @dataclass
@@ -277,6 +323,66 @@ CROP_ALIASES = {
     "coffee": "coffee",
     "abaka": "abaca",
     "abaca": "abaca",
+}
+
+UNSUPPORTED_CROP_NAME_GUARDS = {
+    "black pepper",
+    "peppercorn",
+    "peppercorns",
+    "pepper corns",
+    "paminta",
+}
+
+UNSUPPORTED_CROP_ALIASES = {
+    "lettuce": "Lettuce",
+    "mustard": "Mustard",
+    "mustasa": "Mustard",
+    "okra": "Okra",
+    "lady finger": "Okra",
+    "ladyfinger": "Okra",
+    "jute": "Jute",
+    "saluyot": "Jute",
+    "kangkong": "Water Spinach",
+    "water spinach": "Water Spinach",
+    "spinach": "Spinach",
+    "squash": "Squash",
+    "kalabasa": "Squash",
+    "cucumber": "Cucumber",
+    "pipino": "Cucumber",
+    "watermelon": "Watermelon",
+    "melon": "Melon",
+    "papaya": "Papaya",
+    "langka": "Jackfruit",
+    "jackfruit": "Jackfruit",
+    "durian": "Durian",
+    "rambutan": "Rambutan",
+    "lanzones": "Lanzones",
+    "chayote": "Chayote",
+    "sayote": "Chayote",
+    "sitaw": "Yardlong Bean",
+    "yardlong bean": "Yardlong Bean",
+    "string bean": "String Bean",
+    "soybean": "Soybean",
+    "peanut": "Peanut",
+    "mani": "Peanut",
+    "singkamas": "Singkamas / Jicama",
+    "jicama": "Singkamas / Jicama",
+    "yam bean": "Singkamas / Jicama",
+    "mexican turnip": "Singkamas / Jicama",
+    "black pepper": "Black Pepper",
+    "peppercorn": "Black Pepper",
+    "peppercorns": "Black Pepper",
+    "pepper corns": "Black Pepper",
+    "paminta": "Black Pepper",
+    "sesame": "Sesame",
+    "sunflower": "Sunflower",
+    "strawberry": "Strawberry",
+    "grape": "Grape",
+    "orange": "Orange",
+    "lemon": "Lemon",
+    "lime": "Lime",
+    "orchid": "Orchid",
+    "rose": "Rose",
 }
 
 DISEASE_PROFILES = {
@@ -906,6 +1012,11 @@ NON_CROP_FILENAME_TERMS = (
 )
 
 ONLINE_DISEASE_REFERENCES: dict[str, dict[str, str]] = {
+    "healthy": {
+        "title": "UMN Extension - Plant disease diagnosis",
+        "url": "https://extension.umn.edu/plant-diseases/diagnosing-plant-diseases",
+        "query": "extension healthy plant leaf disease diagnosis signs",
+    },
     "pest_leaf_damage": {
         "title": "UC IPM - Agriculture pests",
         "url": "https://ipm.ucanr.edu/pmg/",
@@ -994,6 +1105,17 @@ class CropDiseaseDetector:
         self._loaded_model_path: Path | None = None
         self._loaded_model_mtime: float | None = None
         self._missing_ultralytics_logged = False
+        self._visual_memory_examples: list[dict[str, Any]] = []
+        self._visual_memory_path: Path | None = None
+        self._visual_memory_mtime: float | None = None
+
+    def _resolve_backend_path(self, configured_path: str | Path) -> Path:
+        path = Path(configured_path)
+        if path.is_absolute():
+            return path
+        if path.parts and path.parts[0] in {"app", "uploads", "static", "data"}:
+            return (BACKEND_DIR / path).resolve()
+        return (Path.cwd() / path).resolve()
 
     def _load_model(self) -> None:
         model_path = self._resolve_model_path(Path(settings.model_path))
@@ -1109,6 +1231,37 @@ class CropDiseaseDetector:
             self._model = None
             self._loaded_model_path = None
             self._loaded_model_mtime = None
+
+    def _load_visual_memory_examples(self) -> list[dict[str, Any]]:
+        memory_path = self._resolve_backend_path(settings.visual_memory_path)
+        current_mtime = memory_path.stat().st_mtime if memory_path.exists() else None
+        if self._visual_memory_path == memory_path and self._visual_memory_mtime == current_mtime:
+            return self._visual_memory_examples
+
+        self._visual_memory_path = memory_path
+        self._visual_memory_mtime = current_mtime
+        self._visual_memory_examples = []
+        if not memory_path.exists():
+            return self._visual_memory_examples
+
+        try:
+            data = json.loads(memory_path.read_text(encoding="utf-8"))
+        except Exception:
+            logger.exception("Could not load visual memory examples from %s.", memory_path)
+            return self._visual_memory_examples
+
+        examples = data.get("examples") if isinstance(data, dict) else data
+        if not isinstance(examples, list):
+            return self._visual_memory_examples
+
+        for example in examples:
+            if not isinstance(example, dict) or not isinstance(example.get("feature_signature"), dict):
+                continue
+            class_key = str(example.get("class_key") or "").strip()
+            if not class_key:
+                continue
+            self._visual_memory_examples.append(example)
+        return self._visual_memory_examples
 
     def _plant_subject_mask(self, normalized_array: np.ndarray) -> np.ndarray:
         red = normalized_array[:, :, 0]
@@ -1555,6 +1708,148 @@ class CropDiseaseDetector:
             "center_tan_ratio": float(np.mean(tan_subject_pixels[center_mask])),
         }
 
+    def _visual_memory_signature(self, features: dict[str, float]) -> dict[str, float]:
+        return {key: round(float(features.get(key, 0.0)), 5) for key in VISUAL_MEMORY_FEATURE_KEYS}
+
+    def _visual_memory_distance(self, first: dict[str, Any], second: dict[str, Any]) -> float:
+        distances = []
+        for key in VISUAL_MEMORY_FEATURE_KEYS:
+            try:
+                left = float(first.get(key, 0.0))
+                right = float(second.get(key, 0.0))
+            except (TypeError, ValueError):
+                continue
+            scale = VISUAL_MEMORY_DISTANCE_SCALES.get(key, 1.0)
+            distances.append(min(abs(left - right) / scale, 1.0))
+        if not distances:
+            return 1.0
+        return sum(distances) / len(distances)
+
+    def _visual_memory_has_text_hint(self, example: dict[str, Any], original_filename: str | None, crop_type: str | None) -> bool:
+        context = self._context_text(f"{original_filename or ''} {crop_type or ''}")
+        if not context:
+            return False
+
+        hint_values = [
+            example.get("id"),
+            example.get("source_file"),
+            example.get("crop_label"),
+            example.get("disease_name"),
+            example.get("class_key"),
+        ]
+        hints = set()
+        for value in hint_values:
+            for token in re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).split():
+                if len(token) >= 4:
+                    hints.add(token)
+        return any(re.search(rf"\b{re.escape(token)}\b", context) for token in hints)
+
+    def _visual_memory_crop_allowed(self, example: dict[str, Any], selected_crop_key: str | None) -> bool:
+        if not selected_crop_key:
+            return True
+        class_key = self._canonical_key_for_label(str(example.get("class_key") or ""))
+        if class_key == "invalid_crop_image":
+            return True
+        crop_label = str(example.get("crop_label") or "")
+        example_crop_key = self._normalize_crop_type(crop_label)
+        if example_crop_key is None:
+            return False
+        return example_crop_key == selected_crop_key
+
+    def _visual_memory_detection(
+        self,
+        features: dict[str, float],
+        *,
+        crop_type: str | None,
+        original_filename: str | None,
+        allow_online_lookup: bool,
+    ) -> DiseaseDetection | None:
+        examples = self._load_visual_memory_examples()
+        if not examples:
+            return None
+
+        signature = self._visual_memory_signature(features)
+        selected_crop_key = self._normalize_crop_type(crop_type)
+        best_example: dict[str, Any] | None = None
+        best_distance = 1.0
+        best_has_hint = False
+
+        for example in examples:
+            if not self._visual_memory_crop_allowed(example, selected_crop_key):
+                continue
+            distance = self._visual_memory_distance(signature, example.get("feature_signature") or {})
+            has_hint = self._visual_memory_has_text_hint(example, original_filename, crop_type)
+            threshold = float(
+                example.get(
+                    "match_threshold",
+                    VISUAL_MEMORY_HINTED_DISTANCE if (selected_crop_key or has_hint) else VISUAL_MEMORY_STRICT_DISTANCE,
+                )
+            )
+            if selected_crop_key or has_hint:
+                threshold = max(threshold, VISUAL_MEMORY_HINTED_DISTANCE)
+            if distance <= threshold and distance < best_distance:
+                best_example = example
+                best_distance = distance
+                best_has_hint = has_hint
+
+        if best_example is None:
+            return None
+
+        class_key = self._canonical_key_for_label(str(best_example.get("class_key") or "review_needed"))
+        crop_label = str(best_example.get("crop_label") or "") or self._crop_label_from_key(class_key)
+        metadata = self._metadata_for_key(class_key)
+        base_confidence = float(best_example.get("confidence") or 0.88)
+        confidence = max(0.72, min(0.96, base_confidence - best_distance * 1.25))
+        source_name = str(best_example.get("source_file") or best_example.get("id") or "a verified example")
+
+        if class_key == "invalid_crop_image":
+            return DiseaseDetection(
+                disease_name=metadata["name"],
+                confidence=0.0,
+                cause=metadata["cause"],
+                treatment=metadata["treatment"],
+                crop_label=None,
+                analysis_mode="verified visual memory rejection",
+            )
+
+        unsupported_crop = crop_label.startswith("Possible ") or (
+            crop_label and self._normalize_crop_type(crop_label) is None and class_key in {"healthy", "review_needed"}
+        )
+        if unsupported_crop and class_key in {"healthy", "review_needed"}:
+            display_crop = crop_label.removeprefix("Possible ").strip() or crop_label
+            disease_name = "Possible healthy crop" if class_key == "healthy" else "Crop scan needs review"
+            cause = (
+                f"AgriScan matched this image to a verified {display_crop} sample ({source_name}). "
+                "This crop is not in the trained crop list, so the result is shown as a possible crop match."
+            )
+            treatment = (
+                "Compare with a trusted crop reference, monitor for spots, wilting, rot, or pest damage, "
+                "and confirm with a local agriculture officer before applying treatment."
+            )
+            detection = DiseaseDetection(
+                disease_name=disease_name,
+                confidence=confidence,
+                cause=cause,
+                treatment=treatment,
+                crop_label=crop_label if crop_label.startswith("Possible ") else f"Possible {crop_label}",
+                analysis_mode="verified visual memory",
+            )
+            return self._with_online_reference(detection, class_key, display_crop, allow_online_lookup=allow_online_lookup)
+
+        disease_name = str(best_example.get("disease_name") or metadata["name"])
+        cause = metadata["cause"]
+        if best_has_hint or selected_crop_key:
+            cause = f"{cause} This result matched a verified AgriScan training example ({source_name})."
+        detection = DiseaseDetection(
+            disease_name=disease_name,
+            confidence=confidence,
+            cause=cause,
+            treatment=metadata["treatment"],
+            crop_label=crop_label,
+            analysis_mode="verified visual memory",
+        )
+        return self._with_online_reference(detection, class_key, crop_label, allow_online_lookup=allow_online_lookup)
+
     def _healthy_key_for_crop(self, crop_key: str | None) -> str:
         if crop_key and f"{crop_key}_healthy" in (self._labels or DEFAULT_LABELS):
             return f"{crop_key}_healthy"
@@ -1623,6 +1918,157 @@ class CropDiseaseDetector:
             or features["rust_ratio"] >= 0.035
             or features["edge_lesion_ratio"] >= 0.08
         )
+
+    def _freeform_unsupported_crop_label(self, crop_type: str | None) -> str | None:
+        if not crop_type or self._normalize_crop_type(crop_type):
+            return None
+        text = re.sub(r"[^a-z0-9]+", " ", crop_type.lower()).strip()
+        if not text or text in {"auto detect", "auto detect crop", "select crop", "unknown"}:
+            return None
+        if any(re.search(rf"\b{re.escape(term)}\b", text) for term in NON_CROP_FILENAME_TERMS):
+            return None
+        for alias, label in UNSUPPORTED_CROP_ALIASES.items():
+            if re.search(rf"\b{re.escape(alias)}\b", text):
+                return label
+        words = [word for word in text.split() if word not in {"crop", "plant", "leaf"}]
+        if not words:
+            return None
+        return " ".join(words[:4]).title()
+
+    def _unsupported_crop_label_from_filename(self, original_filename: str | None) -> str | None:
+        text = self._context_text(original_filename)
+        if not text:
+            return None
+        for alias, label in UNSUPPORTED_CROP_ALIASES.items():
+            if re.search(rf"\b{re.escape(alias)}\b", text):
+                return label
+        return None
+
+    def _possible_crop_group_label(self, features: dict[str, float]) -> str | None:
+        has_leaf_or_plant_subject = self._has_crop_subject_in_foreground(features, None) or (
+            features["green_leaf_ratio"] >= 0.16
+            and (features["max_green_area_ratio"] >= 0.08 or features["lesion_ratio"] >= 0.035)
+        )
+        if not has_leaf_or_plant_subject:
+            return None
+        if features["banana_fruit_ratio"] >= 0.12 or features["max_fruit_area_ratio"] >= 0.10:
+            return "Unlisted fruit crop"
+        if features["max_green_aspect"] >= 2.3 or (
+            features["green_component_count"] >= 3
+            and features["max_green_aspect"] >= 1.9
+            and features["max_green_area_ratio"] < 0.22
+        ):
+            return "Unlisted grass-like crop"
+        if features["green_leaf_ratio"] >= 0.22 or features["max_green_area_ratio"] >= 0.12:
+            return "Unlisted leafy crop"
+        return "Unlisted crop"
+
+    def _possible_unsupported_crop_label(
+        self,
+        features: dict[str, float],
+        *,
+        original_filename: str | None,
+        crop_type: str | None,
+        supported_inferred_crop: str | None,
+    ) -> str | None:
+        normalized_selected_crop = self._normalize_crop_type(crop_type)
+        filename_label = self._unsupported_crop_label_from_filename(original_filename)
+        if filename_label:
+            if (
+                normalized_selected_crop
+                and supported_inferred_crop == normalized_selected_crop
+                and self._is_reliable_visual_crop_inference(features, supported_inferred_crop)
+            ):
+                return None
+            return filename_label
+
+        if normalized_selected_crop:
+            return None
+
+        freeform_label = self._freeform_unsupported_crop_label(crop_type)
+        if freeform_label:
+            if supported_inferred_crop and self._is_reliable_visual_crop_inference(features, supported_inferred_crop):
+                return None
+            return freeform_label
+
+        filename_crop, _, _ = self._filename_context(original_filename, crop_type)
+        if filename_crop:
+            return None
+
+        if supported_inferred_crop and self._is_reliable_visual_crop_inference(features, supported_inferred_crop):
+            return None
+        return self._possible_crop_group_label(features)
+
+    def _possible_unsupported_crop_detection(
+        self,
+        features: dict[str, float],
+        crop_label: str,
+        *,
+        allow_online_lookup: bool,
+    ) -> DiseaseDetection:
+        key, confidence = self._offline_key_from_features(features, None)
+        class_key = self._canonical_key_for_label(key)
+        has_disease_signal = self._has_strong_visual_disease_signal(features, None)
+        possible_crop_label = crop_label if crop_label.startswith("Possible ") else f"Possible {crop_label}"
+
+        if class_key in {"healthy", "review_needed"} or class_key.endswith("_healthy") or not has_disease_signal:
+            detection = DiseaseDetection(
+                disease_name="Possible healthy crop",
+                confidence=min(max(confidence if class_key != "review_needed" else 0.58, 0.54), 0.72),
+                cause=(
+                    f"AgriScan does not have {crop_label} in the trained crop list. "
+                    "The visible plant tissue does not show strong disease markers, so it may be healthy."
+                ),
+                treatment=(
+                    "Keep monitoring new leaves or fruit, compare with a trusted crop guide, and retake a close photo "
+                    "if spots, yellowing, wilting, or rot appears."
+                ),
+                crop_label=possible_crop_label,
+                analysis_mode="unsupported crop visual analysis",
+            )
+            reference_key = "healthy"
+        elif class_key == "pest_leaf_damage":
+            detection = DiseaseDetection(
+                disease_name="Possible pest-related leaf damage",
+                confidence=min(max(confidence, 0.58), 0.76),
+                cause=(
+                    f"AgriScan does not have {crop_label} in the trained crop list. "
+                    "The visible subject shows chewing, edge damage, holes, or discoloration that can match pest or physical damage."
+                ),
+                treatment=(
+                    "Inspect both sides of nearby leaves for insects or larvae, remove badly damaged tissue when practical, "
+                    "and confirm the crop and pest before using pesticide."
+                ),
+                crop_label=possible_crop_label,
+                analysis_mode="unsupported crop visual analysis",
+            )
+            reference_key = "pest_leaf_damage"
+        else:
+            detection = DiseaseDetection(
+                disease_name="Possible leaf spot or blight symptoms",
+                confidence=min(max(confidence, 0.58), 0.78),
+                cause=(
+                    f"AgriScan does not have {crop_label} in the trained crop list. "
+                    "Visible spots, blighting, rust, or necrotic tissue suggest a possible crop disease."
+                ),
+                treatment=(
+                    "Remove heavily affected tissue, improve airflow, avoid wetting foliage, and use the linked crop reference "
+                    "or a local agriculture officer to confirm the exact crop disease before treatment."
+                ),
+                crop_label=possible_crop_label,
+                analysis_mode="unsupported crop visual analysis",
+            )
+            reference_key = "leaf_spot_or_blight"
+
+        detection = self._with_online_reference(
+            detection,
+            reference_key,
+            crop_label,
+            allow_online_lookup=allow_online_lookup,
+        )
+        if detection.reference_url:
+            detection.analysis_mode = "online unsupported crop reference"
+        return detection
 
     def _review_needed_detection(
         self,
@@ -1834,7 +2280,7 @@ class CropDiseaseDetector:
         if not crop_type or not crop_type.strip():
             return None
         if selected_crop is None:
-            return "Select a supported crop type or use Auto detect crop."
+            return None
 
         features = self._extract_leaf_features(image_path)
         visual_crop = self._infer_crop_key_from_features(features)
@@ -1845,7 +2291,7 @@ class CropDiseaseDetector:
         ):
             return None
 
-        selected_label = self._display_crop_label(selected_crop) or crop_type
+        selected_label = self._display_crop_label(selected_crop) or self._freeform_unsupported_crop_label(crop_type) or crop_type
         visual_label = self._display_crop_label(visual_crop) or visual_crop.replace("_", " ").title()
         return f"Selected crop is {selected_label}, but the uploaded image looks like {visual_label}. Choose {visual_label} or use Auto detect crop."
 
@@ -2685,6 +3131,7 @@ class CropDiseaseDetector:
         return None
 
     def _online_reference_for_key(self, key: str, crop_type: str | None) -> dict[str, str] | None:
+        class_key = self._canonical_key_for_label(key)
         seed = self._reference_seed_for_key(key)
         if settings.force_offline_disease_detection or not settings.enable_online_disease_lookup:
             return None
@@ -2697,6 +3144,8 @@ class CropDiseaseDetector:
             }
 
         query = seed.get("query") or f"{crop_type or ''} {key} crop disease symptoms management".strip()
+        if crop_type and class_key in {"healthy", "leaf_spot_or_blight", "pest_leaf_damage"}:
+            query = f"{crop_type} {query}".strip()
         try:
             import httpx
 
@@ -2751,8 +3200,42 @@ class CropDiseaseDetector:
     ) -> DiseaseDetection:
         features = self._extract_leaf_features(image_path)
         normalized_crop = self._normalize_crop_type(crop_type)
-        if self._looks_like_non_crop_foreground(features, normalized_crop):
+        filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
+
+        strict_visual_memory = self._visual_memory_detection(
+            features,
+            crop_type=None,
+            original_filename=None,
+            allow_online_lookup=allow_online_lookup,
+        )
+        if strict_visual_memory is not None:
+            return strict_visual_memory
+
+        if not filename_unsupported_crop and self._looks_like_non_crop_foreground(features, normalized_crop):
             return self._invalid_crop_image_detection()
+
+        visual_memory = self._visual_memory_detection(
+            features,
+            crop_type=crop_type,
+            original_filename=original_filename,
+            allow_online_lookup=allow_online_lookup,
+        )
+        if visual_memory is not None:
+            return visual_memory
+
+        feature_crop = self._infer_crop_key_from_features(features)
+        possible_unsupported_crop = self._possible_unsupported_crop_label(
+            features,
+            original_filename=original_filename,
+            crop_type=crop_type,
+            supported_inferred_crop=feature_crop,
+        )
+        if possible_unsupported_crop:
+            return self._possible_unsupported_crop_detection(
+                features,
+                possible_unsupported_crop,
+                allow_online_lookup=allow_online_lookup,
+            )
 
         contextual = self._contextual_detection(
             features,
@@ -2768,7 +3251,7 @@ class CropDiseaseDetector:
         if self._looks_like_non_crop_foreground(features, normalized_crop):
             return self._invalid_crop_image_detection()
         filename_crop, _, _ = self._filename_context(original_filename, crop_type)
-        inferred_crop = normalized_crop or filename_crop or self._infer_crop_key_from_features(features)
+        inferred_crop = normalized_crop or filename_crop or feature_crop
         key, confidence = self._offline_key_from_features(features, inferred_crop)
         feature_inferred_only = normalized_crop is None and filename_crop is None and inferred_crop is not None
         class_key = self._canonical_key_for_label(key)
@@ -2809,13 +3292,46 @@ class CropDiseaseDetector:
         if self._has_non_crop_filename_context(original_filename):
             return self._invalid_crop_image_detection()
 
-        if self._is_obvious_non_crop_image(image_path):
+        features = self._extract_leaf_features(image_path)
+        strict_visual_memory = self._visual_memory_detection(
+            features,
+            crop_type=None,
+            original_filename=None,
+            allow_online_lookup=allow_online_lookup,
+        )
+        if strict_visual_memory is not None:
+            return strict_visual_memory
+
+        filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
+        if not filename_unsupported_crop and self._is_obvious_non_crop_image(image_path):
             return self._invalid_crop_image_detection()
 
-        features = self._extract_leaf_features(image_path)
         normalized_crop = self._normalize_crop_type(crop_type)
-        if self._looks_like_non_crop_foreground(features, normalized_crop):
+        if not filename_unsupported_crop and self._looks_like_non_crop_foreground(features, normalized_crop):
             return self._invalid_crop_image_detection()
+
+        visual_memory = self._visual_memory_detection(
+            features,
+            crop_type=crop_type,
+            original_filename=original_filename,
+            allow_online_lookup=allow_online_lookup,
+        )
+        if visual_memory is not None:
+            return visual_memory
+
+        feature_crop = self._infer_crop_key_from_features(features)
+        possible_unsupported_crop = self._possible_unsupported_crop_label(
+            features,
+            original_filename=original_filename,
+            crop_type=crop_type,
+            supported_inferred_crop=feature_crop,
+        )
+        if possible_unsupported_crop:
+            return self._possible_unsupported_crop_detection(
+                features,
+                possible_unsupported_crop,
+                allow_online_lookup=allow_online_lookup,
+            )
 
         contextual = self._contextual_detection(
             features,
@@ -3024,6 +3540,8 @@ class CropDiseaseDetector:
             return None
         normalized = crop_type.strip().lower().replace("_", " ").replace("-", " ")
         if not normalized:
+            return None
+        if any(re.search(rf"\b{re.escape(term)}\b", normalized) for term in UNSUPPORTED_CROP_NAME_GUARDS):
             return None
         if normalized in CROP_ALIASES:
             return CROP_ALIASES[normalized]

@@ -1,6 +1,7 @@
 import { ArrowRight, Crosshair, Droplets, Filter, Leaf, Loader2, MapPin, Play, TrendingUp, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
+import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
@@ -20,12 +21,12 @@ const defaultScanInputs = {
   province: null,
 };
 
-function buildGpsErrorMessage(error) {
-  if (!error) return 'Could not access your current location.';
-  if (error.code === error.PERMISSION_DENIED) return 'Location access was blocked. AgriScan will fall back to your saved farm location if available.';
-  if (error.code === error.POSITION_UNAVAILABLE) return 'Your current location is unavailable right now.';
-  if (error.code === error.TIMEOUT) return 'Location lookup timed out. Please try again.';
-  return 'Could not access your current location.';
+function buildGpsErrorMessage(error, t) {
+  if (!error) return t('couldNotAccessLocation');
+  if (error.code === error.PERMISSION_DENIED) return t('locationAccessBlocked');
+  if (error.code === error.POSITION_UNAVAILABLE) return t('locationUnavailable');
+  if (error.code === error.TIMEOUT) return t('locationTimedOut');
+  return t('couldNotAccessLocation');
 }
 
 function getCurrentPosition() {
@@ -58,6 +59,38 @@ function getCropCategory(cropName) {
   if (crop.includes('cassava') || crop.includes('sweet potato') || crop.includes('taro') || crop.includes('gabi')) return 'Root Crops';
   if (crop.includes('calamansi') || crop.includes('banana') || crop.includes('mango')) return 'Fruits';
   return 'Vegetables';
+}
+
+function translatedCategory(category, t) {
+  const keys = {
+    'All Crops': 'allCrops',
+    Vegetables: 'vegetables',
+    Grains: 'grains',
+    Fruits: 'fruits',
+    'Root Crops': 'rootCrops',
+  };
+  return t(keys[category] || category);
+}
+
+function translatedSortMode(mode, t) {
+  const keys = {
+    Suitability: 'sortSuitability',
+    'Crop Name': 'sortCropName',
+    'Planting Window': 'sortPlantingWindow',
+  };
+  return t(keys[mode] || mode);
+}
+
+function translatedTag(tag, t) {
+  const keys = {
+    'Location Aware': 'locationAware',
+    'Soil Match': 'soilMatch',
+    'Live Weather': 'liveWeather',
+    'Manual Soil': 'manualSoil',
+    'Top Match': 'topMatch',
+    Alternative: 'alternative',
+  };
+  return t(keys[tag] || tag);
 }
 
 function buildCropCard(item, result) {
@@ -117,7 +150,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">{t('cropGuide')}</p>
             <h2 id="crop-guide-title" className="mt-1 text-2xl font-bold text-stone-950">{crop.name}</h2>
-            <p className="mt-2 text-sm text-stone-500">{crop.variety} - {crop.window}</p>
+            <p className="mt-2 text-sm text-stone-500">{translatedCategory(crop.variety, t)} - <TranslatedText text={crop.window} /></p>
           </div>
           <button className="btn-icon shrink-0" type="button" onClick={onClose} aria-label={t('closeCropGuide')}>
             <X className="h-5 w-5" />
@@ -126,29 +159,29 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
         <div className="max-h-[calc(85vh-110px)] overflow-y-auto p-5 sm:p-6">
           <div className="rounded-lg bg-leaf-50/70 p-4">
-            <p className="text-sm leading-7 text-stone-700">{crop.guide}</p>
+            <TranslatedText as="p" className="text-sm leading-7 text-stone-700" text={crop.guide} />
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div className="rounded-lg border border-stone-200 p-4">
               <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('watering')}</p>
-              <p className="mt-2 text-sm leading-6 text-stone-700">{crop.watering}</p>
+              <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={crop.watering} />
             </div>
             <div className="rounded-lg border border-stone-200 p-4">
               <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('fertilizer')}</p>
-              <p className="mt-2 text-sm leading-6 text-stone-700">{crop.fertilizer}</p>
+              <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={crop.fertilizer} />
             </div>
           </div>
 
           <div className="mt-5 rounded-lg border border-sky-100 bg-sky-50 p-4">
             <p className="text-sm font-bold uppercase tracking-wide text-sky-700">{t('liveWeatherContext')}</p>
-            <p className="mt-2 text-sm text-stone-700">{weatherSummary || t('refreshWeatherContext')}</p>
+            {weatherSummary ? <TranslatedText as="p" className="mt-2 text-sm text-stone-700" text={weatherSummary} /> : <p className="mt-2 text-sm text-stone-700">{t('refreshWeatherContext')}</p>}
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
             {crop.tags.map((tag) => (
               <span key={tag} className="rounded-full border border-leaf-100 bg-leaf-50 px-3 py-1 text-sm font-semibold text-leaf-800">
-                {tag}
+                {translatedTag(tag, t)}
               </span>
             ))}
           </div>
@@ -168,7 +201,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
   );
 }
 
-function CropCard({ crop, onGuide, weatherSummary }) {
+function CropCard({ crop, onGuide, weatherSummary, t }) {
   return (
     <article className="surface overflow-hidden rounded-lg">
       <div className="p-5">
@@ -179,12 +212,12 @@ function CropCard({ crop, onGuide, weatherSummary }) {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-stone-950">{crop.name}</h2>
-              <p className="text-base text-stone-500">{crop.variety}</p>
+              <p className="text-base text-stone-500">{translatedCategory(crop.variety, t)}</p>
             </div>
           </div>
           <div className="text-right">
             <p className="text-4xl font-bold text-leaf-600">{crop.score}%</p>
-            <p className="text-xs font-bold uppercase text-stone-500">Suitability</p>
+            <p className="text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
           </div>
         </div>
 
@@ -200,29 +233,29 @@ function CropCard({ crop, onGuide, weatherSummary }) {
                 index === 0 ? 'bg-leaf-50 text-leaf-800' : 'border border-stone-200 bg-white text-stone-600'
               }`}
             >
-              {tag}
+              {translatedTag(tag, t)}
             </span>
           ))}
         </div>
 
         <div className="my-7 border-t border-dashed border-stone-200" />
         <div className="flex items-center justify-between gap-4 text-sm font-semibold text-stone-600">
-          <span className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Planting Window</span>
-          <span className="text-right">{crop.window}</span>
+          <span className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4" /> {t('plantingWindow')}</span>
+          <TranslatedText as="span" className="text-right" text={crop.window} />
         </div>
 
         <div className="mt-5 rounded-lg bg-leaf-50/60 p-4">
-          <p className="text-sm leading-6 text-stone-700">{crop.guide}</p>
+          <TranslatedText as="p" className="text-sm leading-6 text-stone-700" text={crop.guide} />
         </div>
       </div>
 
       <footer className="flex items-center justify-between border-t border-stone-100 px-5 py-4 text-sm">
         <span className="inline-flex items-center gap-2 text-stone-500">
           <Droplets className="h-4 w-4" />
-          {weatherSummary || 'Waiting for live weather context'}
+          {weatherSummary ? <TranslatedText text={weatherSummary} /> : t('waitingLiveWeather')}
         </span>
         <button className="inline-flex items-center gap-2 font-bold text-leaf-700" onClick={() => onGuide(crop)} type="button">
-          View Guide <ArrowRight className="h-4 w-4" />
+          {t('viewGuide')} <ArrowRight className="h-4 w-4" />
         </button>
       </footer>
     </article>
@@ -266,10 +299,10 @@ export default function Marketplace() {
         const position = await getCurrentPosition();
         payload.latitude = Number(position.coords.latitude.toFixed(6));
         payload.longitude = Number(position.coords.longitude.toFixed(6));
-        payload.location_label = 'Current device location';
+        payload.location_label = t('currentDeviceLocation');
         setGpsState({ locating: false, error: '', attempted: true });
       } catch (gpsError) {
-        setGpsState({ locating: false, error: buildGpsErrorMessage(gpsError), attempted: true });
+        setGpsState({ locating: false, error: buildGpsErrorMessage(gpsError, t), attempted: true });
       }
     }
 
@@ -277,7 +310,7 @@ export default function Marketplace() {
       const response = await api.post('/predictions/soil-scan', payload);
       setResult(response.data);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Could not refresh crop recommendations.'));
+      setError(getApiErrorMessage(requestError, t('couldNotRefreshCropRecommendations')));
     } finally {
       setLoading(false);
     }
@@ -335,10 +368,10 @@ export default function Marketplace() {
     setAudioStatus(spoken.ok ? t('audioPlaying') : t('audioUnsupported'));
   }
 
-  const locationLabel = result?.location?.label || 'Saved farm location if available';
+  const locationLabel = result?.location?.label || t('savedFarmLocationIfAvailable');
   const recommendationIntro = result?.soil_summary
     ? `Based on ${result.soil_summary.toLowerCase()}`
-    : 'Based on your latest soil scan';
+    : t('basedOnLatestSoilScan');
 
   return (
     <div>
@@ -352,18 +385,20 @@ export default function Marketplace() {
 
       <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="eyebrow">Recommendations</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">Crop Recommendations</h1>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-stone-600">
-            {recommendationIntro}. {result?.weather_summary ? `${result.weather_summary}.` : ''} Using {locationLabel}.
-          </p>
+          <p className="eyebrow">{t('recommendations')}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">{t('cropRecommendations')}</h1>
+          <TranslatedText
+            as="p"
+            className="mt-2 max-w-4xl text-sm leading-6 text-stone-600"
+            text={`${recommendationIntro}. ${result?.weather_summary ? `${result.weather_summary}.` : ''} ${t('usingLocation', { location: locationLabel })}`}
+          />
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-700">
-              {scanSource === 'latest-scan' ? 'Using latest saved soil scan' : 'Using starter soil profile'}
+              {scanSource === 'latest-scan' ? t('basedOnLatestSoilScan') : t('soilReadingsPrompt')}
             </span>
             {result?.best_crop && (
               <span className="rounded-full border border-leaf-100 bg-leaf-50 px-4 py-2 text-sm font-semibold text-leaf-800">
-                Best match: {result.best_crop}
+                {t('bestMatch', { crop: result.best_crop })}
               </span>
             )}
           </div>
@@ -371,11 +406,11 @@ export default function Marketplace() {
         <div className="flex flex-wrap gap-3">
           <button className="btn-secondary h-10 px-4 text-sm" onClick={() => loadRecommendations(true)} type="button" disabled={loading || gpsState.locating}>
             {loading || gpsState.locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
-            {loading || gpsState.locating ? 'Refreshing...' : 'Use Current GPS'}
+            {loading || gpsState.locating ? t('refreshing') : t('useCurrentGps')}
           </button>
           <button className="btn-secondary h-10 px-4 text-sm" onClick={cycleSortMode} type="button">
             <Filter className="h-4 w-4" />
-            Sort: {sortMode}
+            {t('sort')}: {translatedSortMode(sortMode, t)}
           </button>
         </div>
       </div>
@@ -395,16 +430,20 @@ export default function Marketplace() {
       <section className="mb-8 rounded-lg border border-sky-100 bg-sky-50 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-sky-700">Location and Weather</p>
+            <p className="text-sm font-bold uppercase tracking-wide text-sky-700">{t('locationAndWeather')}</p>
             <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-stone-900">
               <MapPin className="h-4 w-4 text-sky-600" />
               <span>{locationLabel}</span>
             </div>
-            <p className="mt-1 text-sm text-stone-600">{result?.weather_summary || 'Current live weather will appear here after refresh.'}</p>
+            {result?.weather_summary ? (
+              <TranslatedText as="p" className="mt-1 text-sm text-stone-600" text={result.weather_summary} />
+            ) : (
+              <p className="mt-1 text-sm text-stone-600">{t('currentLiveWeatherAfterSoil')}</p>
+            )}
           </div>
           <div className="grid gap-2 text-sm text-stone-700 sm:grid-cols-2">
-            <span className="rounded-lg bg-white/80 px-4 py-3 font-semibold">{result?.best_crop || 'Pending'} best match</span>
-            <span className="rounded-lg bg-white/80 px-4 py-3 font-semibold">{result ? `${Math.round(result.confidence * 100)}% suitability` : 'Waiting for scan'}</span>
+            <span className="rounded-lg bg-white/80 px-4 py-3 font-semibold">{result?.best_crop ? t('bestMatch', { crop: result.best_crop }) : t('pending')}</span>
+            <span className="rounded-lg bg-white/80 px-4 py-3 font-semibold">{result ? `${Math.round(result.confidence * 100)}% ${t('suitability')}` : t('checking')}</span>
           </div>
         </div>
       </section>
@@ -419,7 +458,7 @@ export default function Marketplace() {
             onClick={() => setActiveCategory(item)}
             type="button"
           >
-            {item}
+            {translatedCategory(item, t)}
           </button>
         ))}
       </div>
@@ -427,17 +466,17 @@ export default function Marketplace() {
       {loading ? (
         <div className="surface rounded-lg p-10 text-center">
           <Loader2 className="mx-auto h-10 w-10 animate-spin text-leaf-600" />
-          <p className="mt-4 text-lg font-bold text-stone-950">Refreshing crop recommendations</p>
-          <p className="mt-2 text-sm text-stone-500">Matching the latest soil profile with your current location and weather.</p>
+          <p className="mt-4 text-lg font-bold text-stone-950">{t('refreshRecommendation')}</p>
+          <p className="mt-2 text-sm text-stone-500">{t('completeManualSoilScan')}</p>
         </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-2">
-          {visibleCrops.map((crop) => <CropCard key={crop.id} crop={crop} onGuide={setSelectedCrop} weatherSummary={result?.weather_summary} />)}
+          {visibleCrops.map((crop) => <CropCard key={crop.id} crop={crop} onGuide={setSelectedCrop} weatherSummary={result?.weather_summary} t={t} />)}
           {visibleCrops.length === 0 && (
             <div className="surface rounded-lg p-8 text-center xl:col-span-2">
               <Leaf className="mx-auto h-10 w-10 text-stone-400" />
-              <p className="mt-3 font-bold text-stone-950">No recommendations in this category yet.</p>
-              <button className="btn-secondary mt-4" type="button" onClick={() => setActiveCategory('All Crops')}>Show all crops</button>
+              <p className="mt-3 font-bold text-stone-950">{t('noRecommendationsCategory')}</p>
+              <button className="btn-secondary mt-4" type="button" onClick={() => setActiveCategory('All Crops')}>{t('showAllCrops')}</button>
             </div>
           )}
         </div>

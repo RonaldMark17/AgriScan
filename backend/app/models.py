@@ -100,6 +100,11 @@ class Scan(Base):
     confidence: Mapped[float] = mapped_column(Float)
     cause: Mapped[str | None] = mapped_column(Text)
     treatment: Mapped[str | None] = mapped_column(Text)
+    crop_label: Mapped[str | None] = mapped_column(String(120))
+    analysis_mode: Mapped[str | None] = mapped_column(String(120))
+    reference_url: Mapped[str | None] = mapped_column(String(700))
+    reference_title: Mapped[str | None] = mapped_column(String(240))
+    detections: Mapped[list | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(40), default="detected")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
