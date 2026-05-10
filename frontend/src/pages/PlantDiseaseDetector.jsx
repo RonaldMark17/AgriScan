@@ -2,10 +2,12 @@ import {
   Camera,
   CheckCircle2,
   ClipboardList,
+  Flag,
   FlaskConical,
   ImagePlus,
   Loader2,
   RotateCcw,
+  Send,
   Upload,
   X,
 } from 'lucide-react';
@@ -71,6 +73,64 @@ function getBackendHealthUrl() {
   }
 }
 
+function getBackendRootUrl() {
+  const apiBaseUrl = getApiBaseUrl();
+  try {
+    const url = new URL(apiBaseUrl, window.location.origin);
+    return url.origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
+function imageNameFromPath(path) {
+  return (path || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || '';
+}
+
+function getScanImageUrl(scan) {
+  const rawPath = scan?.image_url || scan?.image_path || '';
+  if (!rawPath || rawPath === 'manual-entry' || rawPath === 'offline-browser-analysis') return '';
+  if (/^(blob:|data:|https?:\/\/)/i.test(rawPath)) return rawPath;
+
+  let normalizedPath = rawPath.replace(/\\/g, '/').replace(/^\.?\//, '');
+  const uploadsIndex = normalizedPath.toLowerCase().lastIndexOf('/uploads/');
+  if (uploadsIndex >= 0) {
+    normalizedPath = normalizedPath.slice(uploadsIndex + 1);
+  }
+  normalizedPath = normalizedPath.replace(/^\/+/, '');
+  if (!normalizedPath.startsWith('uploads/')) return '';
+
+  return `${getBackendRootUrl().replace(/\/$/, '')}/${encodeURI(normalizedPath)}`;
+}
+
+function historyKey(scan) {
+  if (scan?.id) return `scan-${scan.id}`;
+  return scan?.local_id || `${scan?.image_name || scan?.image_path || 'scan'}-${scan?.created_at || ''}`;
+}
+
+function normalizeHistoryScan(scan) {
+  return {
+    ...scan,
+    local_id: scan.local_id || (scan.id ? `scan-${scan.id}` : makeHistoryId()),
+    image_name: scan.image_name || imageNameFromPath(scan.image_path),
+    crop_label: scan.crop_label || scan.crop_type || inferCropLabel(scan),
+  };
+}
+
+function mergeHistory(serverHistory, localHistory) {
+  const seen = new Set();
+  return [...serverHistory, ...localHistory]
+    .map(normalizeHistoryScan)
+    .filter((scan) => {
+      const key = historyKey(scan);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((first, second) => new Date(second.created_at || 0) - new Date(first.created_at || 0))
+    .slice(0, 12);
+}
+
 async function checkBackendHealth(timeoutMs = 2500) {
   if (!window.navigator.onLine) return false;
   const controller = new window.AbortController();
@@ -97,6 +157,7 @@ function inferCropLabel(scan) {
   const text = `${scan?.disease_name || ''} ${scan?.cause || ''}`.toLowerCase();
   if (text.includes('rice') || text.includes('palay')) return 'Rice';
   if (text.includes('corn') || text.includes('maize') || text.includes('mais')) return 'Corn';
+  if (text.includes('banana') || text.includes('saging')) return 'Banana';
   if (text.includes('tomato') || text.includes('kamatis')) return 'Tomato';
   return null;
 }
@@ -262,6 +323,208 @@ const offlineDiseaseGuide = {
     treatment: 'Retake a close, well-lit photo of one affected leaf or fruit, select the crop type, and confirm with a local agriculture officer before treatment.',
   },
 };
+const correctionConditionsByCrop = {
+  rice: [
+    'Healthy crop',
+    'Rice bacterial leaf blight',
+    'Rice blast',
+    'Rice brown spot',
+    'Rice tungro virus',
+    'Rice hispa damage',
+    'Rice leaf folder damage',
+    'Rice brown plant hopper damage',
+    'Rice sheath blight',
+  ],
+  corn: [
+    'Healthy crop',
+    'Corn common rust',
+    'Corn gray leaf spot',
+    'Corn northern leaf blight',
+    'Corn stalk rot symptoms',
+    'Corn earworm or borer damage',
+    'Corn leaf spot or blight symptoms',
+  ],
+  coconut: [
+    'Healthy crop',
+    'Coconut leaf blight',
+    'Coconut bud rot',
+    'Coconut root wilt',
+    'Coconut rhinoceros beetle damage',
+    'Coconut scale insect damage',
+    'Coconut lethal yellowing',
+  ],
+  banana: [
+    'Healthy crop',
+    'Banana black Sigatoka',
+    'Banana yellow Sigatoka',
+    'Banana Panama disease',
+    'Banana Moko disease',
+    'Banana bract mosaic virus',
+    'Banana insect pest damage',
+    'Banana fruit rot symptoms',
+    'Banana crown or bunch rot symptoms',
+  ],
+  sugarcane: [
+    'Healthy crop',
+    'Sugarcane red rot',
+    'Sugarcane smut',
+    'Sugarcane rust',
+    'Sugarcane mosaic virus',
+    'Sugarcane leaf scald',
+    'Sugarcane borer damage',
+  ],
+  cassava: [
+    'Healthy crop',
+    'Cassava mosaic disease',
+    'Cassava bacterial blight',
+    'Cassava brown streak disease',
+    'Cassava anthracnose',
+    'Cassava mealybug damage',
+  ],
+  sweet_potato: [
+    'Healthy crop',
+    'Sweet Potato scab',
+    'Sweet Potato feathery mottle virus',
+    'Sweet Potato weevil damage',
+    'Sweet Potato stem rot',
+    'Sweet Potato leaf spot or blight symptoms',
+  ],
+  tomato: [
+    'Healthy crop',
+    'Tomato bacterial spot',
+    'Tomato early blight',
+    'Tomato late blight',
+    'Tomato leaf mold',
+    'Tomato Septoria leaf spot',
+    'Tomato target spot',
+    'Tomato yellow leaf curl virus',
+    'Tomato mosaic virus',
+    'Tomato spider mite damage',
+  ],
+  eggplant: [
+    'Healthy crop',
+    'Eggplant bacterial wilt',
+    'Eggplant Phomopsis blight',
+    'Eggplant Cercospora leaf spot',
+    'Eggplant flea beetle damage',
+    'Eggplant fruit and shoot borer damage',
+    'Eggplant powdery mildew',
+  ],
+  mung_bean: [
+    'Healthy crop',
+    'Mung Bean yellow mosaic virus',
+    'Mung Bean powdery mildew',
+    'Mung Bean Cercospora leaf spot',
+    'Mung Bean anthracnose',
+    'Mung Bean bacterial spot',
+  ],
+  mango: [
+    'Healthy crop',
+    'Mango anthracnose',
+    'Mango bacterial canker',
+    'Mango cutting weevil damage',
+    'Mango Phoma blight',
+    'Mango die-back',
+    'Mango gall midge damage',
+    'Mango powdery mildew',
+    'Mango sooty mould',
+  ],
+  pineapple: [
+    'Healthy crop',
+    'Pineapple heart rot',
+    'Pineapple mealybug wilt',
+    'Pineapple leaf spot or blight symptoms',
+    'Pineapple fruit rot symptoms',
+    'Pineapple root rot',
+  ],
+  calamansi: [
+    'Healthy crop',
+    'Calamansi citrus canker',
+    'Calamansi citrus greening',
+    'Calamansi scab',
+    'Calamansi melanose',
+    'Calamansi sooty mould',
+    'Calamansi leaf miner damage',
+  ],
+  onion: [
+    'Healthy crop',
+    'Onion purple blotch',
+    'Onion downy mildew',
+    'Onion basal rot',
+    'Onion twister disease',
+    'Onion thrips damage',
+  ],
+  cabbage: [
+    'Healthy crop',
+    'Cabbage black rot',
+    'Cabbage clubroot',
+    'Cabbage downy mildew',
+    'Cabbage Alternaria leaf spot',
+    'Cabbage diamondback moth damage',
+  ],
+  bitter_gourd: [
+    'Healthy crop',
+    'Bitter Gourd powdery mildew',
+    'Bitter Gourd downy mildew',
+    'Bitter Gourd anthracnose',
+    'Bitter Gourd mosaic virus',
+    'Bitter Gourd fruit fly damage',
+  ],
+  pepper: [
+    'Healthy crop',
+    'Pepper bacterial spot',
+    'Pepper anthracnose',
+    'Pepper mosaic virus',
+    'Pepper powdery mildew',
+  ],
+  potato: [
+    'Healthy crop',
+    'Potato early blight',
+    'Potato late blight',
+    'Potato bacterial wilt',
+    'Potato black scurf',
+    'Potato mosaic virus',
+  ],
+  guava: [
+    'Healthy crop',
+    'Guava phytophthora disease',
+    'Guava red rust',
+    'Guava scab',
+    'Guava anthracnose',
+    'Guava styler and root disorder',
+  ],
+  cacao: [
+    'Healthy crop',
+    'Cacao black pod rot',
+    'Cacao frosty pod rot',
+    'Cacao vascular streak dieback',
+    'Cacao pod borer damage',
+    'Cacao cherelle wilt',
+  ],
+  coffee: [
+    'Healthy crop',
+    'Coffee leaf rust',
+    'Coffee berry disease',
+    'Coffee brown eye spot',
+    'Coffee berry borer damage',
+    'Coffee anthracnose',
+  ],
+  abaca: [
+    'Healthy crop',
+    'Abaca bunchy top virus',
+    'Abaca mosaic virus',
+    'Abaca fusarium wilt',
+    'Abaca bacterial wilt',
+    'Abaca leaf spot or blight symptoms',
+  ],
+};
+
+function getCorrectionConditionOptions(cropLabel) {
+  const cropKey = normalizeCropKey(cropLabel);
+  const options = correctionConditionsByCrop[cropKey];
+  if (options?.length) return options;
+  return ['Healthy crop', 'Leaf spot or blight symptoms', 'Pest or physical leaf damage'];
+}
 
 function normalizeCrop(value) {
   return (value || '').trim().toLowerCase();
@@ -431,6 +694,40 @@ function looksLikeBananaFruitIssue(features, crop) {
 
 function looksLikeHealthyRicePanicle(features) {
   const warmGrainRatio = features.bananaFruitRatio + features.yellowRatio;
+  const rustSpotDisease =
+    features.componentCount >= 8 &&
+    features.rustRatio >= 0.025 &&
+    features.lesionRatio >= 0.07;
+  const largeBlightPatch =
+    features.maxAreaRatio >= 0.055 &&
+    features.lesionRatio >= 0.1 &&
+    features.darkLesionRatio >= 0.035;
+  const matureRicePanicle =
+    features.bananaFruitRatio >= 0.22 &&
+    features.yellowRatio >= 0.16 &&
+    features.greenLeafRatio >= 0.18 &&
+    features.maxGreenAspect >= 2.4 &&
+    features.fruitComponentCount >= 6 &&
+    features.maxFruitAreaRatio >= 0.1 &&
+    features.maxFruitAreaRatio < 0.32 &&
+    features.rustRatio < 0.02 &&
+    features.darkLesionRatio < 0.24 &&
+    features.lesionRatio < 0.38;
+  if (matureRicePanicle) return true;
+
+  const grainPanicleStructure =
+    warmGrainRatio >= 0.12 &&
+    features.greenLeafRatio >= 0.14 &&
+    features.maxGreenAspect >= 1.65 &&
+    features.fruitComponentCount >= 3 &&
+    features.maxFruitAreaRatio < 0.22 &&
+    features.bananaFruitRatio < 0.34 &&
+    features.darkLesionRatio < 0.095 &&
+    features.rustRatio < 0.035 &&
+    !rustSpotDisease &&
+    !largeBlightPatch;
+  if (grainPanicleStructure) return true;
+
   const warmGrainSignal =
     (features.bananaFruitRatio >= 0.045 && features.yellowRatio >= 0.035) ||
     warmGrainRatio >= 0.11 ||
@@ -475,10 +772,6 @@ function looksLikeHealthyRicePanicle(features) {
     features.lesionRatio >= 0.028 &&
     features.lesionWithinPlant >= 0.045 &&
     !riceGrainCanopy;
-  const rustSpotDisease =
-    features.componentCount >= 8 &&
-    features.rustRatio >= 0.025 &&
-    features.lesionRatio >= 0.07;
   const bananaBunchLike =
     features.maxFruitAreaRatio >= 0.24 &&
     features.bananaFruitRatio >= 0.22 &&
@@ -514,6 +807,31 @@ function looksLikeHealthyRicePanicle(features) {
 function looksLikeHealthyBananaBunch(features) {
   if (looksLikeHealthyRicePanicle(features)) return false;
 
+  const cleanGreenBananaBunch =
+    features.greenLeafRatio >= 0.55 &&
+    features.greenComponentCount >= 4 &&
+    features.maxGreenAreaRatio >= 0.35 &&
+    features.maxGreenAspect >= 2 &&
+    features.maxGreenAspect <= 6.8 &&
+    features.bananaFruitRatio >= 0.06 &&
+    features.fruitComponentCount >= 3 &&
+    features.lesionRatio < 0.16 &&
+    features.darkLesionRatio < 0.15 &&
+    features.rustRatio < 0.015 &&
+    features.maxAreaRatio < 0.04;
+  if (cleanGreenBananaBunch) return true;
+
+  const greenBananaFingerCluster =
+    features.greenLeafRatio >= 0.42 &&
+    features.greenComponentCount >= 4 &&
+    features.maxGreenAreaRatio < 0.56 &&
+    features.maxGreenAspect >= 1.2 &&
+    features.maxGreenAspect <= 6.8 &&
+    features.lesionRatio < 0.18 &&
+    features.darkLesionRatio < 0.12 &&
+    features.rustRatio < 0.08 &&
+    features.maxAreaRatio < 0.13 &&
+    !(features.componentCount >= 12 && features.rustRatio >= 0.025 && features.lesionRatio >= 0.07);
   const cleanFruitSurface =
     features.lesionRatio < 0.1 &&
     features.darkLesionRatio < 0.06 &&
@@ -544,7 +862,13 @@ function looksLikeHealthyBananaBunch(features) {
     features.maxGreenAspect >= 6 &&
     features.greenComponentCount <= 3 &&
     features.maxGreenAreaRatio < 0.28;
-  return fruitToneSignal && cleanFruitSurface && (clusteredFingers || denseGreenBunch) && !spottedLeafDisease && !grassLeaf;
+  return (
+    fruitToneSignal &&
+    (cleanFruitSurface || greenBananaFingerCluster) &&
+    (clusteredFingers || denseGreenBunch || greenBananaFingerCluster) &&
+    !spottedLeafDisease &&
+    !grassLeaf
+  );
 }
 
 function hasStrongVisualDiseaseSignal(features, crop = '') {
@@ -1234,9 +1558,10 @@ function getYoloDetections(result) {
   return result.detections.filter((detection) => detection?.box && Number.isFinite(Number(detection.confidence)));
 }
 
-function ResultPanel({ result, previewUrl, t, panelRef }) {
+function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
   const confidence = result ? Math.round(result.confidence * 100) : 0;
   const cropLabel = result ? resolveCropLabel(result) : '--';
+  const displayPreviewUrl = previewUrl || getScanImageUrl(result);
   const yoloDetections = getYoloDetections(result);
   const cropVerified = Boolean(result?.crop_label || result?.crop_type || inferCropLabel(result)) && cropLabel !== 'General crop leaf';
   const needsReview = /review/i.test(result?.disease_name || '');
@@ -1245,6 +1570,70 @@ function ResultPanel({ result, previewUrl, t, panelRef }) {
   const confidenceLabelClass = needsReview ? 'text-amber-700' : 'text-leaf-700';
   const confidenceTextClass = needsReview ? 'text-amber-900' : 'text-leaf-900';
   const confidenceBarClass = needsReview ? 'bg-amber-500' : 'bg-leaf-600';
+  const canGiveFeedback = Boolean(result?.id) && result?.image_path !== 'manual-entry' && result?.image_path !== 'offline-browser-analysis';
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackCrop, setFeedbackCrop] = useState('');
+  const [feedbackCondition, setFeedbackCondition] = useState('Healthy crop');
+  const [feedbackNote, setFeedbackNote] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackError, setFeedbackError] = useState('');
+  const feedbackConditionOptions = getCorrectionConditionOptions(feedbackCrop || cropLabel);
+
+  useEffect(() => {
+    const currentCrop = cropLabel && cropLabel !== 'General crop leaf' && cropLabel !== '--' ? cropLabel : '';
+    const currentDisease = result?.disease_name || '';
+    const nextOptions = getCorrectionConditionOptions(currentCrop);
+    setFeedbackOpen(false);
+    setFeedbackCrop(currentCrop);
+    setFeedbackCondition(/healthy/i.test(currentDisease) ? nextOptions[1] || 'Leaf spot or blight symptoms' : 'Healthy crop');
+    setFeedbackNote('');
+    setFeedbackMessage('');
+    setFeedbackError('');
+  }, [cropLabel, result?.disease_name, result?.id, result?.local_id]);
+
+  useEffect(() => {
+    if (!feedbackConditionOptions.includes(feedbackCondition)) {
+      setFeedbackCondition(feedbackConditionOptions[0] || 'Healthy crop');
+    }
+  }, [feedbackCondition, feedbackConditionOptions]);
+
+  async function submitFeedback(event) {
+    event.preventDefault();
+    if (!canGiveFeedback || !feedbackCrop || !feedbackCondition) return;
+    setFeedbackSubmitting(true);
+    setFeedbackMessage('');
+    setFeedbackError('');
+    try {
+      const response = await api.post(`/scans/${result.id}/feedback`, {
+        corrected_crop_label: feedbackCrop,
+        corrected_condition: feedbackCondition,
+        user_note: feedbackNote || null,
+      });
+      const feedback = response.data;
+      if (feedback.verification_status === 'verified') {
+        const updatedResult = {
+          ...result,
+          crop_label: feedback.corrected_crop_label,
+          disease_name: feedback.applied_disease_name || feedback.corrected_disease_name,
+          confidence: feedback.applied_confidence ?? result.confidence,
+          cause: feedback.applied_cause || result.cause,
+          treatment: feedback.applied_treatment || result.treatment,
+          analysis_mode: feedback.applied_analysis_mode || result.analysis_mode,
+          status: 'corrected',
+        };
+        onFeedbackApplied?.(updatedResult);
+        setFeedbackMessage('Verified and learned. Similar future scans will use this correction.');
+        setFeedbackOpen(false);
+        return;
+      }
+      setFeedbackMessage(feedback.verification_reason || 'Saved for admin review before the detector learns from it.');
+    } catch (feedbackRequestError) {
+      setFeedbackError(getApiErrorMessage(feedbackRequestError, 'Could not save this correction yet.'));
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  }
 
   return (
     <section ref={panelRef} className="surface scroll-mt-20 overflow-hidden rounded-lg sm:scroll-mt-24 lg:scroll-mt-28">
@@ -1313,6 +1702,80 @@ function ResultPanel({ result, previewUrl, t, panelRef }) {
                   </a>
                 )}
               </article>
+              {canGiveFeedback && (
+                <article className="rounded-lg border border-stone-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Correction learning</p>
+                      <p className="mt-1 text-sm leading-6 text-stone-600">
+                        Mark this scan wrong so AgriScan can verify the correction and learn from it.
+                      </p>
+                    </div>
+                    <button
+                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition hover:border-leaf-300 hover:bg-leaf-50"
+                      type="button"
+                      onClick={() => setFeedbackOpen((open) => !open)}
+                    >
+                      <Flag className="h-4 w-4" />
+                      Flag wrong
+                    </button>
+                  </div>
+
+                  {feedbackOpen && (
+                    <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={submitFeedback}>
+                      <label className="block">
+                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Correct crop</span>
+                        <select
+                          className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
+                          value={feedbackCrop}
+                          onChange={(event) => setFeedbackCrop(event.target.value)}
+                        >
+                          <option value="">Select crop</option>
+                          {quickCropOptions.map((crop) => (
+                            <option key={crop} value={crop}>
+                              {crop}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Correct result</span>
+                        <select
+                          className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
+                          value={feedbackCondition}
+                          onChange={(event) => setFeedbackCondition(event.target.value)}
+                        >
+                          {feedbackConditionOptions.map((condition) => (
+                            <option key={condition} value={condition}>
+                              {condition}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block sm:col-span-2">
+                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Note</span>
+                        <textarea
+                          className="mt-2 min-h-20 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
+                          maxLength={500}
+                          value={feedbackNote}
+                          onChange={(event) => setFeedbackNote(event.target.value)}
+                          placeholder="Example: This is healthy banana fruit, not corn blight."
+                        />
+                      </label>
+                      <button
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-leaf-700 px-4 text-sm font-bold text-white transition hover:bg-leaf-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:w-fit"
+                        disabled={!feedbackCrop || !feedbackCondition || feedbackSubmitting}
+                        type="submit"
+                      >
+                        {feedbackSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Submit correction
+                      </button>
+                    </form>
+                  )}
+                  {feedbackMessage && <p className="mt-3 rounded-lg bg-leaf-50 p-3 text-sm font-semibold text-leaf-700">{feedbackMessage}</p>}
+                  {feedbackError && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700">{feedbackError}</p>}
+                </article>
+              )}
             </div>
           )}
         </div>
@@ -1320,9 +1783,9 @@ function ResultPanel({ result, previewUrl, t, panelRef }) {
         <div className="border-t border-stone-100 bg-stone-50 p-4 sm:p-5 lg:border-l lg:border-t-0">
           <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('uploadCropImage')}</p>
           <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
-            {previewUrl ? (
+            {displayPreviewUrl ? (
               <div className="relative h-52 w-full bg-stone-950 sm:h-64">
-                <img src={previewUrl} alt="Crop preview" className="h-full w-full object-fill" />
+                <img src={displayPreviewUrl} alt="Crop preview" className="h-full w-full object-fill" />
                 {yoloDetections.map((detection, index) => {
                   const box = detection.box;
                   return (
@@ -1448,11 +1911,31 @@ export default function PlantDiseaseDetector() {
         : 'checking';
 
   useEffect(() => {
+    let active = true;
+    let localHistory = [];
     try {
-      setHistory(JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]'));
+      localHistory = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]').map(normalizeHistoryScan);
     } catch {
-      setHistory([]);
+      localHistory = [];
     }
+    setHistory(localHistory);
+
+    api.get('/scans')
+      .then((response) => {
+        if (!active) return;
+        const merged = mergeHistory(Array.isArray(response.data) ? response.data : [], localHistory);
+        setHistory(merged);
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(merged));
+      })
+      .catch(() => {
+        if (active) {
+          setHistory(localHistory);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function detectOnlineMode() {
@@ -1526,9 +2009,17 @@ export default function PlantDiseaseDetector() {
   }, [result]);
 
   function saveHistory(scan) {
-    const next = [scan, ...history.filter((item) => item.local_id !== scan.local_id)].slice(0, 12);
-    setHistory(next);
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+    const normalizedScan = normalizeHistoryScan(scan);
+    setHistory((current) => {
+      const next = [normalizedScan, ...current.filter((item) => historyKey(item) !== historyKey(normalizedScan))].slice(0, 12);
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function handleFeedbackApplied(updatedScan) {
+    setResult(updatedScan);
+    saveHistory(updatedScan);
   }
 
   function queueResultReveal() {
@@ -1706,7 +2197,7 @@ export default function PlantDiseaseDetector() {
   function handleHistorySelect(scan) {
     clearImage();
     queueResultReveal();
-    setResult(scan);
+    setResult(normalizeHistoryScan(scan));
   }
 
   return (
@@ -1842,7 +2333,13 @@ export default function PlantDiseaseDetector() {
         </form>
 
         <div className="space-y-6">
-          <ResultPanel panelRef={resultPanelRef} result={result} previewUrl={previewUrl} t={t} />
+          <ResultPanel
+            panelRef={resultPanelRef}
+            result={result}
+            previewUrl={previewUrl}
+            t={t}
+            onFeedbackApplied={handleFeedbackApplied}
+          />
 
           <HistoryList history={history} onSelect={handleHistorySelect} t={t} />
         </div>

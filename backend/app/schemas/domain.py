@@ -90,6 +90,30 @@ class ScanRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ScanFeedbackCreate(BaseModel):
+    corrected_crop_label: str = Field(min_length=2, max_length=120)
+    corrected_condition: str = Field(min_length=2, max_length=160)
+    user_note: str | None = Field(default=None, max_length=500)
+
+
+class ScanFeedbackRead(BaseModel):
+    id: int
+    scan_id: int
+    corrected_crop_label: str
+    corrected_disease_name: str
+    corrected_class_key: str
+    verification_status: str
+    verification_reason: str | None
+    applied_disease_name: str | None = None
+    applied_confidence: float | None = None
+    applied_cause: str | None = None
+    applied_treatment: str | None = None
+    applied_analysis_mode: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class PredictionRead(BaseModel):
     id: int
     farm_id: int

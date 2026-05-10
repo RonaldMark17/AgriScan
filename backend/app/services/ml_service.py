@@ -467,6 +467,291 @@ DISEASE_PROFILES = {
     },
 }
 
+DISEASE_PROFILES.update(
+    {
+        "sheath_blight": {
+            "name": "Sheath blight",
+            "cause": "A fungal infection is spreading on lower leaves or sheaths, often favored by dense canopy humidity.",
+            "treatment": "Improve spacing and airflow, avoid excess nitrogen, remove infected debris, and follow local fungicide guidance if disease pressure rises.",
+        },
+        "bacterial_blight": {
+            "name": "Bacterial blight",
+            "cause": "A bacterial disease is causing water-soaked, yellow, or brown damaged tissue.",
+            "treatment": "Use clean planting material, avoid working wet plants, improve field sanitation, and follow local bactericide guidance if confirmed.",
+        },
+        "leaf_spot_or_blight": {
+            "name": "Leaf spot or blight symptoms",
+            "cause": "Leaf tissue shows spotting, blighting, or necrotic patches that can come from fungal, bacterial, or stress-related causes.",
+            "treatment": "Remove badly affected leaves, improve airflow, reduce leaf wetness, and confirm the crop-specific cause locally before spraying.",
+        },
+        "leaf_blight": {
+            "name": "Leaf blight",
+            "cause": "A leaf-blighting infection is causing expanding brown or yellow damaged tissue.",
+            "treatment": "Remove heavily affected leaves, improve airflow, avoid wet foliage, and confirm locally before applying crop-specific treatment.",
+        },
+        "bud_rot": {
+            "name": "Bud rot",
+            "cause": "Rot is affecting the growing point, commonly favored by wet conditions and infected plant debris.",
+            "treatment": "Remove badly affected tissue, improve drainage and sanitation, and seek local advice quickly because bud rot can kill the plant.",
+        },
+        "root_wilt": {
+            "name": "Root wilt",
+            "cause": "Root or vascular stress is reducing plant vigor and causing wilt-like symptoms.",
+            "treatment": "Improve drainage, remove severely affected plants, avoid moving contaminated soil, and confirm the cause with local agriculture support.",
+        },
+        "rhinoceros_beetle_damage": {
+            "name": "Rhinoceros beetle damage",
+            "cause": "Beetle feeding is damaging young tissue and can leave cut, bored, or notched plant parts.",
+            "treatment": "Remove breeding sites, inspect crowns or leaf bases, use traps where recommended, and follow local integrated pest management.",
+        },
+        "scale_insect_damage": {
+            "name": "Scale insect damage",
+            "cause": "Scale insects are feeding on sap and weakening leaves, stems, or fruit.",
+            "treatment": "Prune heavy infestations, conserve natural enemies, wash light infestations, and use locally approved controls only when thresholds are met.",
+        },
+        "lethal_yellowing": {
+            "name": "Lethal yellowing",
+            "cause": "A phytoplasma-like disease pattern is causing progressive yellowing and decline.",
+            "treatment": "Report suspected cases locally, remove severely affected palms, control vectors where advised, and use resistant planting material.",
+        },
+        "red_rot": {
+            "name": "Red rot",
+            "cause": "A fungal rot is damaging internal stalk or stem tissue and reducing plant strength.",
+            "treatment": "Remove infected stalks, use clean planting material, rotate crops, and avoid replanting from diseased setts.",
+        },
+        "smut": {
+            "name": "Smut",
+            "cause": "A fungal smut disease is infecting growing tissue and can spread through planting material or spores.",
+            "treatment": "Remove infected plants, use disease-free planting material, and plant resistant varieties when available.",
+        },
+        "rust": {
+            "name": "Rust",
+            "cause": "Rust spores are infecting leaves and creating orange to brown pustules or streaks.",
+            "treatment": "Use resistant varieties, remove badly infected leaves when practical, and apply approved fungicide only when local guidance recommends it.",
+        },
+        "mosaic_virus": {
+            "name": "Mosaic virus",
+            "cause": "A virus is causing mottled, distorted, or yellow-green patterned leaves.",
+            "treatment": "Remove severely affected plants, control insect vectors, disinfect tools, and use clean planting material.",
+        },
+        "leaf_scald": {
+            "name": "Leaf scald",
+            "cause": "A bacterial disease is causing leaf streaking, scalding, and decline.",
+            "treatment": "Use clean planting material, rogue infected stools, sanitize tools, and avoid moving infected stalks to new fields.",
+        },
+        "borer_damage": {
+            "name": "Borer damage",
+            "cause": "Boring insects are tunneling into stems, shoots, or fruit and weakening the crop.",
+            "treatment": "Remove infested parts, monitor for entry holes or frass, conserve natural enemies, and follow local borer IPM thresholds.",
+        },
+        "mosaic_disease": {
+            "name": "Mosaic disease",
+            "cause": "A viral disease is causing mottling, distortion, and reduced plant vigor.",
+            "treatment": "Use clean planting material, remove infected plants early, and control insect vectors where recommended.",
+        },
+        "brown_streak_disease": {
+            "name": "Brown streak disease",
+            "cause": "A viral disease is causing streaking, chlorosis, or root quality loss.",
+            "treatment": "Use certified clean planting material, remove symptomatic plants, and manage whitefly vectors with local guidance.",
+        },
+        "mealybug_damage": {
+            "name": "Mealybug damage",
+            "cause": "Mealybugs are feeding on sap and may spread disease while weakening plant growth.",
+            "treatment": "Inspect undersides and growing points, prune heavy infestations, conserve natural enemies, and follow local IPM controls.",
+        },
+        "feathery_mottle_virus": {
+            "name": "Feathery mottle virus",
+            "cause": "A viral disease is producing mottled or feathery leaf patterns and reducing vigor.",
+            "treatment": "Use clean vines or cuttings, remove infected plants, and manage aphid vectors where needed.",
+        },
+        "weevil_damage": {
+            "name": "Weevil damage",
+            "cause": "Weevil feeding or tunneling is damaging vines, stems, roots, or fruit.",
+            "treatment": "Remove infested material, use clean planting stock, rotate fields, and follow crop-specific weevil IPM.",
+        },
+        "stem_rot": {
+            "name": "Stem rot",
+            "cause": "A rot organism is damaging stems, especially where moisture, wounds, or poor drainage are present.",
+            "treatment": "Remove infected stems, improve drainage and airflow, avoid wounds, and use clean planting material.",
+        },
+        "bacterial_wilt": {
+            "name": "Bacterial wilt",
+            "cause": "A bacterial pathogen is blocking water movement and causing wilting or collapse.",
+            "treatment": "Remove infected plants, sanitize tools, improve rotation, and avoid moving contaminated soil or water.",
+        },
+        "phomopsis_blight": {
+            "name": "Phomopsis blight",
+            "cause": "A fungal blight is causing spots, dieback, or fruit lesions under humid conditions.",
+            "treatment": "Prune infected parts, improve airflow, avoid overhead watering, and follow local fungicide guidance if confirmed.",
+        },
+        "cercospora_leaf_spot": {
+            "name": "Cercospora leaf spot",
+            "cause": "A fungal leaf spot is forming under warm, humid conditions.",
+            "treatment": "Remove infected leaves, improve spacing, reduce leaf wetness, and use resistant varieties or fungicide when advised.",
+        },
+        "flea_beetle_damage": {
+            "name": "Flea beetle damage",
+            "cause": "Small beetles are chewing holes and pits into leaf tissue.",
+            "treatment": "Scout young plants, remove weeds that host pests, use row covers where practical, and follow local IPM thresholds.",
+        },
+        "fruit_and_shoot_borer_damage": {
+            "name": "Fruit and shoot borer damage",
+            "cause": "Borer larvae are tunneling into shoots or fruit and causing wilting, holes, or rot.",
+            "treatment": "Remove infested shoots and fruit, use pheromone traps where available, and follow local borer management guidance.",
+        },
+        "yellow_mosaic_virus": {
+            "name": "Yellow mosaic virus",
+            "cause": "A virus is causing yellow mosaic patterns and reduced vigor, usually spread by insect vectors.",
+            "treatment": "Remove infected plants, manage whiteflies or vectors early, and use resistant varieties when available.",
+        },
+        "heart_rot": {
+            "name": "Heart rot",
+            "cause": "Rot is developing in the central growing tissues, often after prolonged wet conditions.",
+            "treatment": "Improve drainage, remove infected plants or tissue, avoid water collecting in crowns, and confirm locally before treatment.",
+        },
+        "mealybug_wilt": {
+            "name": "Mealybug wilt",
+            "cause": "Mealybug feeding and associated pathogens are causing wilting or reddening symptoms.",
+            "treatment": "Control mealybug vectors, remove heavily affected plants, manage ants, and use clean planting material.",
+        },
+        "root_rot": {
+            "name": "Root rot",
+            "cause": "Root disease is reducing water uptake, commonly favored by poor drainage or infected soil.",
+            "treatment": "Improve drainage, avoid overwatering, remove badly affected plants, and use clean planting material or rotation.",
+        },
+        "citrus_canker": {
+            "name": "Citrus canker",
+            "cause": "A bacterial disease is producing corky lesions on leaves, stems, or fruit.",
+            "treatment": "Prune infected parts, disinfect tools, avoid working wet plants, and follow local citrus disease protocols.",
+        },
+        "citrus_greening": {
+            "name": "Citrus greening",
+            "cause": "A systemic disease spread by psyllids is causing mottling, yellowing, and decline.",
+            "treatment": "Report suspected cases, control psyllid vectors, remove severely infected trees, and use disease-free planting material.",
+        },
+        "melanose": {
+            "name": "Melanose",
+            "cause": "A fungal disease is causing small dark rough spots on leaves, twigs, or fruit.",
+            "treatment": "Prune dead twigs, improve airflow, reduce prolonged wetness, and use protective spray only when locally advised.",
+        },
+        "leaf_miner_damage": {
+            "name": "Leaf miner damage",
+            "cause": "Leaf miner larvae are tunneling inside leaves and leaving winding trails or distorted new growth.",
+            "treatment": "Protect new flushes, conserve natural enemies, prune heavy damage, and use local citrus leaf miner IPM.",
+        },
+        "purple_blotch": {
+            "name": "Purple blotch",
+            "cause": "A fungal disease is causing purple-brown leaf lesions, especially in humid weather.",
+            "treatment": "Improve airflow, avoid overhead watering, remove infected debris, and follow local fungicide timing if needed.",
+        },
+        "downy_mildew": {
+            "name": "Downy mildew",
+            "cause": "A moisture-loving pathogen is causing yellowing, fuzzy growth, or angular leaf spots.",
+            "treatment": "Improve ventilation, avoid wet foliage, remove infected leaves, and use protective treatment when local risk is high.",
+        },
+        "basal_rot": {
+            "name": "Basal rot",
+            "cause": "Rot is developing near the base or root plate and can spread through soil or infected planting material.",
+            "treatment": "Use clean planting material, improve drainage, remove infected plants, and rotate away from susceptible crops.",
+        },
+        "twister_disease": {
+            "name": "Twister disease",
+            "cause": "A disease complex is causing twisted, distorted leaves and poor growth.",
+            "treatment": "Remove severely affected plants, improve field drainage and airflow, and confirm the cause locally before treatment.",
+        },
+        "thrips_damage": {
+            "name": "Thrips damage",
+            "cause": "Thrips are scraping plant tissue and causing silvering, scarring, or distorted growth.",
+            "treatment": "Scout regularly, remove weeds, conserve natural enemies, and use threshold-based thrips control.",
+        },
+        "black_rot": {
+            "name": "Black rot",
+            "cause": "A bacterial disease is causing dark veins, V-shaped lesions, or tissue collapse.",
+            "treatment": "Use clean seed or transplants, remove infected debris, avoid overhead irrigation, and rotate with non-host crops.",
+        },
+        "clubroot": {
+            "name": "Clubroot",
+            "cause": "A soil-borne disease is deforming roots and reducing water uptake.",
+            "treatment": "Improve soil pH and drainage, remove infected roots, avoid moving contaminated soil, and rotate away from brassicas.",
+        },
+        "alternaria_leaf_spot": {
+            "name": "Alternaria leaf spot",
+            "cause": "A fungal disease is producing circular or target-like leaf spots.",
+            "treatment": "Remove infected leaves, improve airflow, avoid leaf wetness, and use approved fungicide if symptoms spread.",
+        },
+        "diamondback_moth_damage": {
+            "name": "Diamondback moth damage",
+            "cause": "Larvae are feeding on leaves and creating holes or windowpane damage.",
+            "treatment": "Scout leaf undersides, preserve beneficial insects, use netting when practical, and rotate approved controls to avoid resistance.",
+        },
+        "fruit_fly_damage": {
+            "name": "Fruit fly damage",
+            "cause": "Fruit flies are laying eggs in fruit, leading to punctures, larvae, and decay.",
+            "treatment": "Remove infested fruit, use traps and field sanitation, bag fruit where practical, and follow local fruit fly control programs.",
+        },
+        "black_scurf": {
+            "name": "Black scurf",
+            "cause": "A soil-borne fungus is producing dark scurf or stem canker symptoms.",
+            "treatment": "Use clean seed pieces, rotate crops, improve drainage, and avoid planting in contaminated soil when possible.",
+        },
+        "black_pod_rot": {
+            "name": "Black pod rot",
+            "cause": "A water mold infection is rotting pods under wet, humid conditions.",
+            "treatment": "Remove infected pods, prune for airflow, improve sanitation, and follow local protective spray guidance.",
+        },
+        "frosty_pod_rot": {
+            "name": "Frosty pod rot",
+            "cause": "A fungal pod disease is causing abnormal pod growth, rot, or pale fungal covering.",
+            "treatment": "Remove infected pods early, sanitize tools, prune for airflow, and report severe cases to local agriculture support.",
+        },
+        "vascular_streak_dieback": {
+            "name": "Vascular streak dieback",
+            "cause": "A fungal disease is affecting vascular tissue and causing leaf yellowing, dieback, and decline.",
+            "treatment": "Prune infected branches, improve shade and airflow balance, and use tolerant planting material where available.",
+        },
+        "pod_borer_damage": {
+            "name": "Pod borer damage",
+            "cause": "Borer larvae are damaging pods and reducing yield quality.",
+            "treatment": "Harvest regularly, remove infested pods, use sanitation and bagging where practical, and follow local borer IPM.",
+        },
+        "cherelle_wilt": {
+            "name": "Cherelle wilt",
+            "cause": "Young pods are wilting or drying due to stress, poor pollination, or disease pressure.",
+            "treatment": "Improve tree nutrition and moisture balance, prune for airflow, and remove diseased or dead young pods.",
+        },
+        "leaf_rust": {
+            "name": "Leaf rust",
+            "cause": "Rust spores are infecting leaf tissue and reducing healthy leaf area.",
+            "treatment": "Prune for airflow, remove badly infected leaves, use resistant varieties where possible, and follow local fungicide guidance.",
+        },
+        "berry_disease": {
+            "name": "Berry disease",
+            "cause": "A fungal disease is affecting berries or fruit tissue and can spread in wet conditions.",
+            "treatment": "Remove infected berries, improve airflow, avoid prolonged wetness, and use protective treatments when recommended locally.",
+        },
+        "brown_eye_spot": {
+            "name": "Brown eye spot",
+            "cause": "A fungal leaf spot is causing brown lesions with pale centers and can increase under stress.",
+            "treatment": "Improve nutrition and airflow, remove infected debris, avoid overhead watering, and use approved fungicide only when needed.",
+        },
+        "berry_borer_damage": {
+            "name": "Berry borer damage",
+            "cause": "Borer insects are entering berries or fruit and causing holes, frass, and quality loss.",
+            "treatment": "Harvest ripe fruit promptly, remove infested berries, use traps where available, and follow local borer IPM.",
+        },
+        "bunchy_top_virus": {
+            "name": "Bunchy top virus",
+            "cause": "A viral disease is causing bunched, narrow, or stunted new growth.",
+            "treatment": "Remove infected plants, control aphid or insect vectors, and use clean planting material.",
+        },
+        "fusarium_wilt": {
+            "name": "Fusarium wilt",
+            "cause": "A soil-borne fungus is blocking water movement and causing wilt or yellowing.",
+            "treatment": "Remove infected plants, improve sanitation, avoid moving contaminated soil, and use resistant or clean planting material.",
+        },
+    }
+)
+
 NON_CROP_IMAGE_KEYWORDS = (
     "dog",
     "cat",
@@ -1564,6 +1849,46 @@ class CropDiseaseDetector:
 
     def _looks_like_healthy_rice_panicle(self, features: dict[str, float]) -> bool:
         warm_grain_ratio = features["banana_fruit_ratio"] + features["yellow_ratio"]
+        rust_spot_disease = (
+            features["component_count"] >= 8
+            and features["rust_ratio"] >= 0.025
+            and features["lesion_ratio"] >= 0.07
+        )
+        large_blight_patch = (
+            features["max_component_area_ratio"] >= 0.055
+            and features["lesion_ratio"] >= 0.10
+            and features["dark_lesion_ratio"] >= 0.035
+        )
+        mature_rice_panicle = (
+            features["banana_fruit_ratio"] >= 0.22
+            and features["yellow_ratio"] >= 0.16
+            and features["green_leaf_ratio"] >= 0.18
+            and features["max_green_aspect"] >= 2.40
+            and features["fruit_component_count"] >= 6
+            and features["max_fruit_area_ratio"] >= 0.10
+            and features["max_fruit_area_ratio"] < 0.32
+            and features["rust_ratio"] < 0.02
+            and features["dark_lesion_ratio"] < 0.24
+            and features["lesion_ratio"] < 0.38
+        )
+        if mature_rice_panicle:
+            return True
+
+        grain_panicle_structure = (
+            warm_grain_ratio >= 0.12
+            and features["green_leaf_ratio"] >= 0.14
+            and features["max_green_aspect"] >= 1.65
+            and features["fruit_component_count"] >= 3
+            and features["max_fruit_area_ratio"] < 0.22
+            and features["banana_fruit_ratio"] < 0.34
+            and features["dark_lesion_ratio"] < 0.095
+            and features["rust_ratio"] < 0.035
+            and not rust_spot_disease
+            and not large_blight_patch
+        )
+        if grain_panicle_structure:
+            return True
+
         warm_grain_signal = (
             (features["banana_fruit_ratio"] >= 0.045 and features["yellow_ratio"] >= 0.035)
             or warm_grain_ratio >= 0.11
@@ -1637,11 +1962,6 @@ class CropDiseaseDetector:
             and features["lesion_within_plant"] >= 0.045
             and not rice_grain_canopy
         )
-        rust_spot_disease = (
-            features["component_count"] >= 8
-            and features["rust_ratio"] >= 0.025
-            and features["lesion_ratio"] >= 0.07
-        )
         banana_bunch_like = (
             features["max_fruit_area_ratio"] >= 0.24
             and features["banana_fruit_ratio"] >= 0.22
@@ -1693,6 +2013,38 @@ class CropDiseaseDetector:
         if self._looks_like_healthy_rice_panicle(features):
             return False
 
+        clean_green_banana_bunch = (
+            features["green_leaf_ratio"] >= 0.55
+            and features["green_component_count"] >= 4
+            and features["max_green_area_ratio"] >= 0.35
+            and features["max_green_aspect"] >= 2.0
+            and features["max_green_aspect"] <= 6.8
+            and features["banana_fruit_ratio"] >= 0.06
+            and features["fruit_component_count"] >= 3
+            and features["lesion_ratio"] < 0.16
+            and features["dark_lesion_ratio"] < 0.15
+            and features["rust_ratio"] < 0.015
+            and features["max_component_area_ratio"] < 0.04
+        )
+        if clean_green_banana_bunch:
+            return True
+
+        green_banana_finger_cluster = (
+            features["green_leaf_ratio"] >= 0.42
+            and features["green_component_count"] >= 4
+            and features["max_green_area_ratio"] < 0.56
+            and features["max_green_aspect"] >= 1.20
+            and features["max_green_aspect"] <= 6.80
+            and features["lesion_ratio"] < 0.18
+            and features["dark_lesion_ratio"] < 0.12
+            and features["rust_ratio"] < 0.08
+            and features["max_component_area_ratio"] < 0.13
+            and not (
+                features["component_count"] >= 12
+                and features["rust_ratio"] >= 0.025
+                and features["lesion_ratio"] >= 0.07
+            )
+        )
         clean_fruit_surface = (
             features["lesion_ratio"] < 0.10
             and features["dark_lesion_ratio"] < 0.06
@@ -1729,7 +2081,13 @@ class CropDiseaseDetector:
             and features["green_component_count"] <= 3
             and features["max_green_area_ratio"] < 0.28
         )
-        return fruit_tone_signal and clean_fruit_surface and (clustered_fingers or dense_green_bunch) and not spotted_leaf_disease and not_grass_leaf
+        return (
+            fruit_tone_signal
+            and (clean_fruit_surface or green_banana_finger_cluster)
+            and (clustered_fingers or dense_green_bunch or green_banana_finger_cluster)
+            and not spotted_leaf_disease
+            and not_grass_leaf
+        )
 
     def _banana_bunch_detection(self) -> DiseaseDetection:
         meta = self._metadata_for_key("banana_healthy")

@@ -104,6 +104,24 @@ class Scan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ScanFeedback(Base):
+    __tablename__ = "scan_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    original_disease_name: Mapped[str] = mapped_column(String(160))
+    original_crop_label: Mapped[str | None] = mapped_column(String(120))
+    corrected_crop_label: Mapped[str] = mapped_column(String(120))
+    corrected_disease_name: Mapped[str] = mapped_column(String(160))
+    corrected_class_key: Mapped[str] = mapped_column(String(160))
+    user_note: Mapped[str | None] = mapped_column(Text)
+    verification_status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
+    verification_reason: Mapped[str | None] = mapped_column(Text)
+    feature_signature: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Prediction(Base):
     __tablename__ = "predictions"
 

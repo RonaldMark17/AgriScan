@@ -9,8 +9,9 @@ from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models import Farm, Scan, User
-from app.schemas.domain import ScanRead
+from app.schemas.domain import ScanFeedbackCreate, ScanFeedbackRead, ScanRead
 from app.services.audit import write_audit_log
+from app.services.feedback_learning import apply_verified_feedback, create_scan_feedback
 from app.services.ml_service import detector, manual_entry_diagnosis
 from app.services.push_notifications import create_notification, dispatch_push_to_user
 
@@ -128,6 +129,8 @@ async def create_scan(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detection.cause or "Upload a clear crop or leaf photo for disease analysis.",
         )
+    if file_path is not None:
+        detection = await apply_verified_feedback(db, str(file_path), detection, crop_type)
 
     scan = Scan(
         user_id=current_user.id,
@@ -185,3 +188,53 @@ async def create_scan(
     setattr(scan, "reference_title", detection.reference_title)
     setattr(scan, "detections", detection.detections)
     return scan
+
+
+@router.post("/{scan_id}/feedback", response_model=ScanFeedbackRead, status_code=status.HTTP_201_CREATED)
+async def flag_scan_result(
+    scan_id: int,
+    payload: ScanFeedbackCreate,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Scan).where(Scan.id == scan_id))
+    scan = result.scalar_one_or_none()
+    if scan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found.")
+    if current_user.role.name == "farmer" and scan.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only correct your own scans.")
+    if scan.image_path == "manual-entry":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only image scans can teach the detector.")
+
+    try:
+        feedback = await create_scan_feedback(db, scan, current_user, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    applied_values = {
+        "applied_disease_name": getattr(feedback, "applied_disease_name", None),
+        "applied_confidence": getattr(feedback, "applied_confidence", None),
+        "applied_cause": getattr(feedback, "applied_cause", None),
+        "applied_treatment": getattr(feedback, "applied_treatment", None),
+        "applied_analysis_mode": getattr(feedback, "applied_analysis_mode", None),
+    }
+    await write_audit_log(
+        db,
+        request,
+        "scan.feedback.created",
+        actor=current_user,
+        resource_type="scan",
+        resource_id=scan.id,
+        metadata={
+            "feedback_id": feedback.id,
+            "verification_status": feedback.verification_status,
+            "corrected_crop_label": feedback.corrected_crop_label,
+            "corrected_disease_name": feedback.corrected_disease_name,
+        },
+    )
+    await db.commit()
+    await db.refresh(feedback)
+    for key, value in applied_values.items():
+        setattr(feedback, key, value)
+    return feedback
