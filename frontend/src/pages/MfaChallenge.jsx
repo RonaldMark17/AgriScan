@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getCurrentDeviceName } from '../utils/deviceName.js';
 
 export default function MfaChallenge() {
   const { verifyMfa } = useAuth();
@@ -10,6 +11,7 @@ export default function MfaChallenge() {
   const location = useLocation();
   const mfaToken = location.state?.mfaToken;
   const rememberMe = Boolean(location.state?.rememberMe);
+  const deviceNameFromLogin = location.state?.deviceName;
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,7 +21,8 @@ export default function MfaChallenge() {
     setError('');
     setLoading(true);
     try {
-      await verifyMfa({ mfa_token: mfaToken, code, device_name: 'AgriScan PWA', remember_me: rememberMe });
+      const deviceName = deviceNameFromLogin || (await getCurrentDeviceName());
+      await verifyMfa({ mfa_token: mfaToken, code, device_name: deviceName, remember_me: rememberMe });
       navigate('/', { replace: true });
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Invalid MFA code.'));

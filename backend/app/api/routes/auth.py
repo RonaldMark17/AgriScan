@@ -57,6 +57,7 @@ from app.services.rate_limiter import login_limiter
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 settings = get_settings()
+GENERIC_DEVICE_NAMES = {"agriscan pwa", "pwa", "unknown device"}
 
 
 def _user_payload(user: User) -> dict:
@@ -76,6 +77,52 @@ def _is_expired(timestamp: datetime | None) -> bool:
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=UTC)
     return timestamp < datetime.now(UTC)
+
+
+def _is_generic_device_name(device_name: str | None) -> bool:
+    return not device_name or device_name.strip().lower() in GENERIC_DEVICE_NAMES
+
+
+def _device_name_from_user_agent(user_agent: str | None) -> str | None:
+    if not user_agent:
+        return None
+    browser = "Browser"
+    if "Edg/" in user_agent:
+        browser = "Microsoft Edge"
+    elif "OPR/" in user_agent or "Opera" in user_agent:
+        browser = "Opera"
+    elif "CriOS/" in user_agent or "Chrome/" in user_agent:
+        browser = "Chrome"
+    elif "FxiOS/" in user_agent or "Firefox/" in user_agent:
+        browser = "Firefox"
+    elif "Safari/" in user_agent:
+        browser = "Safari"
+
+    source = user_agent.lower()
+    os_name = None
+    if "iphone" in source:
+        os_name = "iPhone"
+    elif "ipad" in source:
+        os_name = "iPad"
+    elif "android" in source:
+        os_name = "Android"
+    elif "windows" in source:
+        os_name = "Windows"
+    elif "macintosh" in source or "mac os" in source:
+        os_name = "macOS"
+    elif "linux" in source:
+        os_name = "Linux"
+
+    return f"{browser} on {os_name}" if os_name else browser
+
+
+def _resolve_device_name(request: Request | None, device_name: str | None) -> str | None:
+    candidate = device_name.strip() if device_name else None
+    if candidate and not _is_generic_device_name(candidate):
+        return candidate[:160]
+    user_agent = request.headers.get("user-agent") if request else None
+    inferred = _device_name_from_user_agent(user_agent)
+    return inferred[:160] if inferred else None
 
 
 def _valid_mfa_trust_token(user: User, token: str | None) -> bool:
@@ -101,6 +148,7 @@ async def _issue_token_pair(
     device_name: str | None = None,
     remember_me: bool = False,
 ) -> tuple[str, str]:
+    resolved_device_name = _resolve_device_name(request, device_name)
     access_token = create_access_token(user.id, user.role.name, mfa_verified=True)
     refresh_days = settings.remember_me_expire_days if remember_me else settings.refresh_token_expire_days
     refresh_token = create_refresh_token(user.id, user.role.name, expires_days=refresh_days, remember_me=remember_me)
@@ -108,7 +156,7 @@ async def _issue_token_pair(
         RefreshToken(
             user_id=user.id,
             token_hash=hash_token(refresh_token),
-            device_name=device_name,
+            device_name=resolved_device_name,
             ip_address=get_request_ip(request) if request else None,
             user_agent=request.headers.get("user-agent") if request else None,
             expires_at=datetime.now(UTC) + timedelta(days=refresh_days),
@@ -183,6 +231,7 @@ async def register(payload: RegisterRequest, request: Request, db: AsyncSession 
 @router.post("/login", response_model=LoginResponse)
 async def login(payload: LoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)) -> LoginResponse:
     ip_address = get_request_ip(request)
+    resolved_device_name = _resolve_device_name(request, payload.device_name)
     limiter_key = f"{payload.email.lower()}:{ip_address}"
     limit = login_limiter.check(limiter_key)
     if not limit.allowed:
@@ -202,7 +251,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
             user_id=user.id if user else None,
             ip_address=ip_address,
             user_agent=request.headers.get("user-agent"),
-            device_name=payload.device_name,
+            device_name=resolved_device_name,
             success=success,
         )
     )
@@ -233,8 +282,8 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
         await db.commit()
         return LoginResponse(status="mfa_required", mfa_token=mfa_token, user=_user_payload(user), remember_me=payload.remember_me)
 
-    access_token, refresh_token = await _issue_token_pair(db, user, request, payload.device_name, payload.remember_me)
-    await send_new_login_alert(user.email, payload.device_name, ip_address)
+    access_token, refresh_token = await _issue_token_pair(db, user, request, resolved_device_name, payload.remember_me)
+    await send_new_login_alert(user.email, resolved_device_name, ip_address)
     if trusted_mfa_device:
         await write_audit_log(db, request, "auth.mfa_trusted_device", actor=user, resource_type="user", resource_id=user.id)
     await write_audit_log(db, request, "auth.login_success", actor=user, resource_type="user", resource_id=user.id)
@@ -268,9 +317,10 @@ async def verify_mfa(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authenticator or recovery code.")
 
     user.last_login_at = datetime.now(UTC)
-    access_token, refresh_token = await _issue_token_pair(db, user, request, payload.device_name, payload.remember_me)
+    resolved_device_name = _resolve_device_name(request, payload.device_name)
+    access_token, refresh_token = await _issue_token_pair(db, user, request, resolved_device_name, payload.remember_me)
     mfa_trust_token = _mfa_trust_token_for_response(user, payload.remember_me)
-    await send_new_login_alert(user.email, payload.device_name, get_request_ip(request))
+    await send_new_login_alert(user.email, resolved_device_name, get_request_ip(request))
     await write_audit_log(db, request, "auth.mfa_success", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
     _set_refresh_cookie(response, refresh_token, payload.remember_me)

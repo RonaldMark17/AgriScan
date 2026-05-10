@@ -44,6 +44,11 @@ CLASS_METADATA: dict[str, dict[str, str]] = {
         "cause": "AgriScan could not safely match the uploaded image to one specific crop disease from the visible patterns.",
         "treatment": "Retake a close, well-lit photo of one affected leaf or fruit, select the crop type, and confirm with a local agriculture officer before applying treatment.",
     },
+    "invalid_crop_image": {
+        "name": "Invalid crop or leaf image",
+        "cause": "The uploaded photo does not appear to be a crop, leaf, fruit, or plant part that AgriScan can diagnose.",
+        "treatment": "Upload a clear close-up photo of one crop leaf, fruit, stem, or plant part. Avoid animals, people, tools, vehicles, and indoor objects.",
+    },
     "leaf_spot_or_blight": {
         "name": "Leaf spot or blight symptoms",
         "cause": "The image shows brown or yellow necrotic patches on leaf tissue, which is consistent with a leaf spot or blight pattern.",
@@ -133,6 +138,8 @@ CROP_DISPLAY_NAMES = {
     "calamansi": "Calamansi",
     "onion": "Onion",
     "cabbage": "Cabbage",
+    "pechay": "Pechay",
+    "gabi_taro": "Gabi / Taro",
     "bitter_gourd": "Bitter Gourd",
     "guava": "Guava",
     "cacao": "Cacao",
@@ -251,6 +258,14 @@ CROP_ALIASES = {
     "onion": "onion",
     "repolyo": "cabbage",
     "cabbage": "cabbage",
+    "pechay": "pechay",
+    "bok choy": "pechay",
+    "bokchoi": "pechay",
+    "pak choi": "pechay",
+    "pakchoy": "pechay",
+    "gabi": "gabi_taro",
+    "taro": "gabi_taro",
+    "gabi taro": "gabi_taro",
     "ampalaya": "bitter_gourd",
     "bitter gourd": "bitter_gourd",
     "bitter_gourd": "bitter_gourd",
@@ -1095,8 +1110,120 @@ class CropDiseaseDetector:
             self._loaded_model_path = None
             self._loaded_model_mtime = None
 
+    def _plant_subject_mask(self, normalized_array: np.ndarray) -> np.ndarray:
+        red = normalized_array[:, :, 0]
+        green = normalized_array[:, :, 1]
+        blue = normalized_array[:, :, 2]
+        max_channel = np.max(normalized_array, axis=2)
+        min_channel = np.min(normalized_array, axis=2)
+        saturation = max_channel - min_channel
+
+        green_leaf = (green > red * 1.05) & (green > blue * 1.05) & (green > 0.15) & (saturation > 0.08)
+        brown_or_dark = (
+            (red > 0.20)
+            & (green > 0.08)
+            & (blue < 0.42)
+            & (red >= green * 0.82)
+            & (green > blue * 1.02)
+            & (saturation > 0.07)
+            & (max_channel < 0.86)
+        )
+        yellow_or_kernel = (
+            (red > 0.36)
+            & (green > 0.30)
+            & (blue < 0.58)
+            & (red > blue * 1.08)
+            & (green > blue * 1.05)
+            & (red < green * 1.65)
+            & (green < red * 1.65)
+            & (saturation > 0.045)
+        )
+        tan_stem_or_husk = (
+            (red > 0.34)
+            & (green > 0.22)
+            & (blue > 0.10)
+            & (red > green * 0.92)
+            & (green > blue * 1.02)
+            & (saturation > 0.07)
+            & (max_channel < 0.92)
+        )
+        return green_leaf | brown_or_dark | yellow_or_kernel | tan_stem_or_husk
+
+    def _subject_focus_image(self, image_path: str, size: int) -> Image.Image:
+        image = Image.open(image_path).convert("RGB")
+        working = image.resize((size, size))
+        array = np.asarray(working, dtype=np.uint8)
+        normalized = array.astype(np.float32) / 255.0
+        subject_mask = self._plant_subject_mask(normalized)
+        if float(np.mean(subject_mask)) < 0.025:
+            return working
+
+        selected_mask = subject_mask.copy()
+        try:
+            import cv2
+
+            mask = subject_mask.astype("uint8")
+            kernel = np.ones((3, 3), dtype=np.uint8)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+            count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+            selected_mask = np.zeros_like(mask, dtype=bool)
+            height, width = mask.shape
+            center_left = width * 0.18
+            center_right = width * 0.82
+            center_top = height * 0.18
+            center_bottom = height * 0.82
+            largest_area = 0
+            largest_index = 0
+            for index in range(1, count):
+                area = int(stats[index, cv2.CC_STAT_AREA])
+                if area > largest_area:
+                    largest_area = area
+                    largest_index = index
+                if area < max(18, int(mask.size * 0.002)):
+                    continue
+                x = int(stats[index, cv2.CC_STAT_LEFT])
+                y = int(stats[index, cv2.CC_STAT_TOP])
+                component_width = int(stats[index, cv2.CC_STAT_WIDTH])
+                component_height = int(stats[index, cv2.CC_STAT_HEIGHT])
+                overlaps_center = (
+                    x < center_right
+                    and x + component_width > center_left
+                    and y < center_bottom
+                    and y + component_height > center_top
+                )
+                large_component = area >= mask.size * 0.015
+                if overlaps_center or large_component:
+                    selected_mask |= labels == index
+            if not np.any(selected_mask) and largest_index:
+                selected_mask = labels == largest_index
+            selected_mask = cv2.dilate(selected_mask.astype("uint8"), kernel, iterations=2).astype(bool)
+        except Exception:
+            logger.debug("OpenCV subject focus unavailable; using raw color mask.", exc_info=True)
+
+        if not np.any(selected_mask):
+            return working
+
+        y_positions, x_positions = np.where(selected_mask)
+        top = int(y_positions.min())
+        bottom = int(y_positions.max()) + 1
+        left = int(x_positions.min())
+        right = int(x_positions.max()) + 1
+        padding = max(4, int(max(bottom - top, right - left) * 0.14))
+        top = max(0, top - padding)
+        bottom = min(size, bottom + padding)
+        left = max(0, left - padding)
+        right = min(size, right + padding)
+        if bottom - top < size * 0.18 or right - left < size * 0.18:
+            return working
+
+        focused_array = array.copy()
+        focused_array[~selected_mask] = np.array([244, 245, 240], dtype=np.uint8)
+        focused = Image.fromarray(focused_array, mode="RGB").crop((left, top, right, bottom)).resize((size, size))
+        return focused
+
     def _preprocess(self, image_path: str) -> np.ndarray:
-        image = Image.open(image_path).convert("RGB").resize((224, 224))
+        image = self._subject_focus_image(image_path, 224)
         array = np.asarray(image, dtype=np.float32)
         return np.expand_dims(array, axis=0)
 
@@ -1235,7 +1362,7 @@ class CropDiseaseDetector:
         return synthetic_green_background or animal_on_green_background or centered_non_leaf_subject or not has_crop_signal
 
     def _extract_leaf_features(self, image_path: str) -> dict[str, float]:
-        image = Image.open(image_path).convert("RGB").resize((160, 160))
+        image = self._subject_focus_image(image_path, 160)
         array = np.asarray(image, dtype=np.float32)
         normalized_array = array / 255.0
         red_channel = normalized_array[:, :, 0]
@@ -1594,6 +1721,7 @@ class CropDiseaseDetector:
     def _looks_like_background_green_scene(self, features: dict[str, float], crop_key: str | None) -> bool:
         if crop_key:
             return False
+        has_foreground_crop = self._has_crop_subject_in_foreground(features, crop_key)
         return (
             features["green_leaf_ratio"] >= 0.58
             and features["lesion_ratio"] < 0.018
@@ -1601,6 +1729,7 @@ class CropDiseaseDetector:
             and features["green_edge_ratio"] < 0.08
             and features["adjacent_nonleaf_ratio"] < 0.08
             and features["banana_fruit_ratio"] < 0.18
+            and not has_foreground_crop
         )
 
     def _has_crop_subject_in_foreground(self, features: dict[str, float], crop_key: str | None) -> bool:
@@ -1641,8 +1770,89 @@ class CropDiseaseDetector:
         )
         return centered_leaf or centered_disease_tissue or centered_fruit_or_stem
 
+    def _has_foreground_leaf_disease_signal(self, features: dict[str, float], crop_key: str | None) -> bool:
+        if not self._has_strong_visual_disease_signal(features, crop_key):
+            return False
+        animal_like_center = (
+            crop_key is None
+            and features["center_tan_ratio"] >= 0.18
+            and features["center_neutral_ratio"] >= 0.10
+            and features["center_green_ratio"] < 0.45
+            and features["green_edge_ratio"] < 0.09
+            and features["adjacent_nonleaf_ratio"] < 0.07
+        )
+        if animal_like_center:
+            return False
+        centered_spotted_leaf = (
+            features["center_green_ratio"] >= 0.07
+            and features["center_lesion_ratio"] >= 0.02
+            and features["lesion_within_plant"] >= 0.035
+        )
+        broad_spotted_leaf = (
+            features["green_leaf_ratio"] >= 0.18
+            and features["max_green_area_ratio"] >= 0.08
+            and features["lesion_ratio"] >= 0.025
+            and features["component_count"] >= 3
+        )
+        large_diseased_leaf = (
+            features["green_leaf_ratio"] >= 0.30
+            and features["max_green_area_ratio"] >= 0.25
+            and features["lesion_ratio"] >= 0.035
+        )
+        return centered_spotted_leaf or broad_spotted_leaf or large_diseased_leaf
+
+    def _is_reliable_visual_crop_inference(self, features: dict[str, float], crop_key: str | None) -> bool:
+        if not crop_key:
+            return False
+        if crop_key == "banana":
+            return self._looks_like_healthy_banana_bunch(features) or self._looks_like_banana_fruit_issue(features, None)
+        if crop_key == "rice":
+            return self._looks_like_healthy_rice_panicle(features)
+        if crop_key == "corn":
+            return self._looks_like_corn_ear_issue(features, None)
+        if crop_key == "mango":
+            return self._looks_like_mango_leaf(features)
+        if crop_key in {"cabbage", "pechay", "gabi_taro"}:
+            return (
+                features["green_leaf_ratio"] >= 0.25
+                and features["center_green_ratio"] >= 0.45
+                and features["max_green_area_ratio"] >= 0.25
+                and features["center_tan_ratio"] < 0.08
+                and features["banana_fruit_ratio"] < 0.08
+            )
+        if crop_key in {"tomato", "pepper", "potato", "eggplant"}:
+            return (
+                features["green_leaf_ratio"] >= 0.18
+                and features["component_count"] >= 5
+                and features["lesion_ratio"] >= 0.025
+                and features["banana_fruit_ratio"] < 0.12
+            )
+        return False
+
+    def validate_selected_crop_type(self, image_path: str, crop_type: str | None) -> str | None:
+        selected_crop = self._normalize_crop_type(crop_type)
+        if not crop_type or not crop_type.strip():
+            return None
+        if selected_crop is None:
+            return "Select a supported crop type or use Auto detect crop."
+
+        features = self._extract_leaf_features(image_path)
+        visual_crop = self._infer_crop_key_from_features(features)
+        if (
+            visual_crop is None
+            or visual_crop == selected_crop
+            or not self._is_reliable_visual_crop_inference(features, visual_crop)
+        ):
+            return None
+
+        selected_label = self._display_crop_label(selected_crop) or crop_type
+        visual_label = self._display_crop_label(visual_crop) or visual_crop.replace("_", " ").title()
+        return f"Selected crop is {selected_label}, but the uploaded image looks like {visual_label}. Choose {visual_label} or use Auto detect crop."
+
     def _looks_like_non_crop_foreground(self, features: dict[str, float], crop_key: str | None) -> bool:
         has_foreground_crop = self._has_crop_subject_in_foreground(features, crop_key)
+        if self._has_foreground_leaf_disease_signal(features, crop_key):
+            return False
         synthetic_green_background = (
             features["chroma_green_ratio"] >= 0.35
             and features["center_chroma_green_ratio"] >= 0.22
@@ -1682,6 +1892,19 @@ class CropDiseaseDetector:
             and features["center_fruit_ratio"] < 0.14
             and features["center_natural_green_ratio"] / max(features["natural_green_ratio"], 0.001) < 0.35
         )
+        animal_on_lawn_subject = (
+            features["green_leaf_ratio"] >= 0.45
+            and features["max_green_area_ratio"] >= 0.45
+            and features["green_component_count"] <= 2
+            and features["green_edge_ratio"] < 0.10
+            and features["adjacent_nonleaf_ratio"] < 0.07
+            and features["center_green_ratio"] < 0.45
+            and features["center_tan_ratio"] >= 0.18
+            and features["center_neutral_ratio"] >= 0.10
+            and features["center_fruit_ratio"] < 0.20
+            and features["banana_fruit_ratio"] < 0.14
+            and features["fruit_component_count"] <= 4
+        )
         centered_animal_or_person = (
             not crop_key
             and features["green_leaf_ratio"] >= 0.20
@@ -1701,6 +1924,7 @@ class CropDiseaseDetector:
             and features["green_edge_ratio"] < 0.08
             and features["adjacent_nonleaf_ratio"] < 0.08
             and features["center_fruit_ratio"] < 0.18
+            and not has_foreground_crop
         )
         return (
             synthetic_green_background
@@ -1709,6 +1933,7 @@ class CropDiseaseDetector:
             or centered_neutral_object
             or centered_fur_like_object
             or animal_on_green_background
+            or animal_on_lawn_subject
             or centered_animal_or_person
             or flat_green_background
         )
@@ -1809,20 +2034,34 @@ class CropDiseaseDetector:
         )
         return self._with_online_reference(detection, key, crop_type or crop_label, allow_online_lookup=allow_online_lookup)
 
+    def _looks_like_corn_ear_morphology(self, features: dict[str, float]) -> bool:
+        kernel_signal = features["banana_fruit_ratio"] >= 0.22 or features["max_fruit_area_ratio"] >= 0.12
+        husk_signal = features["green_leaf_ratio"] >= 0.06 or features["green_component_count"] >= 2
+        damage_signal = (
+            features["lesion_ratio"] >= 0.10
+            or features["dark_lesion_ratio"] >= 0.045
+            or features["rust_ratio"] >= 0.03
+        )
+        cob_structure = (
+            features["fruit_component_count"] >= 3
+            and features["max_fruit_area_ratio"] >= 0.08
+            and features["max_fruit_area_ratio"] < 0.34
+            and features["center_fruit_ratio"] >= 0.18
+        )
+        not_leaf_dominant = features["green_leaf_ratio"] < 0.42 and features["max_green_area_ratio"] < 0.28
+        not_banana_bunch = not (
+            features["green_component_count"] >= 8
+            and features["max_green_aspect"] >= 3.0
+            and features["max_fruit_area_ratio"] < 0.12
+        )
+        return kernel_signal and husk_signal and damage_signal and cob_structure and not_leaf_dominant and not_banana_bunch
+
     def _looks_like_banana_fruit_issue(self, features: dict[str, float], crop_key: str | None) -> bool:
+        if self._looks_like_corn_ear_morphology(features):
+            return False
         if crop_key not in {None, "banana"}:
             return False
         if self._looks_like_healthy_rice_panicle(features):
-            return False
-        corn_ear_like = (
-            crop_key is None
-            and features["banana_fruit_ratio"] >= 0.22
-            and features["max_fruit_area_ratio"] >= 0.12
-            and features["green_leaf_ratio"] >= 0.06
-            and features["green_leaf_ratio"] < 0.42
-            and features["green_component_count"] <= 5
-        )
-        if corn_ear_like:
             return False
         if crop_key is None and features["green_leaf_ratio"] >= 0.45 and features["max_green_area_ratio"] >= 0.28:
             return False
@@ -2101,23 +2340,9 @@ class CropDiseaseDetector:
         )
 
     def _looks_like_corn_ear_issue(self, features: dict[str, float], crop_key: str | None) -> bool:
-        if crop_key not in {None, "corn"}:
+        if crop_key not in {None, "corn", "banana"}:
             return False
-
-        kernel_signal = features["banana_fruit_ratio"] >= 0.22 or features["max_fruit_area_ratio"] >= 0.12
-        husk_signal = features["green_leaf_ratio"] >= 0.06 or features["green_component_count"] >= 2
-        damage_signal = (
-            features["lesion_ratio"] >= 0.10
-            or features["dark_lesion_ratio"] >= 0.045
-            or features["rust_ratio"] >= 0.03
-        )
-        not_leaf_dominant = features["green_leaf_ratio"] < 0.42 and features["max_green_area_ratio"] < 0.28
-        not_banana_bunch = not (
-            features["green_component_count"] >= 8
-            and features["max_green_aspect"] >= 3.0
-            and features["max_fruit_area_ratio"] < 0.12
-        )
-        return kernel_signal and husk_signal and damage_signal and not_leaf_dominant and not_banana_bunch
+        return self._looks_like_corn_ear_morphology(features)
 
     def _contextual_detection(
         self,
@@ -2159,6 +2384,14 @@ class CropDiseaseDetector:
                 analysis_mode="filename-guided visual review",
             )
             return review or detection
+        if self._looks_like_corn_ear_issue(features, hint_crop):
+            return self._make_detection(
+                "corn_ear_pest_damage",
+                0.82,
+                crop_type="corn",
+                analysis_mode="crop-part visual fallback",
+                allow_online_lookup=allow_online_lookup,
+            )
         if self._looks_like_banana_fruit_issue(features, hint_crop):
             key = "banana_crown_rot" if features["green_component_count"] >= 8 else "banana_fruit_rot"
             return self._make_detection(
@@ -2166,14 +2399,6 @@ class CropDiseaseDetector:
                 0.74,
                 crop_type="banana",
                 analysis_mode="fruit-aware visual fallback",
-                allow_online_lookup=allow_online_lookup,
-            )
-        if self._looks_like_corn_ear_issue(features, hint_crop):
-            return self._make_detection(
-                "corn_ear_pest_damage",
-                0.82,
-                crop_type="corn",
-                analysis_mode="crop-part visual fallback",
                 allow_online_lookup=allow_online_lookup,
             )
         return None
@@ -2202,6 +2427,9 @@ class CropDiseaseDetector:
 
         if self._looks_like_healthy_banana_bunch(features):
             return "banana"
+
+        if self._looks_like_corn_ear_issue(features, None):
+            return "corn"
 
         banana_fruit_like = (
             features["banana_fruit_ratio"] >= 0.18
@@ -2237,6 +2465,32 @@ class CropDiseaseDetector:
         if features["green_leaf_ratio"] < 0.18 and features["lesion_ratio"] >= 0.05:
             return "rice"
 
+        cabbage_head_like = (
+            features["green_leaf_ratio"] >= 0.45
+            and features["center_green_ratio"] >= 0.55
+            and features["max_green_area_ratio"] >= 0.42
+            and features["lesion_ratio"] < 0.025
+            and features["banana_fruit_ratio"] < 0.05
+            and features["center_tan_ratio"] < 0.08
+            and 0.08 <= features["center_neutral_ratio"] <= 0.34
+            and features["max_green_aspect"] < 3.2
+        )
+        if cabbage_head_like:
+            return "cabbage"
+
+        dense_leafy_vegetable = (
+            features["green_leaf_ratio"] >= 0.25
+            and features["center_green_ratio"] >= 0.55
+            and features["max_green_area_ratio"] >= 0.25
+            and features["lesion_ratio"] < 0.025
+            and features["banana_fruit_ratio"] < 0.05
+            and features["center_tan_ratio"] < 0.08
+            and features["center_neutral_ratio"] < 0.08
+            and features["max_green_aspect"] < 1.8
+        )
+        if dense_leafy_vegetable:
+            return "pechay"
+
         grass_like_leaf = features["max_green_aspect"] >= 2.3 or (
             features["green_component_count"] >= 3
             and features["max_green_aspect"] >= 1.9
@@ -2271,11 +2525,33 @@ class CropDiseaseDetector:
         if crop_key in {None, "banana"} and self._looks_like_healthy_banana_bunch(features):
             return "banana_healthy", 0.82
 
+        if self._looks_like_corn_ear_issue(features, crop_key):
+            return "corn_ear_pest_damage", 0.82
         if self._looks_like_banana_fruit_issue(features, crop_key):
             key = "banana_crown_rot" if features["green_component_count"] >= 8 else "banana_fruit_rot"
             return key, self._confidence_from_features(features, crop_key, matched_pattern=True)
-        if self._looks_like_corn_ear_issue(features, crop_key):
-            return "corn_ear_pest_damage", 0.82
+
+        healthy_leaf = (
+            features["green_leaf_ratio"] >= 0.26
+            and features["lesion_within_plant"] < 0.035
+            and features["lesion_ratio"] < 0.025
+            and features["contrast"] < 72
+        )
+        healthy_leafy_vegetable = (
+            crop_key in {"pechay", "cabbage", "gabi_taro"}
+            and features["green_leaf_ratio"] >= 0.25
+            and features["center_green_ratio"] >= 0.45
+            and features["lesion_within_plant"] < 0.035
+            and features["lesion_ratio"] < 0.025
+            and features["center_tan_ratio"] < 0.08
+            and (
+                features["center_neutral_ratio"] < 0.12
+                or (crop_key == "cabbage" and features["center_neutral_ratio"] <= 0.34)
+            )
+            and features["contrast"] < 78
+        )
+        if healthy_leaf or healthy_leafy_vegetable:
+            return self._healthy_key_for_crop(crop_key), 0.76 if crop_key else 0.68
 
         structural_damage = (
             features["green_leaf_ratio"] >= 0.14
@@ -2304,14 +2580,6 @@ class CropDiseaseDetector:
                 key = "pest_leaf_damage"
             return key, self._confidence_from_features(features, crop_key, matched_pattern=True)
 
-        healthy_leaf = (
-            features["green_leaf_ratio"] >= 0.26
-            and features["lesion_within_plant"] < 0.035
-            and features["lesion_ratio"] < 0.025
-            and features["contrast"] < 72
-        )
-        if healthy_leaf:
-            return self._healthy_key_for_crop(crop_key), 0.76 if crop_key else 0.68
         if not self._has_strong_visual_disease_signal(features, crop_key):
             return "review_needed", 0.52
 

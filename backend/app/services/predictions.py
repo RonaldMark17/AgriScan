@@ -3,6 +3,51 @@ from datetime import date
 from app.services.crop_recommender_model import predict_manual_crop_recommendations
 
 
+SUPPORTED_CROP_NAMES = (
+    "Rice",
+    "Corn",
+    "Coconut",
+    "Banana",
+    "Sugarcane",
+    "Cassava",
+    "Sweet Potato",
+    "Tomato",
+    "Eggplant",
+    "Mung Bean",
+    "Mango",
+    "Pineapple",
+    "Calamansi",
+    "Onion",
+    "Cabbage",
+    "Bitter Gourd",
+    "Pepper",
+    "Potato",
+    "Guava",
+    "Cacao",
+    "Coffee",
+    "Abaca",
+    "Pechay",
+    "Gabi / Taro",
+)
+
+SUPPORTED_CROP_ALIASES = {
+    "maize": "Corn",
+    "corn": "Corn",
+    "mungbean": "Mung Bean",
+    "mung bean": "Mung Bean",
+    "gabi": "Gabi / Taro",
+    "taro": "Gabi / Taro",
+    "gabi taro": "Gabi / Taro",
+    **{name.lower(): name for name in SUPPORTED_CROP_NAMES},
+}
+
+FIELD_INPUT_LIMITS = {
+    "ph_level": (3.5, 9.5),
+    "moisture_percent": (5.0, 100.0),
+    "soil_temperature_c": (10.0, 45.0),
+}
+
+
 CROP_RECOMMENDATION_TEMPLATES = [
     {
         "crop": "Rice",
@@ -76,7 +121,257 @@ CROP_RECOMMENDATION_TEMPLATES = [
         "watering": "Maintain high soil moisture.",
         "fertilizer": "Use compost and balanced nutrients before corm expansion.",
     },
+    {
+        "crop": "Coconut",
+        "base": 63,
+        "reason": "Perennial crop for warm coastal or lowland areas with deep, well-drained soil.",
+        "planting_window": "Plant seedlings when rainfall is reliable and field access is stable.",
+        "watering": "Keep young palms watered during dry spells until roots establish.",
+        "fertilizer": "Use potassium, chloride, and organic matter based on local soil testing.",
+    },
+    {
+        "crop": "Banana",
+        "base": 66,
+        "reason": "Fits warm loam to alluvial soils with steady moisture and good drainage.",
+        "planting_window": "Plant at the start of rains or with dependable irrigation.",
+        "watering": "Maintain even moisture, especially during bunch development.",
+        "fertilizer": "Apply organic matter and potassium-rich fertilizer in split applications.",
+    },
+    {
+        "crop": "Sugarcane",
+        "base": 62,
+        "reason": "Works in fertile loam or alluvial fields with full sun and reliable moisture.",
+        "planting_window": "Plant setts when soil is moist and drainage channels are prepared.",
+        "watering": "Keep soil moist during establishment and elongation, then avoid waterlogging.",
+        "fertilizer": "Use nitrogen and potassium according to soil test and ratoon stage.",
+    },
+    {
+        "crop": "Mango",
+        "base": 58,
+        "reason": "Tree crop for warm well-drained soil and drier flowering windows.",
+        "planting_window": "Plant grafted seedlings at the beginning of the rainy season.",
+        "watering": "Water young trees regularly, then reduce excess moisture before flowering.",
+        "fertilizer": "Use compost and balanced tree fertilizer, avoiding excess nitrogen before flowering.",
+    },
+    {
+        "crop": "Pineapple",
+        "base": 59,
+        "reason": "Tolerates acidic sandy loam and needs open sun with good drainage.",
+        "planting_window": "Plant slips or crowns when rainfall can support early rooting.",
+        "watering": "Irrigate lightly during long dry spells and avoid standing water.",
+        "fertilizer": "Apply nitrogen and potassium in small scheduled doses.",
+    },
+    {
+        "crop": "Calamansi",
+        "base": 57,
+        "reason": "Citrus crop for well-drained loam with steady sunlight and moderate moisture.",
+        "planting_window": "Plant nursery trees when rains are beginning but fields are not waterlogged.",
+        "watering": "Water young trees deeply, then let the root zone drain well.",
+        "fertilizer": "Use citrus fertilizer with micronutrients and organic mulch.",
+    },
+    {
+        "crop": "Onion",
+        "base": 56,
+        "reason": "Performs best in loose, well-drained soil during cooler dry periods.",
+        "planting_window": "Plant during the dry season or a low-rainfall window.",
+        "watering": "Use shallow, regular irrigation and reduce water near bulb maturity.",
+        "fertilizer": "Balance nitrogen early with phosphorus and potassium for bulb formation.",
+    },
+    {
+        "crop": "Cabbage",
+        "base": 55,
+        "reason": "Cooler-season vegetable for fertile loam and steady moisture.",
+        "planting_window": "Plant during cooler months or higher-elevation conditions.",
+        "watering": "Keep soil evenly moist and avoid prolonged leaf wetness.",
+        "fertilizer": "Use compost plus balanced nutrients before head formation.",
+    },
+    {
+        "crop": "Bitter Gourd",
+        "base": 58,
+        "reason": "Warm-season vine that fits fertile loam with full sun and trellis support.",
+        "planting_window": "Plant when soil is warm and heavy rain is not expected daily.",
+        "watering": "Maintain regular moisture during flowering and fruiting.",
+        "fertilizer": "Add compost and balanced fertilizer, then side-dress during vine growth.",
+    },
+    {
+        "crop": "Pepper",
+        "base": 57,
+        "reason": "Needs warm, well-drained loam and moderate moisture for flowering.",
+        "planting_window": "Plant during a stable dry or protected rainy period.",
+        "watering": "Water consistently but avoid saturated soil around roots.",
+        "fertilizer": "Support phosphorus at transplanting and potassium during fruiting.",
+    },
+    {
+        "crop": "Potato",
+        "base": 54,
+        "reason": "Prefers loose, cool, well-drained soil for tuber formation.",
+        "planting_window": "Plant during cooler months or in suitable upland areas.",
+        "watering": "Keep soil moist but not waterlogged during tuber bulking.",
+        "fertilizer": "Use balanced fertilizer and avoid too much nitrogen late in growth.",
+    },
+    {
+        "crop": "Guava",
+        "base": 56,
+        "reason": "Hardy fruit tree for warm loam to sandy loam with good drainage.",
+        "planting_window": "Plant seedlings at the beginning of rains.",
+        "watering": "Water young trees during dry spells and avoid wet feet.",
+        "fertilizer": "Use compost and balanced tree fertilizer after establishment.",
+    },
+    {
+        "crop": "Cacao",
+        "base": 55,
+        "reason": "Tree crop for warm, humid, organic-rich soil with partial shade when young.",
+        "planting_window": "Plant when rainfall is reliable and shade trees are ready.",
+        "watering": "Keep soil moist but well-drained, especially during establishment.",
+        "fertilizer": "Use organic matter plus balanced nutrients based on soil analysis.",
+    },
+    {
+        "crop": "Coffee",
+        "base": 54,
+        "reason": "Perennial crop for slightly acidic, well-drained soil and moderate shade.",
+        "planting_window": "Plant during the rainy season for reliable establishment.",
+        "watering": "Maintain moisture for young plants and avoid stagnant water.",
+        "fertilizer": "Apply compost and balanced nutrients with attention to potassium.",
+    },
+    {
+        "crop": "Abaca",
+        "base": 55,
+        "reason": "Fiber crop for humid areas with deep, fertile, well-drained soil.",
+        "planting_window": "Plant suckers when rainfall is steady.",
+        "watering": "Keep soil moist without prolonged flooding.",
+        "fertilizer": "Use organic matter and potassium support for fiber growth.",
+    },
 ]
+
+CLAY_FRIENDLY = {"rice", "gabi taro", "eggplant", "pechay", "cabbage", "sugarcane"}
+SANDY_FRIENDLY = {"corn", "cassava", "mung bean", "sweet potato", "pineapple", "calamansi", "guava"}
+LOAM_FRIENDLY = {
+    "corn",
+    "tomato",
+    "eggplant",
+    "pechay",
+    "onion",
+    "cabbage",
+    "bitter gourd",
+    "pepper",
+    "potato",
+    "banana",
+    "mango",
+    "cacao",
+    "coffee",
+    "guava",
+    "calamansi",
+}
+ALLUVIAL_FRIENDLY = {"rice", "corn", "pechay", "onion", "banana", "coconut", "sugarcane", "gabi taro"}
+ACID_TOLERANT = {"rice", "cassava", "sweet potato", "pineapple", "coconut", "coffee", "cacao", "banana", "abaca"}
+NEUTRAL_PH_FRIENDLY = {"tomato", "eggplant", "pechay", "corn", "onion", "cabbage", "bitter gourd", "pepper", "potato", "mung bean"}
+ALKALINE_SENSITIVE = {"tomato", "pechay", "onion", "cabbage", "potato", "coffee", "cacao", "pepper"}
+HIGH_MOISTURE_FRIENDLY = {"rice", "gabi taro", "sugarcane", "coconut", "banana", "cacao", "abaca"}
+LOW_MOISTURE_FRIENDLY = {"cassava", "mung bean", "sweet potato", "pineapple", "calamansi", "corn", "guava"}
+MODERATE_MOISTURE_FRIENDLY = {"corn", "tomato", "eggplant", "pechay", "onion", "cabbage", "bitter gourd", "pepper", "potato", "mango", "guava"}
+WARM_SOIL_FRIENDLY = {
+    "corn",
+    "eggplant",
+    "cassava",
+    "mung bean",
+    "sweet potato",
+    "pineapple",
+    "banana",
+    "mango",
+    "coconut",
+    "cacao",
+    "coffee",
+    "sugarcane",
+    "bitter gourd",
+    "pepper",
+    "abaca",
+}
+COOL_SOIL_FRIENDLY = {"pechay", "cabbage", "potato", "onion", "tomato"}
+FULL_SUN_FRIENDLY = {
+    "corn",
+    "tomato",
+    "eggplant",
+    "cassava",
+    "mung bean",
+    "banana",
+    "mango",
+    "pineapple",
+    "calamansi",
+    "bitter gourd",
+    "pepper",
+    "sugarcane",
+    "guava",
+    "coconut",
+}
+PARTIAL_SHADE_FRIENDLY = {"pechay", "gabi taro", "cacao", "coffee", "abaca"}
+DRY_SEASON_FRIENDLY = {"corn", "cassava", "mung bean", "sweet potato", "onion", "tomato", "pepper", "mango", "pineapple"}
+WET_SEASON_FRIENDLY = {"rice", "gabi taro", "sugarcane", "coconut", "banana", "abaca", "cacao"}
+
+
+def _normalize_crop_name(value: str | None) -> str:
+    normalized = (value or "").strip().lower().replace("_", " ").replace("-", " ")
+    return " ".join(normalized.replace("/", " ").split())
+
+
+def _canonical_supported_crop_name(value: str | None) -> str | None:
+    normalized = _normalize_crop_name(value)
+    if not normalized:
+        return None
+    return SUPPORTED_CROP_ALIASES.get(normalized)
+
+
+def _soil_input_guardrail(
+    ph_level: float | None,
+    moisture_percent: float | None,
+    soil_temperature_c: float | None,
+) -> dict:
+    cap = 98
+    penalty = 0
+    warnings: list[str] = []
+
+    if ph_level is not None:
+        if ph_level < 3.5 or ph_level > 9.5:
+            cap = min(cap, 35)
+            penalty += 35
+            warnings.append("Recheck the pH reading. Productive soil is usually between pH 3.5 and 9.5.")
+        elif ph_level < 4.5 or ph_level > 8.8:
+            cap = min(cap, 55)
+            penalty += 18
+            warnings.append("The pH is outside the safe range for most crops; correct soil pH before planting.")
+        elif ph_level < 5.2 or ph_level > 8.2:
+            cap = min(cap, 72)
+            penalty += 8
+            warnings.append("The pH is stressful for many crops and lowers suitability.")
+
+    if moisture_percent is not None:
+        if moisture_percent < 5:
+            cap = min(cap, 40)
+            penalty += 30
+            warnings.append("Soil moisture is near dry. Irrigate or recheck the moisture meter before choosing a crop.")
+        elif moisture_percent < 15:
+            cap = min(cap, 58)
+            penalty += 12
+            warnings.append("Soil moisture is very low, so water-demanding crops should be delayed.")
+        elif moisture_percent > 95:
+            cap = min(cap, 45)
+            penalty += 25
+            warnings.append("Soil moisture is saturated. Improve drainage before planting most crops.")
+        elif moisture_percent > 85:
+            cap = min(cap, 65)
+            penalty += 10
+            warnings.append("Soil moisture is high and may reduce crops that dislike waterlogging.")
+
+    if soil_temperature_c is not None:
+        if soil_temperature_c < 10 or soil_temperature_c > 45:
+            cap = min(cap, 40)
+            penalty += 30
+            warnings.append("Recheck soil temperature. A crop bed reading should normally be between 10C and 45C.")
+        elif soil_temperature_c < 18 or soil_temperature_c > 38:
+            cap = min(cap, 60)
+            penalty += 12
+            warnings.append("Soil temperature is stressful and lowers planting suitability.")
+
+    return {"cap": cap, "penalty": penalty, "warnings": warnings}
 
 
 def build_smart_recommendation(crop_type: str, soil_type: str | None, weather: dict) -> dict:
@@ -155,94 +450,96 @@ def build_soil_crop_recommendation(
     humidity = live_weather.get("humidity") if live_weather else None
     rain_probability = live_weather.get("rain_probability") if live_weather else None
     precipitation = live_weather.get("precipitation_mm") if live_weather else None
+    guardrail = _soil_input_guardrail(ph_level, moisture_percent, soil_temperature_c)
 
     candidates = CROP_RECOMMENDATION_TEMPLATES
 
     scored = []
     for candidate in candidates:
         score = candidate["base"]
-        crop = candidate["crop"].lower()
+        crop = _normalize_crop_name(candidate["crop"])
 
         if "clay" in soil:
-            score += 12 if crop in {"rice", "gabi / taro", "eggplant"} else -4
+            score += 12 if crop in CLAY_FRIENDLY else -4
         if "sandy" in soil:
-            score += 12 if crop in {"corn", "cassava", "mung bean", "sweet potato"} else -5
+            score += 12 if crop in SANDY_FRIENDLY else -5
         if "loam" in soil:
-            score += 10 if crop in {"corn", "tomato", "eggplant", "pechay"} else 4
+            score += 10 if crop in LOAM_FRIENDLY else 4
         if "alluvial" in soil:
-            score += 12 if crop in {"rice", "corn", "pechay"} else 5
+            score += 12 if crop in ALLUVIAL_FRIENDLY else 5
 
         if ph_level is not None:
             if 6.0 <= ph_level <= 7.0:
-                score += 9 if crop in {"tomato", "eggplant", "pechay", "corn"} else 4
+                score += 9 if crop in NEUTRAL_PH_FRIENDLY else 4
             elif ph_level < 5.6:
-                score += 8 if crop in {"rice", "cassava", "sweet potato"} else -8
+                score += 8 if crop in ACID_TOLERANT else -10
             elif ph_level > 7.5:
-                score -= 7 if crop in {"tomato", "pechay"} else 2
+                score += -8 if crop in ALKALINE_SENSITIVE else 2
 
         if moisture_percent is not None:
             if moisture_percent >= 65:
-                score += 12 if crop in {"rice", "gabi / taro"} else -6
+                score += 12 if crop in HIGH_MOISTURE_FRIENDLY else -6
             elif moisture_percent <= 35:
-                score += 10 if crop in {"cassava", "mung bean", "sweet potato", "corn"} else -5
+                score += 10 if crop in LOW_MOISTURE_FRIENDLY else -5
             else:
-                score += 8 if crop in {"corn", "tomato", "eggplant", "pechay"} else 3
+                score += 8 if crop in MODERATE_MOISTURE_FRIENDLY else 3
 
         if soil_temperature_c is not None:
             if soil_temperature_c >= 30:
-                score += 8 if crop in {"corn", "eggplant", "cassava", "mung bean", "sweet potato"} else 0
-                score -= 5 if crop in {"pechay", "tomato"} else 0
+                score += 8 if crop in WARM_SOIL_FRIENDLY else 0
+                score -= 5 if crop in COOL_SOIL_FRIENDLY else 0
             elif 22 <= soil_temperature_c <= 29:
-                score += 7 if crop in {"tomato", "corn", "eggplant", "pechay"} else 3
+                score += 7 if crop in (NEUTRAL_PH_FRIENDLY | MODERATE_MOISTURE_FRIENDLY) else 3
             elif soil_temperature_c < 22:
-                score += 5 if crop in {"pechay", "tomato"} else -2
+                score += 5 if crop in COOL_SOIL_FRIENDLY else -4
 
         if "poor" in drainage_value or "water" in drainage_value:
-            score += 13 if crop in {"rice", "gabi / taro"} else -8
+            score += 13 if crop in HIGH_MOISTURE_FRIENDLY else -8
         elif "good" in drainage_value:
-            score += 9 if crop in {"corn", "tomato", "eggplant", "mung bean", "sweet potato"} else 1
+            score += 9 if crop in (LOW_MOISTURE_FRIENDLY | MODERATE_MOISTURE_FRIENDLY) else 1
 
         if "partial" in sunlight_value:
-            score += 6 if crop in {"pechay", "gabi / taro"} else -3
+            score += 6 if crop in PARTIAL_SHADE_FRIENDLY else -3
         elif "full" in sunlight_value:
-            score += 6 if crop in {"corn", "tomato", "eggplant", "cassava", "mung bean"} else 2
+            score += 6 if crop in FULL_SUN_FRIENDLY else 2
 
         if "rain" in season_value or "wet" in season_value:
-            score += 8 if crop in {"rice", "gabi / taro"} else -2
+            score += 8 if crop in WET_SEASON_FRIENDLY else -2
         elif "dry" in season_value:
-            score += 8 if crop in {"corn", "cassava", "mung bean", "sweet potato"} else -3
+            score += 8 if crop in DRY_SEASON_FRIENDLY else -3
 
         if nitrogen == "low":
             score += 7 if crop == "mung bean" else -2
         if phosphorus == "low":
-            score -= 3 if crop in {"tomato", "corn", "sweet potato"} else 0
+            score -= 3 if crop in {"tomato", "corn", "sweet potato", "onion", "potato"} else 0
         if potassium == "low":
-            score -= 4 if crop in {"tomato", "cassava", "sweet potato"} else 0
+            score -= 4 if crop in {"tomato", "cassava", "sweet potato", "banana", "coconut", "pineapple", "potato"} else 0
 
         if live_weather:
             if rain_probability is not None and rain_probability >= 0.55:
-                score += 10 if crop in {"rice", "gabi / taro"} else -2
+                score += 10 if crop in WET_SEASON_FRIENDLY else -2
                 score -= 6 if crop == "tomato" else 0
             elif rain_probability is not None and rain_probability <= 0.25 and moisture_percent is not None and moisture_percent <= 40:
-                score += 8 if crop in {"corn", "cassava", "mung bean", "sweet potato"} else 0
-                score -= 5 if crop in {"rice", "gabi / taro"} else 0
+                score += 8 if crop in LOW_MOISTURE_FRIENDLY else 0
+                score -= 5 if crop in HIGH_MOISTURE_FRIENDLY else 0
 
             if precipitation is not None and precipitation >= 1:
-                score += 6 if crop in {"rice", "gabi / taro"} else 0
+                score += 6 if crop in HIGH_MOISTURE_FRIENDLY else 0
                 score -= 4 if crop in {"tomato", "pechay"} else 0
 
             if temperature is not None:
                 if temperature >= 32:
-                    score += 6 if crop in {"corn", "eggplant", "cassava", "mung bean", "sweet potato"} else 0
+                    score += 6 if crop in WARM_SOIL_FRIENDLY else 0
                     score -= 4 if crop in {"pechay", "tomato"} else 0
                 elif 24 <= temperature <= 30:
-                    score += 5 if crop in {"tomato", "pechay", "corn"} else 0
+                    score += 5 if crop in {"tomato", "pechay", "corn", "eggplant", "banana", "coconut"} else 0
 
             if humidity is not None and humidity >= 82:
-                score += 4 if crop in {"rice", "gabi / taro"} else 0
+                score += 4 if crop in WET_SEASON_FRIENDLY else 0
                 score -= 6 if crop == "tomato" else 0
 
-        scored.append({**candidate, "suitability": max(45, min(98, round(score)))})
+        final_score = max(20, min(guardrail["cap"], round(score - guardrail["penalty"])))
+        scored.append({**candidate, "suitability": final_score, "suitability_cap": guardrail["cap"]})
 
     model_prediction = predict_manual_crop_recommendations(
         soil_type=soil_type,
@@ -269,6 +566,8 @@ def build_soil_crop_recommendation(
     recommendation_basis = _recommendation_basis(soil_summary, live_weather, resolved_location_label)
     if model_prediction:
         recommendation_basis.insert(0, "Ranked by the trained Manual Scan crop model, with agronomy rules used as guardrails.")
+    if guardrail["warnings"]:
+        recommendation_basis.insert(0, "Suitability was capped because one or more soil readings are outside normal planting ranges.")
 
     return {
         "generated_on": date.today().isoformat(),
@@ -281,7 +580,19 @@ def build_soil_crop_recommendation(
         "confidence": round(best["suitability"] / 100, 2),
         "soil_summary": soil_summary,
         "recommendations": recommendations,
-        "soil_actions": _soil_actions(ph_level, moisture_percent, soil_temperature_c, nitrogen, phosphorus, potassium, drainage_value, live_weather),
+        "soil_warnings": guardrail["warnings"],
+        "scan_valid": not guardrail["warnings"],
+        "soil_actions": _soil_actions(
+            ph_level,
+            moisture_percent,
+            soil_temperature_c,
+            nitrogen,
+            phosphorus,
+            potassium,
+            drainage_value,
+            live_weather,
+            guardrail["warnings"],
+        ),
         "location": {
             "label": resolved_location_label,
             "latitude": latitude,
@@ -302,21 +613,32 @@ def build_soil_crop_recommendation(
 
 
 def _blend_model_recommendations(model_prediction: dict, scored: list[dict]) -> list[dict]:
-    scored_by_crop = {item["crop"].lower(): item for item in scored}
+    scored_by_crop = {_normalize_crop_name(item["crop"]): item for item in scored}
     ranked: list[dict] = []
     seen: set[str] = set()
 
     for prediction in model_prediction.get("predictions", []):
         crop_name = str(prediction.get("crop", ""))
-        crop_key = crop_name.lower()
-        rule_item = scored_by_crop.get(crop_key) or _generic_crop_template(crop_name)
+        canonical_crop = _canonical_supported_crop_name(crop_name)
+        if canonical_crop is None:
+            continue
+        crop_key = _normalize_crop_name(canonical_crop)
+        if crop_key in seen:
+            continue
+        rule_item = scored_by_crop.get(crop_key)
+        if rule_item is None:
+            continue
 
         probability = float(prediction.get("probability") or 0)
+        if probability <= 0.001:
+            continue
         model_score = 60 + (probability * 38)
-        suitability = max(45, min(98, round((model_score * 0.68) + (rule_item["suitability"] * 0.32))))
+        suitability_cap = int(rule_item.get("suitability_cap", 98))
+        suitability = max(20, min(suitability_cap, round((model_score * 0.68) + (rule_item["suitability"] * 0.32))))
         ranked.append(
             {
                 **rule_item,
+                "crop": canonical_crop,
                 "suitability": suitability,
                 "model_confidence": round(probability, 2),
                 "rule_suitability": rule_item["suitability"],
@@ -325,7 +647,7 @@ def _blend_model_recommendations(model_prediction: dict, scored: list[dict]) -> 
         seen.add(crop_key)
 
     for rule_item in sorted(scored, key=lambda item: item["suitability"], reverse=True):
-        crop_key = rule_item["crop"].lower()
+        crop_key = _normalize_crop_name(rule_item["crop"])
         if crop_key not in seen:
             ranked.append({**rule_item, "model_confidence": 0, "rule_suitability": rule_item["suitability"]})
             seen.add(crop_key)
@@ -357,21 +679,31 @@ def _soil_summary(
 ) -> str:
     details = [f"{soil_type} soil"]
     if ph_level is not None:
-        if ph_level < 5.6:
+        if ph_level < 3.5:
+            details.append("extremely acidic pH")
+        elif ph_level < 5.6:
             details.append("acidic pH")
         elif ph_level <= 7.2:
             details.append("near-neutral pH")
+        elif ph_level > 9.5:
+            details.append("extremely alkaline pH")
         else:
             details.append("alkaline pH")
     if moisture_percent is not None:
-        if moisture_percent >= 65:
+        if moisture_percent < 5:
+            details.append("near-dry moisture")
+        elif moisture_percent >= 65:
             details.append("high moisture")
         elif moisture_percent <= 35:
             details.append("low moisture")
         else:
             details.append("moderate moisture")
     if soil_temperature_c is not None:
-        if soil_temperature_c >= 30:
+        if soil_temperature_c < 10:
+            details.append("very cold soil")
+        elif soil_temperature_c > 45:
+            details.append("very hot soil")
+        elif soil_temperature_c >= 30:
             details.append("warm soil")
         elif soil_temperature_c < 22:
             details.append("cool soil")
@@ -390,8 +722,11 @@ def _soil_actions(
     potassium: str,
     drainage: str,
     weather: dict | None = None,
+    guardrail_warnings: list[str] | None = None,
 ) -> list[str]:
     actions: list[str] = []
+    if guardrail_warnings:
+        actions.extend(guardrail_warnings)
     if ph_level is not None and ph_level < 5.6:
         actions.append("Consider liming before planting pH-sensitive vegetables.")
     if ph_level is not None and ph_level > 7.5:

@@ -24,6 +24,13 @@ const TRANSPORT_IMAGE_TARGET_BYTES = 900 * 1024;
 const TRANSPORT_IMAGE_MAX_DIMENSION = 1600;
 const INVALID_CROP_IMAGE_MESSAGE =
   'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
+class CropTypeMismatchError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'CropTypeMismatchError';
+  }
+}
+
 const supportedCropFocus = [
   { key: 'rice', name: 'Rice', aliases: ['palay'] },
   { key: 'corn', name: 'Corn', aliases: ['maize', 'mais'] },
@@ -40,6 +47,8 @@ const supportedCropFocus = [
   { key: 'calamansi', name: 'Calamansi', aliases: ['kalamansi'] },
   { key: 'onion', name: 'Onion', aliases: ['sibuyas'] },
   { key: 'cabbage', name: 'Cabbage', aliases: ['repolyo'] },
+  { key: 'pechay', name: 'Pechay', aliases: ['bok choy', 'bokchoi', 'pak choi', 'pakchoy'] },
+  { key: 'gabi_taro', name: 'Gabi / Taro', aliases: ['gabi', 'taro', 'gabi taro'] },
   { key: 'bitter_gourd', name: 'Bitter Gourd', aliases: ['ampalaya'] },
   { key: 'pepper', name: 'Pepper', aliases: ['sili', 'chili', 'chilli', 'bell pepper'] },
   { key: 'potato', name: 'Potato', aliases: ['patatas'] },
@@ -216,6 +225,11 @@ const offlineDiseaseGuide = {
     disease_name: 'Corn stalk rot symptoms',
     cause: 'The image shows browning, decay, or lesions on corn stalk tissue instead of a leaf-only disease pattern.',
     treatment: 'Remove heavily affected stalks after harvest, improve field drainage and residue management, avoid plant stress where practical, and confirm the stalk rot cause with a local agriculture officer.',
+  },
+  corn_ear_pest_damage: {
+    disease_name: 'Corn earworm or borer damage',
+    cause: 'The photo shows damaged corn kernels or husk tissue, which is more consistent with ear-feeding pest damage than a banana fruit disease.',
+    treatment: 'Inspect nearby ears for larvae and frass, remove badly damaged ears, improve field sanitation, and follow local corn IPM thresholds before using any pesticide.',
   },
   tomato_early_blight: {
     disease_name: 'Tomato early blight',
@@ -462,6 +476,22 @@ const correctionConditionsByCrop = {
     'Cabbage Alternaria leaf spot',
     'Cabbage diamondback moth damage',
   ],
+  pechay: [
+    'Healthy crop',
+    'Pechay downy mildew',
+    'Pechay bacterial soft rot',
+    'Pechay leaf spot or blight symptoms',
+    'Pechay diamondback moth damage',
+    'Pechay aphid damage',
+  ],
+  gabi_taro: [
+    'Healthy crop',
+    'Gabi / Taro leaf blight',
+    'Gabi / Taro corm rot',
+    'Gabi / Taro mosaic virus',
+    'Gabi / Taro leaf spot or blight symptoms',
+    'Gabi / Taro pest damage',
+  ],
   bitter_gourd: [
     'Healthy crop',
     'Bitter Gourd powdery mildew',
@@ -522,8 +552,8 @@ const correctionConditionsByCrop = {
 function getCorrectionConditionOptions(cropLabel) {
   const cropKey = normalizeCropKey(cropLabel);
   const options = correctionConditionsByCrop[cropKey];
-  if (options?.length) return options;
-  return ['Healthy crop', 'Leaf spot or blight symptoms', 'Pest or physical leaf damage'];
+  const cropOptions = options?.length ? options : ['Healthy crop', 'Leaf spot or blight symptoms', 'Pest or physical leaf damage'];
+  return ['Not a crop image', ...cropOptions];
 }
 
 function normalizeCrop(value) {
@@ -670,16 +700,9 @@ function inferContextFromFilename(fileName, cropType) {
 }
 
 function looksLikeBananaFruitIssue(features, crop) {
+  if (looksLikeCornEarIssue(features, crop)) return false;
   if (crop && crop !== 'banana') return false;
   if (looksLikeHealthyRicePanicle(features)) return false;
-  const cornEarLike =
-    !crop &&
-    features.bananaFruitRatio >= 0.22 &&
-    features.maxFruitAreaRatio >= 0.12 &&
-    features.greenLeafRatio >= 0.06 &&
-    features.greenLeafRatio < 0.42 &&
-    features.greenComponentCount <= 5;
-  if (cornEarLike) return false;
   if (!crop && features.greenLeafRatio >= 0.45 && features.maxGreenAreaRatio >= 0.28) return false;
   const fruitSignal =
     features.bananaFruitRatio >= 0.1 ||
@@ -690,6 +713,25 @@ function looksLikeBananaFruitIssue(features, crop) {
     (features.lesionRatio >= 0.13 && features.maxAreaRatio >= 0.06 && features.rustRatio >= 0.035);
   const notLeafDominant = features.greenLeafRatio < 0.38 || features.fruitComponentCount >= 2 || features.greenComponentCount >= 8;
   return fruitSignal && decaySignal && notLeafDominant;
+}
+
+function looksLikeCornEarIssue(features, crop) {
+  if (crop && crop !== 'corn' && crop !== 'banana') return false;
+  const kernelSignal = features.bananaFruitRatio >= 0.22 || features.maxFruitAreaRatio >= 0.12;
+  const huskSignal = features.greenLeafRatio >= 0.06 || features.greenComponentCount >= 2;
+  const damageSignal = features.lesionRatio >= 0.1 || features.darkLesionRatio >= 0.045 || features.rustRatio >= 0.03;
+  const cobStructure =
+    features.fruitComponentCount >= 3 &&
+    features.maxFruitAreaRatio >= 0.08 &&
+    features.maxFruitAreaRatio < 0.34 &&
+    features.centerFruitRatio >= 0.18;
+  const notLeafDominant = features.greenLeafRatio < 0.42 && features.maxGreenAreaRatio < 0.28;
+  const notBananaBunch = !(
+    features.greenComponentCount >= 8 &&
+    features.maxGreenAspect >= 3 &&
+    features.maxFruitAreaRatio < 0.12
+  );
+  return kernelSignal && huskSignal && damageSignal && cobStructure && notLeafDominant && notBananaBunch;
 }
 
 function looksLikeHealthyRicePanicle(features) {
@@ -910,6 +952,75 @@ function hasStrongVisualDiseaseSignal(features, crop = '') {
   );
 }
 
+function hasForegroundLeafDiseaseSignal(features, crop = '') {
+  if (!hasStrongVisualDiseaseSignal(features, crop)) return false;
+
+  const animalLikeCenter =
+    !crop &&
+    features.centerTanRatio >= 0.18 &&
+    features.centerNeutralRatio >= 0.1 &&
+    features.centerGreenRatio < 0.45 &&
+    features.greenEdgeRatio < 0.09 &&
+    features.adjacentNonleafRatio < 0.07;
+  if (animalLikeCenter) return false;
+
+  const centeredSpottedLeaf =
+    features.centerGreenRatio >= 0.07 &&
+    features.centerLesionRatio >= 0.02 &&
+    features.lesionWithinPlant >= 0.035;
+  const broadSpottedLeaf =
+    features.greenLeafRatio >= 0.18 &&
+    features.maxGreenAreaRatio >= 0.08 &&
+    features.lesionRatio >= 0.025 &&
+    features.componentCount >= 3;
+  const largeDiseasedLeaf =
+    features.greenLeafRatio >= 0.30 &&
+    features.maxGreenAreaRatio >= 0.25 &&
+    features.lesionRatio >= 0.035;
+
+  return centeredSpottedLeaf || broadSpottedLeaf || largeDiseasedLeaf;
+}
+
+function isReliableVisualCropInference(features, crop) {
+  if (!crop) return false;
+  if (crop === 'banana') return looksLikeHealthyBananaBunch(features) || looksLikeBananaFruitIssue(features, '');
+  if (crop === 'rice') return looksLikeHealthyRicePanicle(features);
+  if (crop === 'corn') return looksLikeCornEarIssue(features, '');
+  if (crop === 'mango') return looksLikeMangoLeaf(features);
+  if (['cabbage', 'pechay', 'gabi_taro'].includes(crop)) {
+    return (
+      features.greenLeafRatio >= 0.25 &&
+      features.centerGreenRatio >= 0.45 &&
+      features.maxGreenAreaRatio >= 0.25 &&
+      features.centerTanRatio < 0.08 &&
+      features.bananaFruitRatio < 0.08
+    );
+  }
+  if (['tomato', 'pepper', 'potato', 'eggplant'].includes(crop)) {
+    return (
+      features.greenLeafRatio >= 0.18 &&
+      features.componentCount >= 5 &&
+      features.lesionRatio >= 0.025 &&
+      features.bananaFruitRatio < 0.12
+    );
+  }
+  return false;
+}
+
+function validateSelectedCropAgainstImage(features, selectedCrop) {
+  const selectedCropKey = normalizeCropKey(selectedCrop);
+  if (!selectedCropKey) return;
+
+  const visualCropKey = inferOfflineCrop(features, '');
+  if (!visualCropKey || visualCropKey === selectedCropKey || !isReliableVisualCropInference(features, visualCropKey)) return;
+
+  const selectedLabel = cropDisplayName(selectedCropKey);
+  const visualLabel = cropDisplayName(visualCropKey);
+  throw new CropTypeMismatchError(
+    `Selected crop is ${selectedLabel}, but the uploaded image looks like ${visualLabel}. Choose ${visualLabel} or use Auto detect crop.`,
+  );
+}
+
 function looksLikeMangoLeaf(features) {
   const broadLanceolateLeaf =
     features.greenLeafRatio >= 0.32 &&
@@ -930,9 +1041,25 @@ function pickOfflineDiseaseKey(crop, features) {
     return 'healthy';
   }
 
+  if (looksLikeCornEarIssue(features, crop)) {
+    return 'corn_ear_pest_damage';
+  }
+
   if (looksLikeBananaFruitIssue(features, crop)) {
     return features.greenComponentCount >= 8 ? 'banana_crown_rot' : 'banana_fruit_rot';
   }
+
+  const healthyLeaf = features.greenLeafRatio >= 0.26 && features.lesionWithinPlant < 0.035 && features.lesionRatio < 0.025 && features.contrast < 72;
+  const healthyLeafyVegetable =
+    ['pechay', 'cabbage', 'gabi_taro'].includes(crop) &&
+    features.greenLeafRatio >= 0.25 &&
+    features.centerGreenRatio >= 0.45 &&
+    features.lesionWithinPlant < 0.035 &&
+    features.lesionRatio < 0.025 &&
+    features.centerTanRatio < 0.08 &&
+    (features.centerNeutralRatio < 0.12 || (crop === 'cabbage' && features.centerNeutralRatio <= 0.34)) &&
+    features.contrast < 78;
+  if (healthyLeaf || healthyLeafyVegetable) return offlineDiseaseGuide[healthyKeyForCrop(crop)] ? healthyKeyForCrop(crop) : 'healthy';
 
   const structuralDamage =
     features.greenLeafRatio >= 0.14 &&
@@ -952,8 +1079,6 @@ function pickOfflineDiseaseKey(crop, features) {
     return 'pest_leaf_damage';
   }
 
-  const healthyLeaf = features.greenLeafRatio >= 0.26 && features.lesionWithinPlant < 0.035 && features.lesionRatio < 0.025 && features.contrast < 72;
-  if (healthyLeaf) return offlineDiseaseGuide[healthyKeyForCrop(crop)] ? healthyKeyForCrop(crop) : 'healthy';
   if (!hasStrongVisualDiseaseSignal(features, crop)) return 'review_needed';
 
   const elongated = features.maxAspect >= 1.8 && features.maxAreaRatio >= 0.006;
@@ -1029,6 +1154,9 @@ function hasCropSubjectInForeground(features, crop) {
 
 function shouldRejectNonCropForeground(features, crop) {
   const hasForegroundCrop = hasCropSubjectInForeground(features, crop);
+  if (hasForegroundLeafDiseaseSignal(features, crop)) {
+    return false;
+  }
   const syntheticGreenBackground =
     features.chromaGreenRatio >= 0.35 &&
     features.centerChromaGreenRatio >= 0.22 &&
@@ -1060,6 +1188,18 @@ function shouldRejectNonCropForeground(features, crop) {
     features.centerNeutralRatio >= 0.16 &&
     features.centerFruitRatio < 0.14 &&
     features.centerNaturalGreenRatio / Math.max(features.naturalGreenRatio, 0.001) < 0.35;
+  const animalOnLawnSubject =
+    features.greenLeafRatio >= 0.45 &&
+    features.maxGreenAreaRatio >= 0.45 &&
+    features.greenComponentCount <= 2 &&
+    features.greenEdgeRatio < 0.1 &&
+    features.adjacentNonleafRatio < 0.07 &&
+    features.centerGreenRatio < 0.45 &&
+    features.centerTanRatio >= 0.18 &&
+    features.centerNeutralRatio >= 0.1 &&
+    features.centerFruitRatio < 0.2 &&
+    features.bananaFruitRatio < 0.14 &&
+    features.fruitComponentCount <= 4;
   const centeredAnimalOrPerson =
     !crop &&
     features.greenLeafRatio >= 0.2 &&
@@ -1077,7 +1217,8 @@ function shouldRejectNonCropForeground(features, crop) {
     features.greenComponentCount <= 2 &&
     features.greenEdgeRatio < 0.08 &&
     features.adjacentNonleafRatio < 0.08 &&
-    features.centerFruitRatio < 0.18;
+    features.centerFruitRatio < 0.18 &&
+    !hasForegroundCrop;
 
   return (
     syntheticGreenBackground ||
@@ -1086,6 +1227,7 @@ function shouldRejectNonCropForeground(features, crop) {
     centeredNeutralObject ||
     centeredFurLikeObject ||
     animalOnGreenBackground ||
+    animalOnLawnSubject ||
     centeredAnimalOrPerson ||
     flatGreenBackground
   );
@@ -1098,6 +1240,8 @@ function inferOfflineCrop(features, fileName = '') {
 
   if (looksLikeHealthyRicePanicle(features)) return 'rice';
   if (looksLikeHealthyBananaBunch(features)) return 'banana';
+
+  if (looksLikeCornEarIssue(features, '')) return 'corn';
 
   const bananaFruitLike =
     (features.bananaFruitRatio >= 0.18 &&
@@ -1113,6 +1257,29 @@ function inferOfflineCrop(features, fileName = '') {
   if (broadSpottedLeaf) return 'tomato';
   if (manySmallSpots && features.greenLeafRatio < 0.55) return 'tomato';
   if (features.greenLeafRatio < 0.18 && features.lesionRatio >= 0.05) return 'rice';
+
+  const cabbageHeadLike =
+    features.greenLeafRatio >= 0.45 &&
+    features.centerGreenRatio >= 0.55 &&
+    features.maxGreenAreaRatio >= 0.42 &&
+    features.lesionRatio < 0.025 &&
+    features.bananaFruitRatio < 0.05 &&
+    features.centerTanRatio < 0.08 &&
+    features.centerNeutralRatio >= 0.08 &&
+    features.centerNeutralRatio <= 0.34 &&
+    features.maxGreenAspect < 3.2;
+  if (cabbageHeadLike) return 'cabbage';
+
+  const denseLeafyVegetable =
+    features.greenLeafRatio >= 0.25 &&
+    features.centerGreenRatio >= 0.55 &&
+    features.maxGreenAreaRatio >= 0.25 &&
+    features.lesionRatio < 0.025 &&
+    features.bananaFruitRatio < 0.05 &&
+    features.centerTanRatio < 0.08 &&
+    features.centerNeutralRatio < 0.08 &&
+    features.maxGreenAspect < 1.8;
+  if (denseLeafyVegetable) return 'pechay';
 
   const grassLikeLeaf = features.maxGreenAspect >= 2.3 || (features.greenComponentCount >= 3 && features.maxGreenAspect >= 1.9 && features.maxGreenAreaRatio < 0.18);
 
@@ -1194,6 +1361,180 @@ async function prepareImageForUpload(file) {
   return file;
 }
 
+function plantSubjectMaskFromPixels(pixels, size) {
+  const mask = new Uint8Array(size * size);
+  for (let index = 0; index < size * size; index += 1) {
+    const offset = index * 4;
+    const red = pixels[offset] / 255;
+    const green = pixels[offset + 1] / 255;
+    const blue = pixels[offset + 2] / 255;
+    const maxChannel = Math.max(red, green, blue);
+    const minChannel = Math.min(red, green, blue);
+    const saturation = maxChannel - minChannel;
+    const greenLeaf = green > red * 1.05 && green > blue * 1.05 && green > 0.15 && saturation > 0.08;
+    const brownOrDark =
+      red > 0.2 &&
+      green > 0.08 &&
+      blue < 0.42 &&
+      red >= green * 0.82 &&
+      green > blue * 1.02 &&
+      saturation > 0.07 &&
+      maxChannel < 0.86;
+    const yellowOrKernel =
+      red > 0.36 &&
+      green > 0.3 &&
+      blue < 0.58 &&
+      red > blue * 1.08 &&
+      green > blue * 1.05 &&
+      red < green * 1.65 &&
+      green < red * 1.65 &&
+      saturation > 0.045;
+    const tanStemOrHusk =
+      red > 0.34 &&
+      green > 0.22 &&
+      blue > 0.1 &&
+      red > green * 0.92 &&
+      green > blue * 1.02 &&
+      saturation > 0.07 &&
+      maxChannel < 0.92;
+    if (greenLeaf || brownOrDark || yellowOrKernel || tanStemOrHusk) {
+      mask[index] = 1;
+    }
+  }
+  return mask;
+}
+
+function dilateMask(mask, size, iterations = 1) {
+  let current = mask;
+  const offsets = [-1, 1, -size, size, -size - 1, -size + 1, size - 1, size + 1];
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    const nextMask = new Uint8Array(current);
+    for (let index = 0; index < current.length; index += 1) {
+      if (!current[index]) continue;
+      const x = index % size;
+      for (const offset of offsets) {
+        const next = index + offset;
+        if (next < 0 || next >= current.length) continue;
+        const nx = next % size;
+        if (Math.abs(nx - x) > 1) continue;
+        nextMask[next] = 1;
+      }
+    }
+    current = nextMask;
+  }
+  return current;
+}
+
+function selectMainSubjectMask(mask, size) {
+  const selected = new Uint8Array(size * size);
+  const visited = new Uint8Array(size * size);
+  const stack = [];
+  let largest = null;
+  const minArea = Math.max(18, Math.round(size * size * 0.002));
+  const centerLeft = size * 0.18;
+  const centerRight = size * 0.82;
+  const centerTop = size * 0.18;
+  const centerBottom = size * 0.82;
+
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || visited[start]) continue;
+    const pixels = [];
+    let minX = size;
+    let maxX = 0;
+    let minY = size;
+    let maxY = 0;
+    stack.push(start);
+    visited[start] = 1;
+    while (stack.length) {
+      const current = stack.pop();
+      pixels.push(current);
+      const x = current % size;
+      const y = Math.floor(current / size);
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+      const neighbors = [current - 1, current + 1, current - size, current + size];
+      for (const next of neighbors) {
+        if (next < 0 || next >= mask.length || visited[next] || !mask[next]) continue;
+        const nx = next % size;
+        if (Math.abs(nx - x) > 1) continue;
+        visited[next] = 1;
+        stack.push(next);
+      }
+    }
+    const area = pixels.length;
+    if (!largest || area > largest.area) largest = { area, pixels };
+    if (area < minArea) continue;
+    const overlapsCenter = minX < centerRight && maxX > centerLeft && minY < centerBottom && maxY > centerTop;
+    const largeComponent = area >= size * size * 0.015;
+    if (overlapsCenter || largeComponent) {
+      for (const pixelIndex of pixels) selected[pixelIndex] = 1;
+    }
+  }
+
+  if (!selected.some(Boolean) && largest) {
+    for (const pixelIndex of largest.pixels) selected[pixelIndex] = 1;
+  }
+  return dilateMask(selected, size, 2);
+}
+
+function subjectFocusedPixels(image, size) {
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = size;
+  sourceCanvas.height = size;
+  const sourceContext = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  sourceContext.drawImage(image, 0, 0, size, size);
+  const imageData = sourceContext.getImageData(0, 0, size, size);
+  const pixels = imageData.data;
+  const mask = plantSubjectMaskFromPixels(pixels, size);
+  const maskRatio = mask.reduce((sum, value) => sum + value, 0) / mask.length;
+  if (maskRatio < 0.025) return pixels;
+
+  const selected = selectMainSubjectMask(mask, size);
+  if (!selected.some(Boolean)) return pixels;
+
+  let minX = size;
+  let maxX = 0;
+  let minY = size;
+  let maxY = 0;
+  for (let index = 0; index < selected.length; index += 1) {
+    if (!selected[index]) {
+      const offset = index * 4;
+      pixels[offset] = 244;
+      pixels[offset + 1] = 245;
+      pixels[offset + 2] = 240;
+      continue;
+    }
+    const x = index % size;
+    const y = Math.floor(index / size);
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+
+  const subjectWidth = maxX - minX + 1;
+  const subjectHeight = maxY - minY + 1;
+  if (subjectWidth < size * 0.18 || subjectHeight < size * 0.18) return pixels;
+
+  const padding = Math.max(4, Math.round(Math.max(subjectWidth, subjectHeight) * 0.14));
+  const left = Math.max(0, minX - padding);
+  const top = Math.max(0, minY - padding);
+  const right = Math.min(size, maxX + padding + 1);
+  const bottom = Math.min(size, maxY + padding + 1);
+  sourceContext.putImageData(imageData, 0, 0);
+
+  const focusedCanvas = document.createElement('canvas');
+  focusedCanvas.width = size;
+  focusedCanvas.height = size;
+  const focusedContext = focusedCanvas.getContext('2d', { willReadFrequently: true });
+  focusedContext.fillStyle = '#f4f5f0';
+  focusedContext.fillRect(0, 0, size, size);
+  focusedContext.drawImage(sourceCanvas, left, top, right - left, bottom - top, 0, 0, size, size);
+  return focusedContext.getImageData(0, 0, size, size).data;
+}
+
 async function analyzeImageOffline(file, cropType) {
   const crop = normalizeCropKey(cropType);
   if (hasNonCropFilenameContext(file.name)) {
@@ -1201,13 +1542,8 @@ async function analyzeImageOffline(file, cropType) {
   }
 
   const image = await loadImageElement(file);
-  const canvas = document.createElement('canvas');
   const size = 160;
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  context.drawImage(image, 0, 0, size, size);
-  const pixels = context.getImageData(0, 0, size, size).data;
+  const pixels = subjectFocusedPixels(image, size);
 
   let greenLeaf = 0;
   let lesion = 0;
@@ -1491,16 +1827,19 @@ async function analyzeImageOffline(file, cropType) {
     contrast: Math.sqrt(Math.max(variance, 0)) * 255,
   };
 
+  validateSelectedCropAgainstImage(features, crop);
+
   if (shouldRejectNonCropForeground(features, crop)) {
     throw new Error(INVALID_CROP_IMAGE_MESSAGE);
   }
 
   const filenameContext = inferContextFromFilename(file.name, crop);
   const contextCrop = crop || filenameContext.crop;
+  const cornEarIssue = looksLikeCornEarIssue(features, contextCrop);
   const healthyRicePanicle = (!contextCrop || contextCrop === 'rice') && looksLikeHealthyRicePanicle(features);
-  const healthyBananaBunch = (!contextCrop || contextCrop === 'banana') && looksLikeHealthyBananaBunch(features);
+  const healthyBananaBunch = (!contextCrop || contextCrop === 'banana') && !cornEarIssue && looksLikeHealthyBananaBunch(features);
   const strongDiseaseSignal = hasStrongVisualDiseaseSignal(features, contextCrop);
-  let analysisCrop = healthyRicePanicle ? 'rice' : healthyBananaBunch ? 'banana' : contextCrop || inferOfflineCrop(features, file.name);
+  let analysisCrop = cornEarIssue ? 'corn' : healthyRicePanicle ? 'rice' : healthyBananaBunch ? 'banana' : contextCrop || inferOfflineCrop(features, file.name);
   let key = pickOfflineDiseaseKey(analysisCrop, features);
   if (healthyRicePanicle || healthyBananaBunch) {
     key = 'healthy';
@@ -1510,7 +1849,7 @@ async function analyzeImageOffline(file, cropType) {
   const featureInferredOnly = !contextCrop && Boolean(analysisCrop);
   const keyCrop = Object.keys(cropDisplayNamesByKey).find((cropKey) => key.startsWith(`${cropKey}_`));
   const cropSpecificDisease = Boolean(keyCrop && !key.endsWith('_healthy'));
-  if (featureInferredOnly && cropSpecificDisease) {
+  if (featureInferredOnly && cropSpecificDisease && key !== 'corn_ear_pest_damage') {
     key = 'leaf_spot_or_blight';
   }
   const guide = offlineDiseaseGuide[key] || offlineDiseaseGuide.healthy;
@@ -1579,6 +1918,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackError, setFeedbackError] = useState('');
   const feedbackConditionOptions = getCorrectionConditionOptions(feedbackCrop || cropLabel);
+  const isNotCropCorrection = feedbackCondition === 'Not a crop image';
 
   useEffect(() => {
     const currentCrop = cropLabel && cropLabel !== 'General crop leaf' && cropLabel !== '--' ? cropLabel : '';
@@ -1600,13 +1940,13 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
 
   async function submitFeedback(event) {
     event.preventDefault();
-    if (!canGiveFeedback || !feedbackCrop || !feedbackCondition) return;
+    if (!canGiveFeedback || (!feedbackCrop && !isNotCropCorrection) || !feedbackCondition) return;
     setFeedbackSubmitting(true);
     setFeedbackMessage('');
     setFeedbackError('');
     try {
       const response = await api.post(`/scans/${result.id}/feedback`, {
-        corrected_crop_label: feedbackCrop,
+        corrected_crop_label: feedbackCrop || 'General crop',
         corrected_condition: feedbackCondition,
         user_note: feedbackNote || null,
       });
@@ -1620,7 +1960,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           cause: feedback.applied_cause || result.cause,
           treatment: feedback.applied_treatment || result.treatment,
           analysis_mode: feedback.applied_analysis_mode || result.analysis_mode,
-          status: 'corrected',
+          status: isNotCropCorrection ? 'rejected' : 'corrected',
         };
         onFeedbackApplied?.(updatedResult);
         setFeedbackMessage('Verified and learned. Similar future scans will use this correction.');
@@ -1727,10 +2067,11 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                         <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Correct crop</span>
                         <select
                           className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
+                          disabled={isNotCropCorrection}
                           value={feedbackCrop}
                           onChange={(event) => setFeedbackCrop(event.target.value)}
                         >
-                          <option value="">Select crop</option>
+                          <option value="">{isNotCropCorrection ? 'Not applicable' : 'Select crop'}</option>
                           {quickCropOptions.map((crop) => (
                             <option key={crop} value={crop}>
                               {crop}
@@ -1764,7 +2105,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                       </label>
                       <button
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-leaf-700 px-4 text-sm font-bold text-white transition hover:bg-leaf-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:w-fit"
-                        disabled={!feedbackCrop || !feedbackCondition || feedbackSubmitting}
+                        disabled={(!feedbackCrop && !isNotCropCorrection) || !feedbackCondition || feedbackSubmitting}
                         type="submit"
                       >
                         {feedbackSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -1836,6 +2177,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
 }
 
 function HistoryList({ history, onSelect, t }) {
+  const visibleHistory = history.filter((scan) => scan?.status !== 'rejected' && scan?.disease_name !== 'Invalid crop or leaf image');
   return (
     <section>
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1844,12 +2186,12 @@ function HistoryList({ history, onSelect, t }) {
           <p className="text-sm text-stone-500">{t('savedDiseaseDetections')}</p>
         </div>
         <span className="w-fit rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-700">
-          {history.length} {t('total')}
+          {visibleHistory.length} {t('total')}
         </span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {history.slice(0, 6).map((scan) => (
+        {visibleHistory.slice(0, 6).map((scan) => (
           <button
             key={scan.local_id}
             className="surface rounded-lg p-4 text-left transition hover:border-leaf-200 hover:bg-leaf-50"
@@ -1869,7 +2211,7 @@ function HistoryList({ history, onSelect, t }) {
           </button>
         ))}
 
-        {history.length === 0 && (
+        {visibleHistory.length === 0 && (
           <div className="surface rounded-lg border-dashed p-6 text-center md:col-span-2">
             <ClipboardList className="mx-auto h-8 w-8 text-stone-400" />
             <p className="mt-3 text-sm font-semibold text-stone-500">{t('noDiseaseDetections')}</p>
@@ -2090,19 +2432,28 @@ export default function PlantDiseaseDetector() {
     setError('');
     setResult(null);
 
-    let preflightOfflineResult;
+    let preflightOfflineResult = null;
+    let preflightValidationError = null;
     try {
       preflightOfflineResult = await analyzeImageOffline(imageFile, selectedCrop);
     } catch (validationError) {
-      setResult(null);
-      setError(validationError?.message || INVALID_CROP_IMAGE_MESSAGE);
-      setLoading(false);
-      return;
+      if (validationError?.name === 'CropTypeMismatchError') {
+        setResult(null);
+        setError(validationError.message);
+        setLoading(false);
+        return;
+      }
+      preflightValidationError = validationError;
     }
 
     try {
       const backendReady = await detectOnlineMode();
       const useOfflineAnalysis = !window.navigator.onLine || !backendReady;
+      if (useOfflineAnalysis && preflightValidationError) {
+        setResult(null);
+        setError(preflightValidationError?.message || INVALID_CROP_IMAGE_MESSAGE);
+        return;
+      }
       const uploadImageFile = useOfflineAnalysis ? imageFile : await prepareImageForUpload(imageFile);
       const preflightDiseaseName = (preflightOfflineResult?.disease_name || '').toLowerCase();
       const preflightAnalysisMode = (preflightOfflineResult?.analysis_mode || '').toLowerCase();

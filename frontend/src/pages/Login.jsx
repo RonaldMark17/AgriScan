@@ -6,17 +6,35 @@ import LanguageToggle from '../components/shared/LanguageToggle.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getCurrentDeviceName, getFallbackDeviceName } from '../utils/deviceName.js';
 
 export default function Login() {
   const { hasRememberedSession, isAuthenticated, login, restoreRememberedSession, sessionReady } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
-  const [form, setForm] = useState({ email: '', password: '', device_name: 'AgriScan PWA', remember_me: false });
+  const [form, setForm] = useState(() => ({ email: '', password: '', device_name: getFallbackDeviceName(), remember_me: false }));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const returnTo = location.state?.from?.pathname || '/';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveDeviceName() {
+      const deviceName = await getCurrentDeviceName();
+      if (!cancelled) {
+        setForm((current) => ({ ...current, device_name: deviceName }));
+      }
+    }
+
+    resolveDeviceName();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,13 +69,15 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const result = await login(form);
+      const deviceName = await getCurrentDeviceName();
+      const payload = { ...form, device_name: deviceName };
+      const result = await login(payload);
       if (result.status === 'ok') {
         navigate(returnTo, { replace: true });
       } else if (result.status === 'mfa_required') {
-        navigate('/mfa', { state: { mfaToken: result.mfa_token, user: result.user, rememberMe: form.remember_me } });
+        navigate('/mfa', { state: { mfaToken: result.mfa_token, user: result.user, rememberMe: payload.remember_me, deviceName } });
       } else if (result.status === 'mfa_setup_required') {
-        navigate('/mfa/setup', { state: { setupToken: result.setup_token, user: result.user, rememberMe: form.remember_me } });
+        navigate('/mfa/setup', { state: { setupToken: result.setup_token, user: result.user, rememberMe: payload.remember_me, deviceName } });
       }
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Login failed. Please check your credentials.'));

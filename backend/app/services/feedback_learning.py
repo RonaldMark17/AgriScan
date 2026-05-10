@@ -50,6 +50,21 @@ FEATURE_DISTANCE_SCALES = {
 
 LEARNED_MATCH_DISTANCE = 0.18
 LEARNED_CORRECTION_LIMIT = 400
+INVALID_FEEDBACK_TERMS = {
+    "invalid crop image",
+    "invalid crop or leaf image",
+    "not a crop",
+    "not a crop image",
+    "not crop image",
+    "not a plant",
+    "not a plant image",
+    "animal",
+    "non crop",
+    "non crop image",
+    "dog",
+    "cat",
+    "person",
+}
 
 
 def _feature_signature(features: dict[str, float]) -> dict[str, float]:
@@ -75,9 +90,30 @@ def _normalize_condition_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.strip().lower()).strip()
 
 
-def _class_key_from_feedback(crop_label: str, condition: str) -> tuple[str, str]:
+def _mentions_invalid_crop_image(value: str | None) -> bool:
+    normalized = _normalize_condition_text(value or "")
+    if not normalized:
+        return False
+    if normalized in INVALID_FEEDBACK_TERMS:
+        return True
+    tokens = normalized.split()
+    for marker in ("animal", "dog", "cat", "person"):
+        if marker in tokens:
+            return True
+    for index, token in enumerate(tokens):
+        if token != "not":
+            continue
+        window = tokens[index + 1 : index + 4]
+        if any(candidate in {"crop", "plant", "leaf"} for candidate in window):
+            return True
+    return "non crop" in normalized or "not crop" in normalized
+
+
+def _class_key_from_feedback(crop_label: str, condition: str, user_note: str | None = None) -> tuple[str, str]:
     crop_key = detector._normalize_crop_type(crop_label)
     normalized_condition = _normalize_condition_text(condition)
+    if _mentions_invalid_crop_image(condition) or _mentions_invalid_crop_image(user_note):
+        return "invalid_crop_image", "Invalid crop or leaf image"
     if not normalized_condition:
         return "review_needed", "Crop scan needs review"
 
@@ -123,6 +159,15 @@ def _verified_detection(
     metadata = detector._metadata_for_key(corrected_class_key)
     disease_name = corrected_disease_name or metadata["name"]
     cause = metadata["cause"]
+    if corrected_class_key == "invalid_crop_image":
+        return DiseaseDetection(
+            disease_name=disease_name,
+            confidence=0.0,
+            cause=cause,
+            treatment=metadata["treatment"],
+            crop_label=None,
+            analysis_mode="verified non-crop feedback",
+        )
     if disease_name != "Healthy crop":
         cause = f"{cause} This result also matched a verified user correction from a similar scan."
     confidence_from_match = 0.94
@@ -154,6 +199,11 @@ def _verify_feedback(
 
     if original_condition == corrected_condition and original_crop_key == corrected_crop_key:
         return "rejected", "The correction matches the existing scan result, so there is nothing new to learn."
+
+    if corrected_class_key == "invalid_crop_image":
+        if detector._looks_like_non_crop_foreground(features, None):
+            return "verified", "The image matches a non-crop foreground pattern, so it will be rejected in future scans."
+        return "pending", "AgriScan could not prove this is a non-crop image automatically, so an admin should review it before learning."
 
     is_healthy_correction = corrected_disease_name == "Healthy crop" or corrected_class_key.endswith("_healthy")
     if is_healthy_correction:
@@ -232,6 +282,7 @@ async def create_scan_feedback(
     corrected_class_key, corrected_disease_name = _class_key_from_feedback(
         payload.corrected_crop_label,
         payload.corrected_condition,
+        payload.user_note,
     )
     corrected_crop_key = detector._normalize_crop_type(payload.corrected_crop_label)
     corrected_crop_label = detector._display_crop_label(corrected_crop_key) or payload.corrected_crop_label.strip()
@@ -270,7 +321,7 @@ async def create_scan_feedback(
         scan.confidence = applied_detection.confidence
         scan.cause = applied_detection.cause
         scan.treatment = applied_detection.treatment
-        scan.status = "corrected"
+        scan.status = "rejected" if corrected_class_key == "invalid_crop_image" else "corrected"
 
     await db.flush()
     setattr(feedback, "applied_disease_name", applied_detection.disease_name if applied_detection else None)

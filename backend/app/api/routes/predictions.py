@@ -32,9 +32,9 @@ class PredictionRequest(BaseModel):
 
 class SoilScanRequest(BaseModel):
     soil_type: str = Field(min_length=2, max_length=80)
-    ph_level: float | None = Field(default=None, ge=0, le=14)
-    moisture_percent: float | None = Field(default=None, ge=0, le=100)
-    soil_temperature_c: float | None = Field(default=None, ge=-10, le=80)
+    ph_level: float | None = Field(default=None, ge=3.5, le=9.5)
+    moisture_percent: float | None = Field(default=None, ge=5, le=100)
+    soil_temperature_c: float | None = Field(default=None, ge=10, le=45)
     nitrogen_level: str | None = Field(default="medium", pattern="^(low|medium|high)$")
     phosphorus_level: str | None = Field(default="medium", pattern="^(low|medium|high)$")
     potassium_level: str | None = Field(default="medium", pattern="^(low|medium|high)$")

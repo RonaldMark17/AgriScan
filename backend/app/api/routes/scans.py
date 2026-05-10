@@ -30,6 +30,31 @@ NON_ALERT_SCAN_NAMES = {
 }
 
 
+def _resolve_scan_image_path(image_path: str) -> Path:
+    path = Path(image_path)
+    if path.is_absolute() or path.exists():
+        return path
+    return Path(settings.upload_dir) / path.name
+
+
+def _scan_crop_label(scan: Scan) -> str | None:
+    direct_label = detector._crop_label_from_key(scan.disease_name)
+    if direct_label:
+        return direct_label
+    if scan.image_path == "manual-entry":
+        return None
+    if (scan.disease_name or "").strip().lower() not in {"healthy crop", "crop scan needs review", "low-confidence crop image"}:
+        return None
+    image_path = _resolve_scan_image_path(scan.image_path)
+    if not image_path.exists():
+        return None
+    try:
+        features = detector._extract_leaf_features(str(image_path))
+        return detector._display_crop_label(detector._infer_crop_key_from_features(features))
+    except Exception:
+        return None
+
+
 def _scan_alert_details(scan: Scan, crop_label: str | None, crop_type: str | None) -> tuple[str, str, dict] | None:
     disease_name = (scan.disease_name or "").strip()
     if disease_name.lower() in NON_ALERT_SCAN_NAMES or (scan.confidence or 0) < 0.55:
@@ -62,7 +87,7 @@ async def list_scans(current_user: User = Depends(get_current_user), db: AsyncSe
     result = await db.execute(query.limit(200))
     scans = list(result.scalars().all())
     for scan in scans:
-        setattr(scan, "crop_label", detector._crop_label_from_key(scan.disease_name))
+        setattr(scan, "crop_label", _scan_crop_label(scan))
     return scans
 
 
@@ -113,6 +138,11 @@ async def create_scan(
             )
         file_path.write_bytes(content)
 
+    if file_path is not None:
+        crop_mismatch = detector.validate_selected_crop_type(str(file_path), crop_type)
+        if crop_mismatch:
+            file_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=crop_mismatch)
     detection = (
         detector.detect(
             str(file_path),
@@ -131,6 +161,12 @@ async def create_scan(
         )
     if file_path is not None:
         detection = await apply_verified_feedback(db, str(file_path), detection, crop_type)
+        if detection.disease_name == "Invalid crop or leaf image":
+            file_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=detection.cause or "Upload a clear crop or leaf photo for disease analysis.",
+            )
 
     scan = Scan(
         user_id=current_user.id,

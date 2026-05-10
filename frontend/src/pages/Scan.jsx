@@ -61,13 +61,41 @@ const nutrientLevels = [
   ['medium', 'Medium'],
   ['high', 'High'],
 ];
-const categories = ['All Crops', 'Vegetables', 'Grains', 'Fruits', 'Root Crops'];
+const categories = ['All Crops', 'Vegetables', 'Grains', 'Fruits', 'Root Crops', 'Field Crops'];
 const sortModes = ['Suitability', 'Crop Name', 'Planting Window'];
+const soilInputLimits = {
+  ph_level: { min: 3.5, max: 9.5, label: 'pH must be between 3.5 and 9.5.' },
+  moisture_percent: { min: 5, max: 100, label: 'Moisture must be between 5% and 100%.' },
+  soil_temperature_c: { min: 10, max: 45, label: 'Soil temperature must be between 10C and 45C.' },
+};
 
 function parseOptionalNumber(value) {
   if (value === '' || value === null || value === undefined) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function getSoilInputErrors(inputs) {
+  const errors = [];
+  const ph = parseOptionalNumber(inputs?.ph_level);
+  const moisture = parseOptionalNumber(inputs?.moisture_percent);
+  const soilTemperature = parseOptionalNumber(inputs?.soil_temperature_c);
+
+  [
+    [ph, soilInputLimits.ph_level],
+    [moisture, soilInputLimits.moisture_percent],
+    [soilTemperature, soilInputLimits.soil_temperature_c],
+  ].forEach(([value, limits]) => {
+    if (value !== null && (value < limits.min || value > limits.max)) {
+      errors.push(limits.label);
+    }
+  });
+
+  return errors;
+}
+
+function hasUsableSoilScan(scan) {
+  return getSoilInputErrors(scan?.inputs || scan).length === 0;
 }
 
 function makeHistoryId() {
@@ -95,8 +123,18 @@ function formatLocationMeta(location) {
 function getCropCategory(cropName) {
   const crop = cropName.toLowerCase();
   if (crop.includes('rice') || crop.includes('corn')) return 'Grains';
-  if (crop.includes('cassava') || crop.includes('sweet potato') || crop.includes('taro') || crop.includes('gabi')) return 'Root Crops';
-  if (crop.includes('calamansi') || crop.includes('banana') || crop.includes('mango')) return 'Fruits';
+  if (crop.includes('cassava') || crop.includes('sweet potato') || crop.includes('potato') || crop.includes('taro') || crop.includes('gabi')) return 'Root Crops';
+  if (
+    crop.includes('calamansi') ||
+    crop.includes('banana') ||
+    crop.includes('mango') ||
+    crop.includes('coconut') ||
+    crop.includes('pineapple') ||
+    crop.includes('guava') ||
+    crop.includes('cacao') ||
+    crop.includes('coffee')
+  ) return 'Fruits';
+  if (crop.includes('sugarcane') || crop.includes('abaca')) return 'Field Crops';
   return 'Vegetables';
 }
 
@@ -144,7 +182,7 @@ function buildAudioGuide(selectedCrop, result, t) {
 function readStoredScans() {
   try {
     const scans = JSON.parse(localStorage.getItem('agriscan_soil_scans') || '[]');
-    return Array.isArray(scans) ? scans : [];
+    return Array.isArray(scans) ? scans.filter(hasUsableSoilScan) : [];
   } catch {
     return [];
   }
@@ -198,6 +236,7 @@ function buildLocationStateFromScan(scan) {
 function ResultPanel({ result }) {
   const confidence = result ? Math.round(result.confidence * 100) : 0;
   const topRecommendations = result?.recommendations || [];
+  const warnings = result?.soil_warnings || [];
 
   return (
     <section className="surface overflow-hidden rounded-lg">
@@ -221,6 +260,15 @@ function ResultPanel({ result }) {
           <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Suitability</p>
         </div>
       </div>
+
+      {warnings.length > 0 && (
+        <div className="mx-5 mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-bold">Recheck soil readings before planting.</p>
+          <ul className="mt-2 space-y-1">
+            {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          </ul>
+        </div>
+      )}
 
       <div className="p-5">
         <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500">Top Matches</h3>
@@ -523,17 +571,8 @@ export default function Scan() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedCrop]);
 
-  const canSubmit = useMemo(() => {
-    const ph = parseOptionalNumber(form.ph_level);
-    const moisture = parseOptionalNumber(form.moisture_percent);
-    const soilTemperature = parseOptionalNumber(form.soil_temperature_c);
-    return Boolean(
-      form.soil_type &&
-      (ph === null || (ph >= 0 && ph <= 14)) &&
-      (moisture === null || (moisture >= 0 && moisture <= 100)) &&
-      (soilTemperature === null || (soilTemperature >= -10 && soilTemperature <= 80))
-    );
-  }, [form.moisture_percent, form.ph_level, form.soil_temperature_c, form.soil_type]);
+  const inputErrors = useMemo(() => getSoilInputErrors(form), [form]);
+  const canSubmit = useMemo(() => Boolean(form.soil_type && inputErrors.length === 0), [form.soil_type, inputErrors.length]);
 
   const crops = useMemo(
     () => (result?.recommendations || []).map((item) => buildCropCard(item, result)),
@@ -550,6 +589,7 @@ export default function Scan() {
   }, [activeCategory, crops, sortMode]);
 
   function updateField(field, value) {
+    setError('');
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -687,7 +727,10 @@ export default function Scan() {
 
   async function submit(event) {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      setError(inputErrors[0] || 'Enter valid soil readings before recommending crops.');
+      return;
+    }
     await runRecommendation(buildPayload());
   }
 
@@ -778,15 +821,15 @@ export default function Scan() {
                 <input
                   className="field mt-2 h-12"
                   inputMode="decimal"
-                  max="14"
-                  min="0"
+                  max={soilInputLimits.ph_level.max}
+                  min={soilInputLimits.ph_level.min}
                   placeholder="e.g. 6.5"
                   step="0.1"
                   type="number"
                   value={form.ph_level}
                   onChange={(event) => updateField('ph_level', event.target.value)}
                 />
-                <FieldHelp>Use a pH strip or meter. Around 6.0 to 7.0 is common for many crops.</FieldHelp>
+                <FieldHelp>Use a pH strip or meter. Productive field readings are usually 3.5 to 9.5.</FieldHelp>
               </label>
               <label className="block">
                 <span className="text-sm font-bold text-stone-700">Moisture %</span>
@@ -794,7 +837,7 @@ export default function Scan() {
                   className="field mt-2 h-12"
                   inputMode="decimal"
                   max="100"
-                  min="0"
+                  min={soilInputLimits.moisture_percent.min}
                   placeholder="e.g. 45"
                   step="1"
                   type="number"
@@ -808,15 +851,15 @@ export default function Scan() {
                 <input
                   className="field mt-2 h-12"
                   inputMode="decimal"
-                  max="80"
-                  min="-10"
+                  max={soilInputLimits.soil_temperature_c.max}
+                  min={soilInputLimits.soil_temperature_c.min}
                   placeholder="e.g. 28"
                   step="0.1"
                   type="number"
                   value={form.soil_temperature_c}
                   onChange={(event) => updateField('soil_temperature_c', event.target.value)}
                 />
-                <FieldHelp>Use a soil thermometer or meter. If unavailable, enter the closest measured soil temperature.</FieldHelp>
+                <FieldHelp>Use a soil thermometer or meter. Enter a crop-bed reading from 10C to 45C.</FieldHelp>
               </label>
             </div>
 
@@ -883,6 +926,15 @@ export default function Scan() {
               {locationState.error && <p className="mt-3 text-sm font-medium text-amber-700">{locationState.error}</p>}
             </section>
           </div>
+
+          {inputErrors.length > 0 && (
+            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+              <p className="font-bold">Check the soil readings.</p>
+              <ul className="mt-2 space-y-1">
+                {inputErrors.map((message) => <li key={message}>{message}</li>)}
+              </ul>
+            </div>
+          )}
 
           {error && <div className="mt-5 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
 

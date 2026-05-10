@@ -14,6 +14,7 @@ import {
   rememberNotificationIds,
   showBrowserNotification,
 } from '../utils/browserNotifications.js';
+import { deviceNameFromUserAgent, isGenericDeviceName } from '../utils/deviceName.js';
 
 export default function SecuritySettings() {
   const { user } = useAuth();
@@ -223,6 +224,15 @@ export default function SecuritySettings() {
   const pushStatusLabel = pushEnabled ? t('enabled') : pushChecking ? t('checking') : t('notEnabled');
   const syncStatusLabel = toggles.autoSync ? t('active') : t('notEnabled');
   const recentDevices = devices.slice(0, 5);
+  const getDeviceDisplayName = useCallback(
+    (device) => {
+      if (device.device_name && !isGenericDeviceName(device.device_name)) {
+        return device.device_name;
+      }
+      return deviceNameFromUserAgent(device.user_agent) || device.device_name || t('unknownDevice');
+    },
+    [t],
+  );
 
   return (
     <div className="page-stack">
@@ -484,7 +494,7 @@ export default function SecuritySettings() {
               {recentDevices.map((device) => (
                 <div key={device.id} className="rounded-lg border border-stone-200 bg-white p-3">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="min-w-0 break-words font-semibold text-stone-900">{device.device_name || t('unknownDevice')}</p>
+                    <p className="min-w-0 break-words font-semibold text-stone-900">{getDeviceDisplayName(device)}</p>
                     <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-bold ${device.success ? 'bg-leaf-50 text-leaf-700' : 'bg-red-50 text-red-700'}`}>
                       {device.success ? t('success') : t('failed')}
                     </span>
