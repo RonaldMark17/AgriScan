@@ -12,6 +12,8 @@ ARTIFACTS_DIR = ML_DIR / "artifacts"
 DISEASE_METRICS_PATH = ARTIFACTS_DIR / "training_metrics.json"
 DISEASE_MODEL_PATH = ARTIFACTS_DIR / "crop_disease_model.keras"
 DISEASE_LABELS_PATH = ARTIFACTS_DIR / "labels.json"
+YOLO_STARTER_MODEL_PATH = ML_DIR / "yolov8n-cls.pt"
+YOLO_RUNS_DIR = ML_DIR / "runs"
 
 CROP_RECOMMENDER_METADATA_PATH = ARTIFACTS_DIR / "manual_crop_recommender_metadata.json"
 CROP_RECOMMENDER_MODEL_PATH = ARTIFACTS_DIR / "manual_crop_recommender.pkl"
@@ -49,9 +51,21 @@ def file_status(path: Path) -> str:
     return "found" if path.exists() else "missing"
 
 
+def latest_yolo_model() -> Path | None:
+    candidates = []
+    if YOLO_STARTER_MODEL_PATH.exists():
+        candidates.append(YOLO_STARTER_MODEL_PATH)
+    if YOLO_RUNS_DIR.exists():
+        candidates.extend(YOLO_RUNS_DIR.rglob("best.pt"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
 def build_report() -> dict[str, Any]:
     disease_metrics = read_json(DISEASE_METRICS_PATH)
     crop_metadata = read_json(CROP_RECOMMENDER_METADATA_PATH)
+    yolo_model = latest_yolo_model()
 
     disease_classes = disease_metrics.get("classes", [])
     crop_classes = crop_metadata.get("classes", [])
@@ -67,6 +81,10 @@ def build_report() -> dict[str, Any]:
             "validation_accuracy": disease_metrics.get("last_val_accuracy"),
             "class_count": len(disease_classes) if isinstance(disease_classes, list) else 0,
             "classes": disease_classes if isinstance(disease_classes, list) else [],
+            "yolo_integration": "enabled",
+            "yolo_model_file": str(yolo_model) if yolo_model else str(YOLO_STARTER_MODEL_PATH),
+            "yolo_model_status": "found" if yolo_model else "missing",
+            "yolo_bounding_boxes": "available when MODEL_PATH points to a YOLO detect .pt model",
         },
         "manual_scan_crop_recommender": {
             "model_file": str(CROP_RECOMMENDER_MODEL_PATH),
@@ -74,13 +92,18 @@ def build_report() -> dict[str, Any]:
             "metrics_file": str(CROP_RECOMMENDER_METADATA_PATH),
             "metrics_status": file_status(CROP_RECOMMENDER_METADATA_PATH),
             "accuracy": crop_metadata.get("accuracy"),
+            "f1_score": crop_metadata.get("f1_score"),
             "top_3_accuracy": crop_metadata.get("top_3_accuracy"),
             "train_samples": crop_metadata.get("train_samples"),
             "test_samples": crop_metadata.get("test_samples"),
             "class_count": len(crop_classes) if isinstance(crop_classes, list) else 0,
             "classes": crop_classes if isinstance(crop_classes, list) else [],
+            "algorithm": crop_metadata.get("algorithm") or crop_metadata.get("model_type"),
             "training_source": crop_metadata.get("training_source"),
-            "training_note": crop_metadata.get("training_note"),
+            "dataset_source_url": crop_metadata.get("dataset_source_url"),
+            "target_variable": crop_metadata.get("target_variable"),
+            "input_features": crop_metadata.get("input_features"),
+            "dataset_note": crop_metadata.get("dataset_note") or crop_metadata.get("training_note"),
         },
     }
 
@@ -101,20 +124,31 @@ def print_report(report: dict[str, Any]) -> None:
     print(f"Training accuracy: {percent(disease['training_accuracy'])}")
     print(f"Validation accuracy: {percent(disease['validation_accuracy'])}")
     print(f"Classes: {disease['class_count']} ({compact_classes(disease['classes'])})")
+    print(f"YOLO integration: {disease['yolo_integration']} (Ultralytics .pt inference supported)")
+    print(f"YOLO model file: {disease['yolo_model_status']} ({disease['yolo_model_file']})")
+    print(f"Bounding boxes: {disease['yolo_bounding_boxes']}")
     print()
 
     print("Manual Scan Crop Recommender")
     print("----------------------------")
     print(f"Model file: {crop['model_status']} ({crop['model_file']})")
     print(f"Metrics file: {crop['metrics_status']} ({crop['metrics_file']})")
+    if crop.get("algorithm"):
+        print(f"Model: {crop['algorithm']}")
     print(f"Accuracy: {percent(crop['accuracy'])}")
+    print(f"Macro F1: {percent(crop['f1_score'])}")
     print(f"Top-3 accuracy: {percent(crop['top_3_accuracy'])}")
     print(f"Samples: {crop['train_samples'] or 'not available'} train, {crop['test_samples'] or 'not available'} test")
     print(f"Classes: {crop['class_count']} ({compact_classes(crop['classes'])})")
+    if crop.get("target_variable") and crop.get("input_features"):
+        print(f"Target: {crop['target_variable']}")
+        print(f"Features: {', '.join(crop['input_features'])}")
     if crop.get("training_source"):
         print(f"Training source: {crop['training_source']}")
-    if crop.get("training_note"):
-        print(f"Note: {crop['training_note']}")
+    if crop.get("dataset_source_url"):
+        print(f"Dataset URL: {crop['dataset_source_url']}")
+    if crop.get("dataset_note"):
+        print(f"Note: {crop['dataset_note']}")
 
 
 def main() -> None:

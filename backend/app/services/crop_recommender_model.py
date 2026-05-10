@@ -12,6 +12,7 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 NUMERIC_FEATURES = ("ph_level", "moisture_percent", "soil_temperature_c")
+DATASET_FEATURES = ("N", "P", "K", "temperature", "humidity", "ph", "rainfall")
 CATEGORICAL_FEATURES = (
     "soil_type",
     "nitrogen_level",
@@ -36,6 +37,18 @@ CATEGORICAL_DEFAULTS = {
     "drainage": "moderate",
     "sunlight": "full sun",
     "season": "regular season",
+}
+
+DEFAULT_NUTRIENT_LEVEL_VALUES = {
+    "N": {"low": 25.0, "medium": 55.0, "high": 90.0},
+    "P": {"low": 30.0, "medium": 55.0, "high": 80.0},
+    "K": {"low": 25.0, "medium": 45.0, "high": 80.0},
+}
+
+SEASON_RAINFALL_DEFAULTS = {
+    "dry season": 65.0,
+    "regular season": 130.0,
+    "wet season": 215.0,
 }
 
 
@@ -91,6 +104,96 @@ def normalize_manual_scan_features(
     }
 
 
+def _metadata_nutrient_value(metadata: dict[str, Any], feature: str, level: str) -> float:
+    level_values = metadata.get("nutrient_level_values")
+    if isinstance(level_values, dict):
+        feature_values = level_values.get(feature)
+        if isinstance(feature_values, dict):
+            value = feature_values.get(level)
+            if isinstance(value, int | float):
+                return float(value)
+    return DEFAULT_NUTRIENT_LEVEL_VALUES[feature].get(level, DEFAULT_NUTRIENT_LEVEL_VALUES[feature]["medium"])
+
+
+def _bounded_number(value: float | int | str | None, default: float, low: float, high: float) -> float:
+    number = _clean_number(value, default)
+    return min(max(number, low), high)
+
+
+def _estimate_rainfall_mm(
+    *,
+    season: str,
+    drainage: str,
+    moisture_percent: float | None,
+    rainfall_mm: float | None,
+) -> float:
+    if rainfall_mm is not None:
+        return _bounded_number(rainfall_mm, SEASON_RAINFALL_DEFAULTS["regular season"], 0.0, 400.0)
+
+    rainfall = SEASON_RAINFALL_DEFAULTS.get(season, SEASON_RAINFALL_DEFAULTS["regular season"])
+    if "water" in drainage:
+        rainfall += 35.0
+    elif drainage == "poor":
+        rainfall += 20.0
+    elif drainage == "good":
+        rainfall -= 12.0
+
+    if moisture_percent is not None:
+        if moisture_percent >= 70:
+            rainfall += 25.0
+        elif moisture_percent <= 35:
+            rainfall -= 25.0
+
+    return min(max(rainfall, 20.0), 350.0)
+
+
+def build_dataset_feature_record(
+    manual_features: dict[str, float | str],
+    metadata: dict[str, Any] | None = None,
+    *,
+    air_temperature_c: float | None = None,
+    humidity_percent: float | None = None,
+    rainfall_mm: float | None = None,
+) -> dict[str, float]:
+    metadata = metadata or {}
+    nitrogen_level = str(manual_features["nitrogen_level"])
+    phosphorus_level = str(manual_features["phosphorus_level"])
+    potassium_level = str(manual_features["potassium_level"])
+    moisture_percent = float(manual_features["moisture_percent"])
+    soil_temperature_c = float(manual_features["soil_temperature_c"])
+
+    temperature_source = air_temperature_c if air_temperature_c is not None else soil_temperature_c
+    temperature = _bounded_number(temperature_source, NUMERIC_DEFAULTS["soil_temperature_c"], -10.0, 60.0)
+
+    humidity_default = moisture_percent if moisture_percent is not None else 75.0
+    humidity = _bounded_number(humidity_percent, humidity_default, 0.0, 100.0)
+    ph = _bounded_number(manual_features["ph_level"], NUMERIC_DEFAULTS["ph_level"], 0.0, 14.0)
+
+    return {
+        "N": _metadata_nutrient_value(metadata, "N", nitrogen_level),
+        "P": _metadata_nutrient_value(metadata, "P", phosphorus_level),
+        "K": _metadata_nutrient_value(metadata, "K", potassium_level),
+        "temperature": temperature,
+        "humidity": humidity,
+        "ph": ph,
+        "rainfall": _estimate_rainfall_mm(
+            season=str(manual_features["season"]),
+            drainage=str(manual_features["drainage"]),
+            moisture_percent=moisture_percent,
+            rainfall_mm=rainfall_mm,
+        ),
+    }
+
+
+def _display_crop_name(label: str, metadata: dict[str, Any]) -> str:
+    display_names = metadata.get("class_display_names")
+    if isinstance(display_names, dict):
+        value = display_names.get(label)
+        if value:
+            return str(value)
+    return label.replace("_", " ").title()
+
+
 @lru_cache(maxsize=1)
 def load_manual_crop_recommender() -> dict[str, Any] | None:
     settings = get_settings()
@@ -130,6 +233,9 @@ def predict_manual_crop_recommendations(
     drainage: str | None = None,
     sunlight: str | None = None,
     season: str | None = None,
+    air_temperature_c: float | None = None,
+    humidity_percent: float | None = None,
+    rainfall_mm: float | None = None,
 ) -> dict[str, Any] | None:
     bundle = load_manual_crop_recommender()
     if bundle is None:
@@ -149,8 +255,17 @@ def predict_manual_crop_recommendations(
     )
 
     model = bundle["model"]
+    metadata = bundle.get("metadata") or {}
+    model_features = build_dataset_feature_record(
+        features,
+        metadata,
+        air_temperature_c=air_temperature_c if soil_temperature_c is None else None,
+        humidity_percent=humidity_percent,
+        rainfall_mm=rainfall_mm,
+    )
+    model_input = {**features, **model_features}
     try:
-        probabilities = model.predict_proba([features])[0]
+        probabilities = model.predict_proba([model_input])[0]
         classes = list(model.classes_)
     except Exception:
         logger.exception("Manual crop recommender prediction failed")
@@ -158,19 +273,25 @@ def predict_manual_crop_recommendations(
 
     ranked = sorted(
         (
-            {"crop": str(crop), "probability": round(float(probability), 4)}
+            {
+                "crop": _display_crop_name(str(crop), metadata),
+                "raw_label": str(crop),
+                "probability": round(float(probability), 4),
+            }
             for crop, probability in zip(classes, probabilities, strict=False)
         ),
         key=lambda item: item["probability"],
         reverse=True,
     )
 
-    metadata = bundle.get("metadata") or {}
     return {
-        "source": "trained_manual_scan_model",
-        "model_version": metadata.get("model_version", "manual-scan-hgb"),
+        "source": "kaggle_crop_recommendation_decision_tree",
+        "model_version": metadata.get("model_version", "kaggle-crop-decision-tree-v1"),
+        "model_type": metadata.get("model_type", "DecisionTreeClassifier"),
         "accuracy": metadata.get("accuracy"),
+        "f1_score": metadata.get("f1_score"),
         "top_3_accuracy": metadata.get("top_3_accuracy"),
         "features": features,
+        "model_features": model_features,
         "predictions": ranked,
     }

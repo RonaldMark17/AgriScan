@@ -74,8 +74,6 @@ async def list_farms(current_user: User = Depends(get_current_user), db: AsyncSe
     query = select(Farm).order_by(Farm.created_at.desc())
     if current_user.role.name == "farmer":
         query = query.where(Farm.user_id == current_user.id)
-    elif current_user.role.name == "buyer":
-        query = query.where(Farm.status == "approved")
     result = await db.execute(query.limit(200))
     return list(result.scalars().all())
 
@@ -108,7 +106,7 @@ async def create_farm(
 async def approve_farm(
     farm_id: int,
     request: Request,
-    current_user: User = Depends(require_roles("admin", "inspector")),
+    current_user: User = Depends(require_roles("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> Farm:
     result = await db.execute(select(Farm).where(Farm.id == farm_id))
@@ -154,7 +152,7 @@ async def create_crop(
     farm_id: int,
     payload: CropCreate,
     request: Request,
-    current_user: User = Depends(require_roles("farmer", "admin", "inspector")),
+    current_user: User = Depends(require_roles("farmer", "admin")),
     db: AsyncSession = Depends(get_db),
 ) -> Crop:
     if payload.farm_id != farm_id:
@@ -201,7 +199,7 @@ async def delete_farm(
     farm = result.scalar_one_or_none()
     if farm is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found.")
-    if current_user.role.name not in {"admin", "inspector"} and farm.user_id != current_user.id:
+    if current_user.role.name != "admin" and farm.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot delete this farm.")
     await db.delete(farm)
     await write_audit_log(db, request, "farm.deleted", actor=current_user, resource_type="farm", resource_id=farm_id)

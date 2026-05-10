@@ -255,6 +255,9 @@ def build_soil_crop_recommendation(
         drainage=drainage,
         sunlight=sunlight,
         season=season,
+        air_temperature_c=temperature,
+        humidity_percent=humidity,
+        rainfall_mm=_model_rainfall_mm(season_value, moisture_percent, drainage_value, rain_probability, precipitation),
     )
     if model_prediction:
         recommendations = _blend_model_recommendations(model_prediction, scored)
@@ -291,7 +294,9 @@ def build_soil_crop_recommendation(
             "source": model_prediction["source"] if model_prediction else "rules",
             "version": model_prediction["model_version"] if model_prediction else "rule-based-v1",
             "accuracy": model_prediction.get("accuracy") if model_prediction else None,
+            "f1_score": model_prediction.get("f1_score") if model_prediction else None,
             "top_3_accuracy": model_prediction.get("top_3_accuracy") if model_prediction else None,
+            "features": model_prediction.get("model_features") if model_prediction else None,
         },
     }
 
@@ -304,9 +309,7 @@ def _blend_model_recommendations(model_prediction: dict, scored: list[dict]) -> 
     for prediction in model_prediction.get("predictions", []):
         crop_name = str(prediction.get("crop", ""))
         crop_key = crop_name.lower()
-        rule_item = scored_by_crop.get(crop_key)
-        if rule_item is None:
-            continue
+        rule_item = scored_by_crop.get(crop_key) or _generic_crop_template(crop_name)
 
         probability = float(prediction.get("probability") or 0)
         model_score = 60 + (probability * 38)
@@ -330,6 +333,19 @@ def _blend_model_recommendations(model_prediction: dict, scored: list[dict]) -> 
             break
 
     return sorted(ranked, key=lambda item: item["suitability"], reverse=True)[:4]
+
+
+def _generic_crop_template(crop_name: str) -> dict:
+    name = crop_name.strip() or "Recommended crop"
+    return {
+        "crop": name,
+        "base": 64,
+        "reason": f"The trained crop dataset matched the entered soil nutrients and weather conditions to {name}.",
+        "planting_window": "Plant when local weather, seed availability, and farm water supply are suitable.",
+        "watering": "Match irrigation to crop stage and avoid prolonged water stress or waterlogging.",
+        "fertilizer": "Use a soil-test based fertilizer plan and adjust nitrogen, phosphorus, and potassium before planting.",
+        "suitability": 64,
+    }
 
 
 def _soil_summary(
@@ -433,6 +449,41 @@ def _weather_summary(weather: dict | None) -> str | None:
     if humidity is not None:
         parts.append(f"{round(float(humidity))}% humidity")
     return ", ".join(parts) if parts else None
+
+
+def _model_rainfall_mm(
+    season: str,
+    moisture_percent: float | None,
+    drainage: str,
+    rain_probability: float | None,
+    precipitation_mm: float | None,
+) -> float | None:
+    if precipitation_mm is not None and precipitation_mm >= 20:
+        return min(float(precipitation_mm), 350.0)
+
+    if "wet" in season or "rain" in season:
+        rainfall = 215.0
+    elif "dry" in season:
+        rainfall = 65.0
+    else:
+        rainfall = 130.0
+
+    if rain_probability is not None:
+        rainfall += (float(rain_probability) - 0.35) * 90
+    if precipitation_mm is not None:
+        rainfall += min(float(precipitation_mm), 20.0) * 2.5
+    if moisture_percent is not None:
+        if moisture_percent >= 70:
+            rainfall += 25
+        elif moisture_percent <= 35:
+            rainfall -= 25
+    if "water" in drainage:
+        rainfall += 35
+    elif "poor" in drainage:
+        rainfall += 15
+    elif "good" in drainage:
+        rainfall -= 10
+    return max(20.0, min(350.0, round(rainfall, 2)))
 
 
 def _recommendation_basis(soil_summary: str, weather: dict | None, location_label: str | None) -> list[str]:

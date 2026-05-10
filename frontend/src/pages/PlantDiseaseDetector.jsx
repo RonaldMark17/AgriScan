@@ -216,6 +216,11 @@ const offlineDiseaseGuide = {
     cause: 'Dark mango leaf lesions commonly match anthracnose or related fungal spotting.',
     treatment: 'Prune infected tissues, improve airflow, avoid prolonged wetness, and use locally approved protective spray if needed.',
   },
+  mango_phoma_blight: {
+    disease_name: 'Mango Phoma blight',
+    cause: 'The mango leaf shows broad brown to black blighted tissue with yellowing or scorched margins, which can match Phoma-type leaf blight.',
+    treatment: 'Prune and destroy infected leaves or twigs, improve canopy airflow, avoid overhead watering, and confirm local fungicide guidance before spraying.',
+  },
   mango_bacterial_canker: {
     disease_name: 'Mango bacterial canker',
     cause: 'Multiple dark mango leaf lesions can match bacterial canker or bacterial spotting symptoms.',
@@ -384,6 +389,9 @@ function inferContextFromFilename(fileName, cropType) {
   if (text.includes('septoria')) return { crop: 'tomato', key: 'tomato_septoria_leaf_spot', confidence: 0.86 };
   if (text.includes('target spot')) return { crop: 'tomato', key: 'tomato_target_spot', confidence: 0.84 };
   if (text.includes('rice blast') || (crop === 'rice' && text.includes('blast'))) return { crop: 'rice', key: 'rice_blast', confidence: 0.86 };
+  if (crop === 'mango' && (text.includes('phoma') || text.includes('blight'))) return { crop: 'mango', key: 'mango_phoma_blight', confidence: text.includes('phoma') ? 0.88 : 0.82 };
+  if (crop === 'mango' && text.includes('anthracnose')) return { crop: 'mango', key: 'mango_anthracnose', confidence: 0.86 };
+  if (crop === 'mango' && (text.includes('canker') || text.includes('black spot'))) return { crop: 'mango', key: 'mango_bacterial_canker', confidence: 0.82 };
   if (text.includes('northern leaf blight') || (crop === 'corn' && text.includes('blight'))) return { crop: 'corn', key: 'corn_northern_leaf_blight', confidence: 0.84 };
   if (text.includes('sigatoka')) return { crop: 'banana', key: text.includes('black') ? 'banana_black_sigatoka' : 'banana_yellow_sigatoka', confidence: 0.84 };
   if (crop === 'banana' && /\b(bunch|crown|closeup|close up)\b/.test(text)) return { crop: 'banana', key: 'banana_crown_rot', confidence: 0.83 };
@@ -409,14 +417,14 @@ function looksLikeBananaFruitIssue(features, crop) {
 function looksLikeHealthyRicePanicle(features) {
   const warmGrainRatio = features.bananaFruitRatio + features.yellowRatio;
   const warmGrainSignal =
-    features.bananaFruitRatio >= 0.045 ||
-    features.yellowRatio >= 0.055 ||
-    warmGrainRatio >= 0.055;
+    features.bananaFruitRatio >= 0.035 ||
+    features.yellowRatio >= 0.045 ||
+    warmGrainRatio >= 0.05;
   const grassLeafStructure =
-    features.greenLeafRatio >= 0.16 &&
-    (features.maxGreenAspect >= 1.8 ||
-      features.greenComponentCount >= 4 ||
-      (features.maxGreenAreaRatio >= 0.08 && features.greenEdgeRatio >= 0.1));
+    features.greenLeafRatio >= 0.14 &&
+    (features.maxGreenAspect >= 1.45 ||
+      features.greenComponentCount >= 3 ||
+      (features.maxGreenAreaRatio >= 0.08 && features.greenEdgeRatio >= 0.14));
   const clusteredSmallGrainsCandidate =
     (features.fruitComponentCount >= 3 && features.maxFruitAreaRatio < 0.16) ||
       (features.fruitComponentCount >= 1 &&
@@ -429,8 +437,19 @@ function looksLikeHealthyRicePanicle(features) {
     warmGrainRatio >= 0.045 &&
     (features.componentCount >= 3 || features.maxAspect >= 1.6) &&
     features.lesionRatio < 0.16;
+  const riceGrainCanopy =
+    features.greenLeafRatio >= 0.18 &&
+    warmGrainRatio >= 0.055 &&
+    (features.fruitComponentCount >= 2 || features.yellowRatio >= 0.05 || features.bananaFruitRatio >= 0.09) &&
+    features.maxFruitAreaRatio < 0.24 &&
+    features.lesionRatio < 0.18 &&
+    features.darkLesionRatio < 0.13 &&
+    (features.maxGreenAspect >= 1.55 ||
+      features.greenComponentCount >= 3 ||
+      features.yellowRatio >= 0.035 ||
+      (features.greenEdgeRatio >= 0.18 && features.maxGreenAreaRatio < 0.5));
   const clusteredSmallGrains =
-    (clusteredSmallGrainsCandidate || riceCanopyWithGrain) &&
+    (clusteredSmallGrainsCandidate || riceCanopyWithGrain || riceGrainCanopy) &&
     features.bananaFruitRatio < 0.42;
   const notRotLike =
     features.darkLesionRatio < 0.08 &&
@@ -440,13 +459,17 @@ function looksLikeHealthyRicePanicle(features) {
     features.componentCount >= 7 &&
     features.darkLesionRatio >= 0.045 &&
     features.lesionWithinPlant >= 0.05 &&
-    features.yellowRatio < 0.035;
+    features.yellowRatio < 0.035 &&
+    !riceGrainCanopy;
   const bananaBunchLike =
     features.maxFruitAreaRatio >= 0.24 &&
     features.bananaFruitRatio >= 0.22 &&
     features.greenLeafRatio < 0.32;
-  const leafStructure = grassLeafStructure || riceCanopyWithGrain;
-  return warmGrainSignal && leafStructure && clusteredSmallGrains && notRotLike && !spottedLeafDisease && !bananaBunchLike;
+  const mangoBlightLike =
+    looksLikeMangoLeaf(features) &&
+    (features.darkLesionRatio >= 0.025 || features.lesionRatio >= 0.07 || features.yellowRatio >= 0.08);
+  const leafStructure = grassLeafStructure || riceCanopyWithGrain || riceGrainCanopy;
+  return warmGrainSignal && leafStructure && clusteredSmallGrains && notRotLike && !spottedLeafDisease && !bananaBunchLike && !mangoBlightLike;
 }
 
 function looksLikeHealthyBananaBunch(features) {
@@ -485,8 +508,9 @@ function looksLikeHealthyBananaBunch(features) {
   return fruitToneSignal && cleanFruitSurface && (clusteredFingers || denseGreenBunch) && !spottedLeafDisease && !grassLeaf;
 }
 
-function hasStrongVisualDiseaseSignal(features) {
-  if (looksLikeHealthyRicePanicle(features) || looksLikeHealthyBananaBunch(features)) return false;
+function hasStrongVisualDiseaseSignal(features, crop = '') {
+  if ((!crop || crop === 'rice') && looksLikeHealthyRicePanicle(features)) return false;
+  if ((!crop || crop === 'banana') && looksLikeHealthyBananaBunch(features)) return false;
 
   const structuralDamage =
     features.greenLeafRatio >= 0.14 &&
@@ -535,11 +559,11 @@ function looksLikeMangoLeaf(features) {
 }
 
 function pickOfflineDiseaseKey(crop, features) {
-  if (looksLikeHealthyRicePanicle(features)) {
+  if ((!crop || crop === 'rice') && looksLikeHealthyRicePanicle(features)) {
     return 'healthy';
   }
 
-  if (looksLikeHealthyBananaBunch(features)) {
+  if ((!crop || crop === 'banana') && looksLikeHealthyBananaBunch(features)) {
     return 'healthy';
   }
 
@@ -567,7 +591,7 @@ function pickOfflineDiseaseKey(crop, features) {
 
   const healthyLeaf = features.greenLeafRatio >= 0.26 && features.lesionWithinPlant < 0.035 && features.lesionRatio < 0.025 && features.contrast < 72;
   if (healthyLeaf) return offlineDiseaseGuide[healthyKeyForCrop(crop)] ? healthyKeyForCrop(crop) : 'healthy';
-  if (!hasStrongVisualDiseaseSignal(features)) return 'review_needed';
+  if (!hasStrongVisualDiseaseSignal(features, crop)) return 'review_needed';
 
   const elongated = features.maxAspect >= 1.8 && features.maxAreaRatio >= 0.006;
   const manySpots = features.componentCount >= 7 && features.maxAreaRatio < 0.025;
@@ -598,7 +622,12 @@ function pickOfflineDiseaseKey(crop, features) {
   if (crop === 'pepper') return 'pepper_bacterial_spot';
   if (crop === 'potato') return features.darkLesionRatio >= 0.05 || features.lesionRatio >= 0.085 ? 'potato_late_blight' : 'potato_early_blight';
   if (crop === 'banana') return elongated && features.yellowRatio >= 0.06 ? 'banana_yellow_sigatoka' : 'banana_black_sigatoka';
-  if (crop === 'mango') return manySpots ? 'mango_bacterial_canker' : 'mango_anthracnose';
+  if (crop === 'mango') {
+    const largeBlightPatch = features.maxAreaRatio >= 0.035 || features.darkLesionRatio >= 0.055 || features.lesionRatio >= 0.12;
+    const scorchedMangoLeaf = features.yellowRatio >= 0.055 && features.darkLesionRatio >= 0.025;
+    if (largeBlightPatch && (scorchedMangoLeaf || features.lesionWithinPlant >= 0.11)) return 'mango_phoma_blight';
+    return manySpots ? 'mango_bacterial_canker' : 'mango_anthracnose';
+  }
   if (crop === 'guava') {
     if (features.rustRatio >= 0.025) return 'guava_red_rust';
     if (features.darkLesionRatio >= 0.045) return 'guava_phytophthora';
@@ -1083,17 +1112,18 @@ async function analyzeImageOffline(file, cropType) {
   }
 
   const filenameContext = inferContextFromFilename(file.name, crop);
-  const healthyRicePanicle = looksLikeHealthyRicePanicle(features);
-  const healthyBananaBunch = looksLikeHealthyBananaBunch(features);
-  const strongDiseaseSignal = hasStrongVisualDiseaseSignal(features);
-  let analysisCrop = healthyRicePanicle ? 'rice' : healthyBananaBunch ? 'banana' : crop || filenameContext.crop || inferOfflineCrop(features, file.name);
+  const contextCrop = crop || filenameContext.crop;
+  const healthyRicePanicle = (!contextCrop || contextCrop === 'rice') && looksLikeHealthyRicePanicle(features);
+  const healthyBananaBunch = (!contextCrop || contextCrop === 'banana') && looksLikeHealthyBananaBunch(features);
+  const strongDiseaseSignal = hasStrongVisualDiseaseSignal(features, contextCrop);
+  let analysisCrop = healthyRicePanicle ? 'rice' : healthyBananaBunch ? 'banana' : contextCrop || inferOfflineCrop(features, file.name);
   let key = pickOfflineDiseaseKey(analysisCrop, features);
   if (healthyRicePanicle || healthyBananaBunch) {
     key = 'healthy';
   } else if (filenameContext.key) {
     key = strongDiseaseSignal ? filenameContext.key : 'review_needed';
   }
-  const featureInferredOnly = !crop && !filenameContext.crop && Boolean(analysisCrop);
+  const featureInferredOnly = !contextCrop && Boolean(analysisCrop);
   const keyCrop = Object.keys(cropDisplayNamesByKey).find((cropKey) => key.startsWith(`${cropKey}_`));
   const cropSpecificDisease = Boolean(keyCrop && !key.endsWith('_healthy'));
   if (featureInferredOnly && cropSpecificDisease) {
@@ -1136,9 +1166,15 @@ async function analyzeImageOffline(file, cropType) {
   };
 }
 
+function getYoloDetections(result) {
+  if (!Array.isArray(result?.detections)) return [];
+  return result.detections.filter((detection) => detection?.box && Number.isFinite(Number(detection.confidence)));
+}
+
 function ResultPanel({ result, previewUrl, t, panelRef }) {
   const confidence = result ? Math.round(result.confidence * 100) : 0;
   const cropLabel = result ? resolveCropLabel(result) : '--';
+  const yoloDetections = getYoloDetections(result);
   const cropVerified = Boolean(result?.crop_label || result?.crop_type || inferCropLabel(result)) && cropLabel !== 'General crop leaf';
   const needsReview = /review/i.test(result?.disease_name || '');
   const statusClass = needsReview ? 'bg-amber-50 text-amber-700' : 'bg-leaf-50 text-leaf-700';
@@ -1202,7 +1238,9 @@ function ResultPanel({ result, previewUrl, t, panelRef }) {
               <article className="rounded-lg border border-sky-100 bg-sky-50 p-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('modelBasis')}</p>
                 <p className="mt-2 text-sm leading-6 text-stone-700">
-                  {isLocalVisualAnalysisMode(result.analysis_mode)
+                  {yoloDetections.length > 0
+                    ? 'Ultralytics YOLO detected crop disease regions and AgriScan matched the labels to treatment guidance.'
+                    : isLocalVisualAnalysisMode(result.analysis_mode)
                     ? 'Local visual analysis used image features plus the selected or estimated crop. Confirm severe cases with a local agriculture officer.'
                     : t('modelBasisBody')}
                 </p>
@@ -1220,7 +1258,28 @@ function ResultPanel({ result, previewUrl, t, panelRef }) {
           <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('uploadCropImage')}</p>
           <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
             {previewUrl ? (
-              <img src={previewUrl} alt="Crop preview" className="h-52 w-full object-cover sm:h-64" />
+              <div className="relative h-52 w-full bg-stone-950 sm:h-64">
+                <img src={previewUrl} alt="Crop preview" className="h-full w-full object-fill" />
+                {yoloDetections.map((detection, index) => {
+                  const box = detection.box;
+                  return (
+                    <div
+                      key={`${detection.raw_label || detection.label}-${index}`}
+                      className={`absolute border-2 ${detection.selected ? 'border-leaf-300' : 'border-amber-300'} bg-stone-950/10`}
+                      style={{
+                        left: `${Number(box.x) * 100}%`,
+                        top: `${Number(box.y) * 100}%`,
+                        width: `${Number(box.width) * 100}%`,
+                        height: `${Number(box.height) * 100}%`,
+                      }}
+                    >
+                      <span className={`absolute left-0 top-0 max-w-full truncate px-2 py-1 text-[10px] font-bold text-stone-950 ${detection.selected ? 'bg-leaf-300' : 'bg-amber-300'}`}>
+                        {detection.label} {Math.round(Number(detection.confidence) * 100)}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <div className="relative h-52 overflow-hidden bg-stone-100 sm:h-64">
                 <img src={diseaseDetectorImage} alt="Sample crop disease leaves" className="h-full w-full object-cover opacity-45" />
@@ -1234,6 +1293,16 @@ function ResultPanel({ result, previewUrl, t, panelRef }) {
             )}
           </div>
           {result?.image_name && <p className="mt-3 text-sm font-semibold text-stone-700">{result.image_name}</p>}
+          {yoloDetections.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {yoloDetections.slice(0, 4).map((detection, index) => (
+                <div key={`${detection.raw_label || detection.label}-summary-${index}`} className="rounded-lg border border-stone-200 bg-white p-3">
+                  <p className="truncate text-sm font-bold text-stone-900">{detection.label}</p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">{Math.round(Number(detection.confidence) * 100)}% confidence</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -1481,8 +1550,21 @@ export default function PlantDiseaseDetector() {
       const backendReady = await detectOnlineMode();
       const useOfflineAnalysis = !window.navigator.onLine || !backendReady;
       const uploadImageFile = useOfflineAnalysis ? imageFile : await prepareImageForUpload(imageFile);
+      const preflightDiseaseName = (preflightOfflineResult?.disease_name || '').toLowerCase();
+      const preflightAnalysisMode = (preflightOfflineResult?.analysis_mode || '').toLowerCase();
+      const canTrustPreflightCrop =
+        preflightOfflineResult?.crop_label &&
+        preflightOfflineResult.crop_label !== 'General crop leaf' &&
+        !preflightDiseaseName.includes('review') &&
+        preflightOfflineResult.confidence >= 0.72 &&
+        (
+          preflightDiseaseName !== 'healthy crop' ||
+          preflightAnalysisMode.includes('rice panicle') ||
+          preflightAnalysisMode.includes('banana bunch') ||
+          preflightAnalysisMode.includes('filename-guided')
+        );
       const inferredCropType =
-        !selectedCrop && preflightOfflineResult?.crop_label && preflightOfflineResult.crop_label !== 'General crop leaf'
+        !selectedCrop && canTrustPreflightCrop
           ? preflightOfflineResult.crop_label
           : '';
       const requestCropType = selectedCrop || inferredCropType;

@@ -1,16 +1,46 @@
 {
-  "model_version": "manual-scan-hgb-v1",
-  "model_type": "sklearn.pipeline.DictVectorizer+HistGradientBoostingClassifier",
-  "trained_at": "2026-05-01T04:49:30.459883+00:00",
-  "training_source": "generated_philippine_manual_scan_profiles",
-  "training_note": "No public dataset was found with all AgriScan Manual Scan fields, so this model is trained from generated agronomic crop suitability profiles and random boundary cases.",
+  "model_version": "kaggle-crop-decision-tree-v1",
+  "model_type": "sklearn.pipeline.DictVectorizer+DecisionTreeClassifier",
+  "algorithm": "DecisionTreeClassifier",
+  "trained_at": "2026-05-10T13:15:03.261424+00:00",
+  "training_source": "Kaggle Crop Recommendation Dataset",
+  "dataset_source_url": "https://www.kaggle.com/datasets/atharvaingle/crop-recommendation-dataset",
+  "dataset_download_url": "https://huggingface.co/datasets/liaad/agricultural-data/resolve/main/Crop_recommendation.csv",
+  "dataset_local_path": "C:\\Users\\ronal\\OneDrive\\Desktop\\agriscan\\backend\\app\\ml\\datasets\\crop_recommendation\\Crop_recommendation.csv",
+  "dataset_note": "Public crop recommendation CSV with soil nutrient and climate features. Columns are N, P, K, temperature, humidity, ph, rainfall, and label.",
+  "preprocessing": [
+    "Validated required columns.",
+    "Converted numeric feature columns to float.",
+    "Dropped rows with missing labels, invalid numbers, impossible pH, humidity, temperature, or rainfall values.",
+    "Removed exact duplicate feature-target rows.",
+    "Split data with stratified train/test sampling."
+  ],
+  "input_features": [
+    "N",
+    "P",
+    "K",
+    "temperature",
+    "humidity",
+    "ph",
+    "rainfall"
+  ],
+  "target_variable": "label",
   "feature_schema": {
-    "numeric": [
+    "dataset_numeric": [
+      "N",
+      "P",
+      "K",
+      "temperature",
+      "humidity",
+      "ph",
+      "rainfall"
+    ],
+    "manual_numeric": [
       "ph_level",
       "moisture_percent",
       "soil_temperature_c"
     ],
-    "categorical": [
+    "manual_categorical": [
       "soil_type",
       "nitrogen_level",
       "phosphorus_level",
@@ -34,63 +64,148 @@
       "season": "regular season"
     }
   },
-  "categorical_values": {
-    "soil_type": [
-      "loam",
-      "sandy loam",
-      "clay loam",
-      "clay",
-      "sandy",
-      "alluvial"
-    ],
-    "nutrient_levels": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "drainage": [
-      "good",
-      "moderate",
-      "poor",
-      "waterlogged"
-    ],
-    "sunlight": [
-      "full sun",
-      "partial shade"
-    ],
-    "season": [
-      "regular season",
-      "wet season",
-      "dry season"
-    ]
+  "manual_input_mapping": {
+    "nitrogen_level": "N",
+    "phosphorus_level": "P",
+    "potassium_level": "K",
+    "soil_temperature_c": "temperature",
+    "moisture_percent": "humidity when live weather humidity is unavailable",
+    "ph_level": "ph",
+    "season/drainage/moisture/weather": "rainfall"
   },
-  "numeric_ranges": {
-    "ph_level": [
-      4.7,
-      8.1
-    ],
-    "moisture_percent": [
-      20.0,
-      95.0
-    ],
-    "soil_temperature_c": [
-      18.0,
-      36.0
-    ]
+  "class_display_names": {
+    "apple": "Apple",
+    "banana": "Banana",
+    "blackgram": "Black Gram",
+    "chickpea": "Chickpea",
+    "coconut": "Coconut",
+    "coffee": "Coffee",
+    "cotton": "Cotton",
+    "grapes": "Grapes",
+    "jute": "Jute",
+    "kidneybeans": "Kidney Beans",
+    "lentil": "Lentil",
+    "maize": "Corn",
+    "mango": "Mango",
+    "mothbeans": "Moth Beans",
+    "mungbean": "Mung Bean",
+    "muskmelon": "Muskmelon",
+    "orange": "Orange",
+    "papaya": "Papaya",
+    "pigeonpeas": "Pigeon Peas",
+    "pomegranate": "Pomegranate",
+    "rice": "Rice",
+    "watermelon": "Watermelon"
   },
-  "accuracy": 0.9577,
-  "top_3_accuracy": 0.9986,
-  "train_samples": 14080,
-  "test_samples": 3520,
+  "feature_ranges": {
+    "N": {
+      "min": 0.0,
+      "max": 140.0,
+      "mean": 50.552
+    },
+    "P": {
+      "min": 5.0,
+      "max": 145.0,
+      "mean": 53.363
+    },
+    "K": {
+      "min": 5.0,
+      "max": 205.0,
+      "mean": 48.149
+    },
+    "temperature": {
+      "min": 8.826,
+      "max": 43.675,
+      "mean": 25.616
+    },
+    "humidity": {
+      "min": 14.258,
+      "max": 99.982,
+      "mean": 71.482
+    },
+    "ph": {
+      "min": 3.505,
+      "max": 9.935,
+      "mean": 6.469
+    },
+    "rainfall": {
+      "min": 20.211,
+      "max": 298.56,
+      "mean": 103.464
+    }
+  },
+  "nutrient_level_values": {
+    "N": {
+      "low": 21.0,
+      "medium": 37.0,
+      "high": 84.25
+    },
+    "P": {
+      "low": 28.0,
+      "medium": 51.0,
+      "high": 68.0
+    },
+    "K": {
+      "low": 20.0,
+      "medium": 32.0,
+      "high": 49.0
+    }
+  },
+  "raw_rows": 2200,
+  "clean_rows": 2200,
+  "dropped_rows": 0,
+  "duplicate_rows_removed": 0,
+  "accuracy": 0.9818,
+  "f1_score": 0.9817,
+  "top_3_accuracy": 0.9841,
+  "train_samples": 1760,
+  "test_samples": 440,
+  "raw_classes": [
+    "apple",
+    "banana",
+    "blackgram",
+    "chickpea",
+    "coconut",
+    "coffee",
+    "cotton",
+    "grapes",
+    "jute",
+    "kidneybeans",
+    "lentil",
+    "maize",
+    "mango",
+    "mothbeans",
+    "mungbean",
+    "muskmelon",
+    "orange",
+    "papaya",
+    "pigeonpeas",
+    "pomegranate",
+    "rice",
+    "watermelon"
+  ],
   "classes": [
-    "Cassava",
+    "Apple",
+    "Banana",
+    "Black Gram",
+    "Chickpea",
+    "Coconut",
+    "Coffee",
+    "Cotton",
+    "Grapes",
+    "Jute",
+    "Kidney Beans",
+    "Lentil",
     "Corn",
-    "Eggplant",
-    "Gabi / Taro",
+    "Mango",
+    "Moth Beans",
     "Mung Bean",
-    "Pechay",
+    "Muskmelon",
+    "Orange",
+    "Papaya",
+    "Pigeon Peas",
+    "Pomegranate",
     "Rice",
-    "Sweet Potato",
-    "Tomato"
+    "Watermelon"
   ]
 }

@@ -14,7 +14,7 @@ from app.core.config import get_settings
 from app.core.database import Base, AsyncSessionLocal, engine, run_schema_compatibility_migrations
 from app.core.middleware import SecurityHeadersMiddleware
 from app.core.security import decode_token
-from app.models import Role
+from app.models import Role, User
 from app.services.realtime_alerts import realtime_alert_hub
 
 settings = get_settings()
@@ -36,8 +36,6 @@ async def seed_roles() -> None:
     role_seed = {
         "admin": ("System administrator", True),
         "farmer": ("Farm owner or operator", False),
-        "inspector": ("Agriculture office staff or inspector", True),
-        "buyer": ("Harvest buyer or cooperative purchaser", False),
     }
     async with AsyncSessionLocal() as db:
         for name, (description, requires_mfa) in role_seed.items():
@@ -47,8 +45,17 @@ async def seed_roles() -> None:
                 db.add(Role(name=name, description=description, requires_mfa=requires_mfa))
             else:
                 role.description = description
-                if name in {"admin", "inspector"}:
-                    role.requires_mfa = True
+                role.requires_mfa = requires_mfa
+
+        farmer_result = await db.execute(select(Role).where(Role.name == "farmer"))
+        farmer_role = farmer_result.scalar_one()
+        legacy_result = await db.execute(select(Role).where(Role.name.in_(("inspector", "buyer"))))
+        legacy_roles = list(legacy_result.scalars().all())
+        for legacy_role in legacy_roles:
+            users_result = await db.execute(select(User).where(User.role_id == legacy_role.id))
+            for user in users_result.scalars().all():
+                user.role_id = farmer_role.id
+            await db.delete(legacy_role)
         await db.commit()
 
 

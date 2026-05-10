@@ -183,4 +183,5 @@ async def create_scan(
     setattr(scan, "analysis_mode", detection.analysis_mode)
     setattr(scan, "reference_url", detection.reference_url)
     setattr(scan, "reference_title", detection.reference_title)
+    setattr(scan, "detections", detection.detections)
     return scan

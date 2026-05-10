@@ -17,7 +17,7 @@ async def audit_logs(_: User = Depends(require_roles("admin")), db: AsyncSession
 
 
 @router.get("/pending-farms", response_model=list[FarmRead])
-async def pending_farms(_: User = Depends(require_roles("admin", "inspector")), db: AsyncSession = Depends(get_db)) -> list[Farm]:
+async def pending_farms(_: User = Depends(require_roles("admin")), db: AsyncSession = Depends(get_db)) -> list[Farm]:
     result = await db.execute(select(Farm).where(Farm.status == "pending").order_by(Farm.created_at.desc()).limit(200))
     return list(result.scalars().all())
 

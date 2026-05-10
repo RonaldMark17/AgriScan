@@ -84,11 +84,15 @@ The FastAPI scan route loads this model automatically through `MODEL_PATH` and `
 
 ## 3B. Train Manual Scan Crop Recommender
 
-The Manual Scan form uses a separate tabular scikit-learn model trained for these fields:
+The Manual Scan form uses a separate tabular scikit-learn Decision Tree classifier trained on the public Kaggle Crop Recommendation Dataset:
 
 ```text
-Soil Type, pH Level, Moisture %, Soil Temp, Nitrogen, Phosphorus, Potassium, Drainage, Sunlight, Season
+Source: https://www.kaggle.com/datasets/atharvaingle/crop-recommendation-dataset
+Features: N, P, K, temperature, humidity, ph, rainfall
+Target: label
 ```
+
+The training script downloads a public CSV mirror when the local dataset is missing, cleans invalid rows, converts numeric features, removes duplicates, and creates a stratified train/test split. Manual form values are mapped into the dataset feature columns before prediction.
 
 Train it with:
 
@@ -103,7 +107,7 @@ app/ml/artifacts/manual_crop_recommender.pkl
 app/ml/artifacts/manual_crop_recommender_metadata.json
 ```
 
-The `/predictions/soil-scan` API loads this model automatically through `CROP_RECOMMENDER_MODEL_PATH` and falls back to the rule-based recommender if the artifact is missing.
+The `/predictions/soil-scan` API loads this model automatically through `CROP_RECOMMENDER_MODEL_PATH`, blends model probabilities with local agronomy guardrails, and falls back to the rule-based recommender if the artifact is missing.
 
 ## 3C. Train YOLOv8-Style Classifier
 
@@ -126,4 +130,4 @@ For true object detection with bounding boxes, use an annotated YOLO dataset and
 python app/ml/train_yolo.py --task detect --model yolov8n.pt --data path/to/data.yaml --epochs 50 --imgsz 640
 ```
 
-Classification datasets only contain image-level labels. Detection requires bounding box annotations.
+Classification datasets only contain image-level labels. Detection requires bounding box annotations. When `MODEL_PATH` points to a YOLO detection `.pt` file, the `/scans` API returns `detections` with normalized bounding boxes, labels, confidence scores, and the React disease detector draws those boxes on the uploaded image.

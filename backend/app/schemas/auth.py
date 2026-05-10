@@ -8,7 +8,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     phone: str | None = Field(default=None, max_length=32)
     password: str = Field(min_length=12, max_length=128)
-    role: str = Field(default="farmer", pattern="^(farmer|buyer|inspector)$")
+    role: str = Field(default="farmer", pattern="^farmer$")
 
     @field_validator("password")
     @classmethod

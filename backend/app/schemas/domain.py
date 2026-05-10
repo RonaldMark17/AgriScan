@@ -78,6 +78,7 @@ class ScanRead(BaseModel):
     analysis_mode: str | None = None
     reference_url: str | None = None
     reference_title: str | None = None
+    detections: list[dict[str, Any]] | None = None
     image_path: str
     disease_name: str
     confidence: float
@@ -144,4 +145,3 @@ class AuditLogRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
