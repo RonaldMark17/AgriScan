@@ -5,6 +5,7 @@ from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_roles
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models import AuditLog, Farm, Role, Scan, ScanFeedback, User
 from app.schemas.domain import AdminActivityLogRead, AdminFlaggedReviewRead, AuditLogRead, FarmRead
@@ -12,6 +13,7 @@ from app.services.audit import write_audit_log
 from app.services.feedback_learning import accept_scan_feedback, reject_scan_feedback, undo_scan_feedback_decision
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+settings = get_settings()
 
 
 def _scan_image_url(image_path: str | None) -> str | None:
@@ -20,6 +22,9 @@ def _scan_image_url(image_path: str | None) -> str | None:
 
     image_name = Path(image_path.replace("\\", "/")).name
     if not image_name:
+        return None
+
+    if not (settings.upload_path / image_name).is_file():
         return None
 
     return f"/uploads/{image_name}"

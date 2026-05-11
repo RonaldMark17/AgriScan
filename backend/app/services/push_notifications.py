@@ -133,21 +133,25 @@ def _firebase_app():
     except ValueError:
         pass
 
-    service_account_json = _clean(settings.firebase_service_account_json)
-    if service_account_json:
-        try:
-            certificate_data = json.loads(service_account_json)
-        except json.JSONDecodeError:
-            logger.exception("FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.")
-            return None
-        credential = credentials.Certificate(certificate_data)
-    else:
-        service_account_path = _service_account_path()
-        if service_account_path is None:
-            return None
-        credential = credentials.Certificate(str(service_account_path))
+    try:
+        service_account_json = _clean(settings.firebase_service_account_json)
+        if service_account_json:
+            try:
+                certificate_data = json.loads(service_account_json)
+            except json.JSONDecodeError:
+                logger.exception("FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.")
+                return None
+            credential = credentials.Certificate(certificate_data)
+        else:
+            service_account_path = _service_account_path()
+            if service_account_path is None:
+                return None
+            credential = credentials.Certificate(str(service_account_path))
 
-    return firebase_admin.initialize_app(credential, {"projectId": settings.firebase_project_id})
+        return firebase_admin.initialize_app(credential, {"projectId": settings.firebase_project_id})
+    except Exception as exc:
+        logger.exception("Firebase Admin could not initialize; push delivery will be skipped.", exc_info=exc)
+        return None
 
 
 async def upsert_push_subscription(
@@ -215,14 +219,18 @@ async def dispatch_push_to_user(
         "payload": payload or {},
     }
     realtime_sent = await realtime_alert_hub.notify_user(user_id, realtime_payload)
-    firebase_result = await _dispatch_firebase_push_to_user(
-        db,
-        user_id=user_id,
-        title=title,
-        body=body,
-        url=url,
-        payload=payload,
-    )
+    try:
+        firebase_result = await _dispatch_firebase_push_to_user(
+            db,
+            user_id=user_id,
+            title=title,
+            body=body,
+            url=url,
+            payload=payload,
+        )
+    except Exception as exc:
+        logger.exception("Firebase push dispatch failed for user %s; continuing without push delivery.", user_id, exc_info=exc)
+        firebase_result = PushDispatchResult(attempted=1, failed=1, skipped_reason="firebase_dispatch_failed")
     sent = realtime_sent + firebase_result.sent
     failed = firebase_result.failed
     attempted = realtime_sent + firebase_result.attempted
