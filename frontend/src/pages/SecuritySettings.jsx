@@ -12,7 +12,6 @@ import {
   ensureManualNotificationsEnabled,
   manualNotificationsEnabled,
   rememberNotificationIds,
-  showBrowserNotification,
 } from '../utils/browserNotifications.js';
 import { deviceNameFromUserAgent, isGenericDeviceName } from '../utils/deviceName.js';
 
@@ -32,8 +31,6 @@ export default function SecuritySettings() {
   const [syncStatus, setSyncStatus] = useState(() => localStorage.getItem('agriscan_last_sync') || t('notSyncedYet'));
   const [settingsStatus, setSettingsStatus] = useState('');
   const [pushLoading, setPushLoading] = useState(false);
-  const [testPushLoading, setTestPushLoading] = useState(false);
-  const [testNotificationPreview, setTestNotificationPreview] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
@@ -162,34 +159,6 @@ export default function SecuritySettings() {
       setPushStatus(getApiErrorMessage(error, t('pushFailed')));
     } finally {
       setPushLoading(false);
-    }
-  }
-
-  async function sendTestPush() {
-    setTestPushLoading(true);
-    try {
-      const enabled = await ensureManualNotificationsEnabled();
-      await api.post('/notifications/test');
-      const timestamp = Date.now();
-      const testNotification = {
-        id: `test-${timestamp}`,
-        title: 'AgriScan notifications ready',
-        body: 'You will receive alerts while AgriScan is open on this device.',
-        type: 'system',
-        tag: `agriscan-test-notification-${timestamp}`,
-        created_at: new Date(timestamp).toISOString(),
-        payload: { url: '/settings/security' },
-      };
-      const shown = enabled ? await showBrowserNotification(testNotification, user?.id) : false;
-      const notificationsResponse = await api.get('/notifications');
-      rememberNotificationIds(Array.isArray(notificationsResponse.data) ? notificationsResponse.data : [], user?.id);
-      setTestNotificationPreview(testNotification);
-      setPushStatus(shown ? t('testNotificationSent') : t('testNotificationFallback'));
-      setPushEnabled(enabled);
-    } catch (error) {
-      setPushStatus(getApiErrorMessage(error, t('testNotificationFailed')));
-    } finally {
-      setTestPushLoading(false);
     }
   }
 
@@ -453,30 +422,12 @@ export default function SecuritySettings() {
               </div>
             </div>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              {!pushEnabled ? (
+            {!pushEnabled ? (
+              <div className="mt-3">
                 <button className="btn-secondary w-full" onClick={enablePush} type="button" disabled={pushLoading || pushChecking}>
                   <BellRing className="h-4 w-4" />
                   {pushLoading ? t('enabling') : pushChecking ? `${t('checking')}...` : t('enablePush')}
                 </button>
-              ) : null}
-              <button className="btn-secondary w-full" onClick={sendTestPush} type="button" disabled={testPushLoading || pushChecking || !pushEnabled}>
-                <BellRing className="h-4 w-4" />
-                {testPushLoading ? t('sendingTestNotification') : t('sendTestNotification')}
-              </button>
-            </div>
-            {testNotificationPreview ? (
-              <div className="mt-3 rounded-lg border border-leaf-100 bg-white p-4 text-sm shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-                <div className="flex items-start gap-3">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
-                    <BellRing className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-stone-950">{testNotificationPreview.title}</p>
-                    <p className="mt-1 text-stone-600">{testNotificationPreview.body}</p>
-                    <p className="mt-2 text-xs font-semibold text-leaf-700">{t('testNotificationPreview')}</p>
-                  </div>
-                </div>
               </div>
             ) : null}
           </SettingsSection>

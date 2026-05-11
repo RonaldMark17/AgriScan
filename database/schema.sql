@@ -90,6 +90,28 @@ CREATE INDEX IF NOT EXISTS ix_scans_user_id ON scans(user_id);
 CREATE INDEX IF NOT EXISTS ix_scans_farm_id ON scans(farm_id);
 CREATE INDEX IF NOT EXISTS ix_scans_crop_id ON scans(crop_id);
 
+CREATE TABLE IF NOT EXISTS scan_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  scan_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  original_disease_name VARCHAR(160) NOT NULL,
+  original_crop_label VARCHAR(120),
+  corrected_crop_label VARCHAR(120) NOT NULL,
+  corrected_disease_name VARCHAR(160) NOT NULL,
+  corrected_class_key VARCHAR(160) NOT NULL,
+  user_note TEXT,
+  verification_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+  verification_reason TEXT,
+  feature_signature JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS ix_scan_feedback_scan_id ON scan_feedback(scan_id);
+CREATE INDEX IF NOT EXISTS ix_scan_feedback_user_id ON scan_feedback(user_id);
+CREATE INDEX IF NOT EXISTS ix_scan_feedback_status ON scan_feedback(verification_status);
+
 CREATE TABLE IF NOT EXISTS predictions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   farm_id INTEGER NOT NULL,

@@ -1,4 +1,4 @@
-import { Clock3, Loader2, RefreshCw, ShieldCheck, UserRoundCheck } from 'lucide-react';
+import { Clock3, Flag, Loader2, RefreshCw, ShieldCheck, UserRoundCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import EmptyState from '../components/shared/EmptyState.jsx';
@@ -10,20 +10,23 @@ export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [farms, setFarms] = useState([]);
+  const [flaggedReviews, setFlaggedReviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
 
   async function load() {
     setLoading(true);
     try {
-      const [usersResponse, logsResponse, farmsResponse] = await Promise.all([
+      const [usersResponse, logsResponse, farmsResponse, flaggedReviewsResponse] = await Promise.all([
         api.get('/users'),
         api.get('/admin/audit-logs'),
         api.get('/admin/pending-farms'),
+        api.get('/admin/flagged-reviews'),
       ]);
       setUsers(usersResponse.data);
       setLogs(logsResponse.data);
       setFarms(farmsResponse.data);
+      setFlaggedReviews(flaggedReviewsResponse.data);
     } finally {
       setLoading(false);
     }
@@ -41,6 +44,18 @@ export default function AdminUsers() {
     } finally {
       setApprovingId(null);
     }
+  }
+
+  function reviewStatusClass(status) {
+    if (status === 'verified') return 'bg-leaf-50 text-leaf-800';
+    if (status === 'pending') return 'bg-amber-50 text-amber-800';
+    return 'bg-stone-100 text-stone-700';
+  }
+
+  function reviewStatusLabel(status) {
+    if (status === 'pending') return t('pending');
+    if (status === 'verified') return t('success');
+    return status || t('status');
   }
 
   return (
@@ -121,6 +136,68 @@ export default function AdminUsers() {
                       {t('approve')}
                     </button>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="surface rounded-lg p-4 sm:p-5">
+            <h2 className="section-title flex items-center gap-2">
+              <Flag className="h-5 w-5 text-leaf-700" />
+              {t('flaggedReviews')}
+            </h2>
+            {flaggedReviews.length === 0 ? (
+              <div className="mt-4">
+                <EmptyState title={t('noFlaggedReviews')} body={t('flaggedReviewsBody')} />
+              </div>
+            ) : (
+              <div className="mt-4 max-h-[30rem] space-y-3 overflow-y-auto pr-1">
+                {flaggedReviews.map((review) => (
+                  <article key={review.id} className="rounded-lg border border-stone-200 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-stone-950">{review.corrected_crop_label}</p>
+                        <p className="mt-1 text-xs text-stone-500">
+                          {t('submittedBy')}: {review.user_name}
+                        </p>
+                      </div>
+                      <span className={`status-pill shrink-0 ${reviewStatusClass(review.verification_status)}`}>
+                        {reviewStatusLabel(review.verification_status)}
+                      </span>
+                    </div>
+
+                    <div className={`mt-3 grid gap-3 ${review.image_url ? 'min-[420px]:grid-cols-[88px_minmax(0,1fr)]' : ''}`}>
+                      {review.image_url ? (
+                        <img
+                          src={review.image_url}
+                          alt={t('scanImage')}
+                          className="h-20 w-full rounded-lg border border-stone-200 object-cover min-[420px]:w-[88px]"
+                        />
+                      ) : null}
+                      <div className="space-y-2 text-xs leading-5 text-stone-600">
+                        <p>
+                          <span className="font-bold text-stone-800">{t('originalResult')}:</span> {review.original_disease_name}
+                        </p>
+                        <p>
+                          <span className="font-bold text-stone-800">{t('correctedResult')}:</span> {review.corrected_disease_name}
+                        </p>
+                        {review.user_note ? (
+                          <p>
+                            <span className="font-bold text-stone-800">{t('note')}:</span> {review.user_note}
+                          </p>
+                        ) : null}
+                        {review.verification_reason ? (
+                          <p>
+                            <span className="font-bold text-stone-800">{t('verificationReason')}:</span> {review.verification_reason}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-[11px] font-medium text-stone-400">
+                      {new Date(review.created_at).toLocaleString()}
+                    </p>
+                  </article>
                 ))}
               </div>
             )}

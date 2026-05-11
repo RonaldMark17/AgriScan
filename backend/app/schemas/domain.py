@@ -114,6 +114,28 @@ class ScanFeedbackRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AdminFlaggedReviewRead(BaseModel):
+    id: int
+    scan_id: int
+    user_id: int
+    user_name: str
+    user_email: EmailStr
+    original_disease_name: str
+    original_crop_label: str | None
+    corrected_crop_label: str
+    corrected_disease_name: str
+    corrected_class_key: str
+    user_note: str | None
+    verification_status: str
+    verification_reason: str | None
+    scan_disease_name: str
+    scan_status: str
+    scan_confidence: float
+    scan_crop_label: str | None
+    image_url: str | None
+    created_at: datetime
+
+
 class PredictionRead(BaseModel):
     id: int
     farm_id: int

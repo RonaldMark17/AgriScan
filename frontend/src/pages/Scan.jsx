@@ -71,6 +71,145 @@ const soilInputLimits = {
   moisture_percent: { min: 5, max: 100, label: 'Moisture must be between 5% and 100%.', key: 'moistureRangeError' },
   soil_temperature_c: { min: 10, max: 45, label: 'Soil temperature must be between 10C and 45C.', key: 'soilTemperatureRangeError' },
 };
+const offlineCropTemplates = [
+  {
+    crop: 'Rice',
+    base: 72,
+    reason: 'Performs well in clay or alluvial soils with reliable water supply.',
+    planting_window: 'Best at the start of the rainy season or when irrigation is available.',
+    watering: 'Keep soil consistently moist during establishment.',
+    fertilizer: 'Use split nitrogen application and avoid excess nitrogen during humid periods.',
+  },
+  {
+    crop: 'Corn',
+    base: 70,
+    reason: 'Fits well-drained loam to sandy loam soils with good sunlight.',
+    planting_window: 'Plant when soil is moist but not waterlogged.',
+    watering: 'Water during tasseling and grain filling if rainfall is low.',
+    fertilizer: 'Side-dress nitrogen during vegetative growth.',
+  },
+  {
+    crop: 'Tomato',
+    base: 68,
+    reason: 'Needs well-drained loam soil with balanced moisture and near-neutral pH.',
+    planting_window: 'Plant during cooler dry months or protected rainy-season production.',
+    watering: 'Use consistent watering and avoid wetting leaves.',
+    fertilizer: 'Support calcium and potassium to reduce fruit disorders.',
+  },
+  {
+    crop: 'Eggplant',
+    base: 67,
+    reason: 'Adaptable to loam and clay loam soils with warm Philippine conditions.',
+    planting_window: 'Suitable for year-round planting with pest monitoring.',
+    watering: 'Maintain steady moisture without flooding.',
+    fertilizer: 'Apply compost and balanced NPK before flowering.',
+  },
+  {
+    crop: 'Pechay',
+    base: 64,
+    reason: 'Fast-growing leafy vegetable for fertile loam soils.',
+    planting_window: 'Plant in short cycles when heavy rain is manageable.',
+    watering: 'Water lightly and regularly.',
+    fertilizer: 'Use nitrogen-rich organic fertilizer for leaf growth.',
+  },
+  {
+    crop: 'Cassava',
+    base: 63,
+    reason: 'Tolerates sandy or light soils and lower moisture better than many vegetables.',
+    planting_window: 'Plant at the beginning of rains for establishment.',
+    watering: 'Needs little irrigation after establishment.',
+    fertilizer: 'Add potassium support for root development.',
+  },
+  {
+    crop: 'Mung Bean',
+    base: 62,
+    reason: 'Good legume option for sandy loam and lower nitrogen soils.',
+    planting_window: 'Best after rice or during a drier window.',
+    watering: 'Avoid waterlogging and irrigate lightly during flowering.',
+    fertilizer: 'Use inoculant or compost; avoid heavy nitrogen.',
+  },
+  {
+    crop: 'Sweet Potato',
+    base: 61,
+    reason: 'Works well in loose sandy loam soils with moderate fertility.',
+    planting_window: 'Plant when soil is warm and rainfall is steady.',
+    watering: 'Keep moist during vine establishment, then reduce watering.',
+    fertilizer: 'Avoid excess nitrogen; support potassium for tuber growth.',
+  },
+  {
+    crop: 'Gabi / Taro',
+    base: 60,
+    reason: 'Suitable for moist clay soils and areas that stay wet.',
+    planting_window: 'Plant during rainy months or in irrigated plots.',
+    watering: 'Maintain high soil moisture.',
+    fertilizer: 'Use compost and balanced nutrients before corm expansion.',
+  },
+  {
+    crop: 'Banana',
+    base: 66,
+    reason: 'Fits warm loam to alluvial soils with steady moisture and good drainage.',
+    planting_window: 'Plant at the start of rains or with dependable irrigation.',
+    watering: 'Maintain even moisture, especially during bunch development.',
+    fertilizer: 'Apply organic matter and potassium-rich fertilizer in split applications.',
+  },
+  {
+    crop: 'Coconut',
+    base: 63,
+    reason: 'Perennial crop for warm coastal or lowland areas with deep, well-drained soil.',
+    planting_window: 'Plant seedlings when rainfall is reliable and field access is stable.',
+    watering: 'Keep young palms watered during dry spells until roots establish.',
+    fertilizer: 'Use potassium, chloride, and organic matter based on local soil testing.',
+  },
+  {
+    crop: 'Pineapple',
+    base: 59,
+    reason: 'Tolerates acidic sandy loam and needs open sun with good drainage.',
+    planting_window: 'Plant slips or crowns when rainfall can support early rooting.',
+    watering: 'Irrigate lightly during long dry spells and avoid standing water.',
+    fertilizer: 'Apply nitrogen and potassium in small scheduled doses.',
+  },
+  {
+    crop: 'Onion',
+    base: 56,
+    reason: 'Performs best in loose, well-drained soil during cooler dry periods.',
+    planting_window: 'Plant during the dry season or a low-rainfall window.',
+    watering: 'Use shallow, regular irrigation and reduce water near bulb maturity.',
+    fertilizer: 'Balance nitrogen early with phosphorus and potassium for bulb formation.',
+  },
+  {
+    crop: 'Mango',
+    base: 58,
+    reason: 'Tree crop for warm well-drained soil and drier flowering windows.',
+    planting_window: 'Plant grafted seedlings at the beginning of the rainy season.',
+    watering: 'Water young trees regularly, then reduce excess moisture before flowering.',
+    fertilizer: 'Use compost and balanced tree fertilizer, avoiding excess nitrogen before flowering.',
+  },
+  {
+    crop: 'Cacao',
+    base: 55,
+    reason: 'Tree crop for warm, humid, organic-rich soil with partial shade when young.',
+    planting_window: 'Plant when rainfall is reliable and shade trees are ready.',
+    watering: 'Keep soil moist but well-drained, especially during establishment.',
+    fertilizer: 'Use organic matter plus balanced nutrients based on soil analysis.',
+  },
+];
+const offlineCropTraits = {
+  clay: new Set(['rice', 'gabi taro', 'eggplant', 'pechay']),
+  sandy: new Set(['corn', 'cassava', 'mung bean', 'sweet potato', 'pineapple']),
+  loam: new Set(['corn', 'tomato', 'eggplant', 'pechay', 'onion', 'banana', 'mango', 'cacao']),
+  alluvial: new Set(['rice', 'corn', 'banana', 'coconut', 'gabi taro']),
+  acid: new Set(['rice', 'cassava', 'sweet potato', 'pineapple', 'coconut', 'cacao', 'banana']),
+  neutral: new Set(['tomato', 'eggplant', 'pechay', 'corn', 'onion', 'mung bean']),
+  highMoisture: new Set(['rice', 'gabi taro', 'coconut', 'banana', 'cacao']),
+  lowMoisture: new Set(['cassava', 'mung bean', 'sweet potato', 'pineapple', 'corn', 'mango']),
+  moderateMoisture: new Set(['corn', 'tomato', 'eggplant', 'pechay', 'onion', 'mango']),
+  warm: new Set(['corn', 'eggplant', 'cassava', 'mung bean', 'sweet potato', 'pineapple', 'banana', 'mango', 'coconut', 'cacao']),
+  cool: new Set(['pechay', 'onion', 'tomato']),
+  fullSun: new Set(['corn', 'tomato', 'eggplant', 'cassava', 'mung bean', 'banana', 'mango', 'pineapple', 'coconut']),
+  partialShade: new Set(['pechay', 'gabi taro', 'cacao']),
+  drySeason: new Set(['corn', 'cassava', 'mung bean', 'sweet potato', 'onion', 'tomato', 'mango', 'pineapple']),
+  wetSeason: new Set(['rice', 'gabi taro', 'coconut', 'banana', 'cacao']),
+};
 
 function parseOptionalNumber(value) {
   if (value === '' || value === null || value === undefined) return null;
@@ -95,6 +234,169 @@ function getSoilInputErrors(inputs, t = null) {
   });
 
   return errors;
+}
+
+function normalizeCropName(value) {
+  return (value || '').toLowerCase().replace(/[/_-]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function hasCrop(trait, crop) {
+  return offlineCropTraits[trait].has(normalizeCropName(crop));
+}
+
+function offlineSoilGuardrail(phLevel, moisturePercent, soilTemperatureC) {
+  let cap = 98;
+  let penalty = 0;
+  const warnings = [];
+
+  if (phLevel !== null) {
+    if (phLevel < 4.5 || phLevel > 8.8) {
+      cap = Math.min(cap, 55);
+      penalty += 18;
+      warnings.push('The pH is outside the safe range for most crops; correct soil pH before planting.');
+    } else if (phLevel < 5.2 || phLevel > 8.2) {
+      cap = Math.min(cap, 72);
+      penalty += 8;
+      warnings.push('The pH is stressful for many crops and lowers suitability.');
+    }
+  }
+
+  if (moisturePercent !== null) {
+    if (moisturePercent < 15) {
+      cap = Math.min(cap, 58);
+      penalty += 12;
+      warnings.push('Soil moisture is very low, so water-demanding crops should be delayed.');
+    } else if (moisturePercent > 85) {
+      cap = Math.min(cap, 65);
+      penalty += 10;
+      warnings.push('Soil moisture is high and may reduce crops that dislike waterlogging.');
+    }
+  }
+
+  if (soilTemperatureC !== null && (soilTemperatureC < 18 || soilTemperatureC > 38)) {
+    cap = Math.min(cap, 60);
+    penalty += 12;
+    warnings.push('Soil temperature is stressful and lowers planting suitability.');
+  }
+
+  return { cap, penalty, warnings };
+}
+
+function buildOfflineSoilSummary(payload) {
+  const details = [`${payload.soil_type} soil`];
+  if (payload.ph_level !== null) details.push(`pH ${payload.ph_level}`);
+  if (payload.moisture_percent !== null) details.push(`${payload.moisture_percent}% moisture`);
+  if (payload.soil_temperature_c !== null) details.push(`${payload.soil_temperature_c}C soil temperature`);
+  return details.join(', ');
+}
+
+function buildOfflineSoilActions(payload, warnings) {
+  if (warnings.length > 0) return warnings;
+
+  const actions = ['Confirm the recommendation with local field conditions before planting.'];
+  if (payload.ph_level !== null && payload.ph_level < 5.6) {
+    actions.push('Consider lime or organic matter based on a soil test before planting sensitive crops.');
+  }
+  if (payload.moisture_percent !== null && payload.moisture_percent <= 35) {
+    actions.push('Irrigate before planting water-demanding crops.');
+  }
+  if ((payload.drainage || '').includes('water')) {
+    actions.push('Open drainage channels before planting crops that dislike standing water.');
+  }
+  return actions;
+}
+
+function buildOfflineCropRecommendation(payload, t) {
+  const soil = (payload.soil_type || '').toLowerCase();
+  const drainage = (payload.drainage || 'moderate').toLowerCase();
+  const sunlight = (payload.sunlight || 'full sun').toLowerCase();
+  const season = (payload.season || 'regular season').toLowerCase();
+  const nitrogen = (payload.nitrogen_level || 'medium').toLowerCase();
+  const phosphorus = (payload.phosphorus_level || 'medium').toLowerCase();
+  const potassium = (payload.potassium_level || 'medium').toLowerCase();
+  const guardrail = offlineSoilGuardrail(payload.ph_level, payload.moisture_percent, payload.soil_temperature_c);
+
+  const recommendations = offlineCropTemplates
+    .map((candidate) => {
+      let score = candidate.base;
+
+      if (soil.includes('clay')) score += hasCrop('clay', candidate.crop) ? 12 : -4;
+      if (soil.includes('sandy')) score += hasCrop('sandy', candidate.crop) ? 12 : -5;
+      if (soil.includes('loam')) score += hasCrop('loam', candidate.crop) ? 10 : 4;
+      if (soil.includes('alluvial')) score += hasCrop('alluvial', candidate.crop) ? 12 : 5;
+
+      if (payload.ph_level !== null) {
+        if (payload.ph_level < 5.6) score += hasCrop('acid', candidate.crop) ? 8 : -10;
+        else if (payload.ph_level <= 7.2) score += hasCrop('neutral', candidate.crop) ? 9 : 4;
+      }
+
+      if (payload.moisture_percent !== null) {
+        if (payload.moisture_percent >= 65) score += hasCrop('highMoisture', candidate.crop) ? 12 : -6;
+        else if (payload.moisture_percent <= 35) score += hasCrop('lowMoisture', candidate.crop) ? 10 : -5;
+        else score += hasCrop('moderateMoisture', candidate.crop) ? 8 : 3;
+      }
+
+      if (payload.soil_temperature_c !== null) {
+        if (payload.soil_temperature_c >= 30) score += hasCrop('warm', candidate.crop) ? 8 : 0;
+        else if (payload.soil_temperature_c < 22) score += hasCrop('cool', candidate.crop) ? 5 : -4;
+      }
+
+      if (drainage.includes('poor') || drainage.includes('water')) score += hasCrop('highMoisture', candidate.crop) ? 13 : -8;
+      else if (drainage.includes('good')) score += hasCrop('lowMoisture', candidate.crop) || hasCrop('moderateMoisture', candidate.crop) ? 9 : 1;
+
+      if (sunlight.includes('partial')) score += hasCrop('partialShade', candidate.crop) ? 6 : -3;
+      else score += hasCrop('fullSun', candidate.crop) ? 6 : 2;
+
+      if (season.includes('rain') || season.includes('wet')) score += hasCrop('wetSeason', candidate.crop) ? 8 : -2;
+      else if (season.includes('dry')) score += hasCrop('drySeason', candidate.crop) ? 8 : -3;
+
+      if (nitrogen === 'low') score += normalizeCropName(candidate.crop) === 'mung bean' ? 7 : -2;
+      if (phosphorus === 'low' && ['tomato', 'corn', 'sweet potato', 'onion'].includes(normalizeCropName(candidate.crop))) score -= 3;
+      if (potassium === 'low' && ['tomato', 'cassava', 'sweet potato', 'banana', 'coconut', 'pineapple'].includes(normalizeCropName(candidate.crop))) score -= 4;
+
+      return {
+        ...candidate,
+        suitability: Math.max(20, Math.min(guardrail.cap, Math.round(score - guardrail.penalty))),
+        suitability_cap: guardrail.cap,
+      };
+    })
+    .sort((first, second) => second.suitability - first.suitability)
+    .slice(0, 4);
+  const best = recommendations[0];
+  const locationLabel = payload.location_label || payload.province || null;
+
+  return {
+    generated_on: new Date().toISOString().slice(0, 10),
+    province: payload.province,
+    soil_type: payload.soil_type,
+    ph_level: payload.ph_level,
+    moisture_percent: payload.moisture_percent,
+    soil_temperature_c: payload.soil_temperature_c,
+    best_crop: best.crop,
+    confidence: Number((best.suitability / 100).toFixed(2)),
+    soil_summary: buildOfflineSoilSummary(payload),
+    recommendations,
+    soil_warnings: guardrail.warnings,
+    scan_valid: guardrail.warnings.length === 0,
+    soil_actions: buildOfflineSoilActions(payload, guardrail.warnings),
+    location: {
+      label: locationLabel,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+    },
+    weather: null,
+    weather_summary: null,
+    recommendation_basis: [t('offlineRecommendationBasis')],
+    recommendation_model: {
+      source: 'offline-browser-rules',
+      version: 'offline-rule-based-v1',
+      accuracy: null,
+      f1_score: null,
+      top_3_accuracy: null,
+      features: null,
+    },
+    offline: true,
+  };
 }
 
 function hasUsableSoilScan(scan) {
@@ -371,7 +673,7 @@ function HistoryList({ history, onSelect, t }) {
           <p className="text-sm text-stone-500">{t('savedForComparison')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {history.length > 6 && (
+          {history.length >= 6 && (
             <button
               className="btn-secondary h-10 px-4 text-sm"
               onClick={() => setShowAll((current) => !current)}
@@ -588,6 +890,7 @@ export default function Scan() {
   const [sortMode, setSortMode] = useState('Suitability');
   const [selectedCrop, setSelectedCrop] = useState(null);
   const [audioStatus, setAudioStatus] = useState('');
+  const [online, setOnline] = useState(() => navigator.onLine);
   const [locationState, setLocationState] = useState({
     locating: false,
     error: '',
@@ -607,6 +910,17 @@ export default function Scan() {
       return;
     }
     requestCurrentLocation(true);
+  }, []);
+
+  useEffect(() => {
+    const handleOnlineChange = () => setOnline(navigator.onLine);
+
+    window.addEventListener('online', handleOnlineChange);
+    window.addEventListener('offline', handleOnlineChange);
+    return () => {
+      window.removeEventListener('online', handleOnlineChange);
+      window.removeEventListener('offline', handleOnlineChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -759,6 +1073,15 @@ export default function Scan() {
 
   async function runRecommendation(payload) {
     setError('');
+    if (!navigator.onLine) {
+      setOnline(false);
+      const scan = { ...buildOfflineCropRecommendation(payload, t), id: makeHistoryId(), created_at: new Date().toISOString(), inputs: payload };
+      setResult(scan);
+      saveHistory(scan);
+      setAudioStatus(t('offlineCropRecommendationReady'));
+      return scan;
+    }
+
     setLoading(true);
     setAudioStatus('');
 
@@ -769,6 +1092,14 @@ export default function Scan() {
       saveHistory(scan);
       return scan;
     } catch (requestError) {
+      if (!navigator.onLine || requestError?.code === 'ERR_NETWORK') {
+        setOnline(navigator.onLine);
+        const scan = { ...buildOfflineCropRecommendation(payload, t), id: makeHistoryId(), created_at: new Date().toISOString(), inputs: payload };
+        setResult(scan);
+        saveHistory(scan);
+        setAudioStatus(t('offlineCropRecommendationReady'));
+        return scan;
+      }
       setError(getApiErrorMessage(requestError, t('soilScanFailed')));
       return null;
     } finally {
@@ -988,6 +1319,12 @@ export default function Scan() {
           )}
 
           {error && <div className="mt-5 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
+
+          {!online && !error && (
+            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+              {t('cropRecommendationOfflineMode')}
+            </div>
+          )}
 
           <button className="btn-primary mt-6 h-12 w-full text-base" disabled={!canSubmit || loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sprout className="h-4 w-4" />}
