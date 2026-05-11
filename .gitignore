@@ -5,6 +5,7 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+*.log
 uploads/
 runs/
 backend/app/ml/datasets/
