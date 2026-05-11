@@ -158,7 +158,7 @@ For production, set the same-origin frontend API URL before rebuilding:
 
 ```env
 VITE_API_BASE_URL=/api/v1
-VITE_ENABLE_REALTIME_ALERTS=true
+VITE_ENABLE_REALTIME_ALERTS=false
 ```
 
 Configure Firebase Cloud Messaging in `backend/.env` to enable closed-browser push delivery:
@@ -206,7 +206,7 @@ sudo systemctl start agriscan
 New scan image uploads are mirrored to Firebase Storage automatically when `FIREBASE_MIRROR_UPLOADS=true`. If a local
 `/uploads/<file>` is missing, the backend will try to restore it from Firebase Storage before returning 404.
 
-Realtime WebSocket alerts are enabled by default and backed by AJAX polling every 10 seconds, so the notification bell updates without a manual refresh. Set `VITE_ENABLE_REALTIME_ALERTS=false` only if the host proxy cannot pass WebSocket traffic yet.
+AJAX notification refresh runs every 10 seconds by default, so the notification bell updates without a manual refresh. Set `VITE_ENABLE_REALTIME_ALERTS=true` only after the host proxy can pass `/api/v1/notifications/stream` WebSocket traffic.
 
 ## Notification Flow
 
@@ -216,8 +216,8 @@ AgriScan supports Firebase Cloud Messaging for closed-browser delivery when Fire
 - Backend also sends Firebase push through stored browser FCM tokens in `backend/app/services/push_notifications.py`.
 - Frontend subscribes with Firebase Messaging from the Security settings screen and stores the token through `/api/v1/notifications/push/subscribe`.
 - `frontend/public/sw.js` handles native `push` events and displays notifications through `self.registration.showNotification(...)`.
-- Frontend listens with `connectRealtimeAlertStream` in `frontend/src/utils/realtimeAlerts.js` when realtime alerts are enabled.
-- `frontend/src/components/layout/Topbar.jsx` reloads notifications on realtime signals and every 60 seconds while the app is running.
+- Frontend listens with `connectRealtimeAlertStream` in `frontend/src/utils/realtimeAlerts.js` only when realtime alerts are explicitly enabled.
+- `frontend/src/components/layout/Topbar.jsx` reloads notifications on realtime signals and every 10 seconds while the app is running.
 - New unread items show an in-app toast while AgriScan is open; Firebase push handles notifications when the app is closed or in the background.
 
 Seed or refresh the production demo data without wiping the SQLite volume:

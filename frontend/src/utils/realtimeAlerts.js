@@ -1,8 +1,8 @@
 import { getApiBaseUrl } from '../api/client.js';
 
-const MAX_REALTIME_RETRIES = 8;
+const MAX_REALTIME_RETRIES = 4;
 const TOKEN_EXPIRY_GRACE_MS = 15000;
-const REALTIME_ALERTS_ENABLED = import.meta.env.VITE_ENABLE_REALTIME_ALERTS !== 'false';
+const REALTIME_ALERTS_ENABLED = import.meta.env.VITE_ENABLE_REALTIME_ALERTS === 'true';
 
 function realtimeUrl(token) {
   const baseUrl = getApiBaseUrl().replace(/\/$/, '');
