@@ -2,6 +2,7 @@ import { api } from '../api/client.js';
 
 const MANUAL_NOTIFICATIONS_KEY = 'agriscan_manual_notifications';
 const SHOWN_NOTIFICATION_IDS_PREFIX = 'agriscan_shown_notification_ids';
+const SERVICE_WORKER_READY_TIMEOUT_MS = 10000;
 
 function storageAvailable() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -134,6 +135,59 @@ async function getWebPushPublicKey() {
   return data.public_key;
 }
 
+function waitForActiveServiceWorkerRegistration() {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((resolve) => {
+      window.setTimeout(() => resolve(null), SERVICE_WORKER_READY_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+function waitForWorkerActivation(worker) {
+  if (!worker) return Promise.resolve(false);
+  if (worker.state === 'activated') return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeoutId;
+
+    const finish = (active) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      worker.removeEventListener('statechange', onStateChange);
+      resolve(active);
+    };
+
+    const onStateChange = () => {
+      if (worker.state === 'activated') {
+        finish(true);
+      } else if (worker.state === 'redundant') {
+        finish(false);
+      }
+    };
+
+    timeoutId = window.setTimeout(() => finish(worker.state === 'activated'), SERVICE_WORKER_READY_TIMEOUT_MS);
+    worker.addEventListener('statechange', onStateChange);
+  });
+}
+
+async function ensureActiveServiceWorker(registration) {
+  if (registration?.active) return registration;
+
+  const readyRegistration = await waitForActiveServiceWorkerRegistration();
+  if (readyRegistration?.active) return readyRegistration;
+
+  const activatingWorkers = [registration?.installing, registration?.waiting].filter(Boolean);
+  if (activatingWorkers.length) {
+    await Promise.all(activatingWorkers.map((worker) => waitForWorkerActivation(worker)));
+  }
+
+  if (registration?.active) return registration;
+  throw new Error('Service worker is still starting. Please try again in a few seconds.');
+}
+
 async function getServiceWorkerRegistration({ create = true } = {}) {
   if (!('serviceWorker' in navigator)) return null;
 
@@ -141,7 +195,8 @@ async function getServiceWorkerRegistration({ create = true } = {}) {
   if (!registration && create) {
     registration = await navigator.serviceWorker.register('/sw.js');
   }
-  return registration || null;
+  if (!registration || !create) return registration || null;
+  return ensureActiveServiceWorker(registration);
 }
 
 export async function getWebPushSubscriptionState() {
