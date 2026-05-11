@@ -47,6 +47,8 @@ class FarmCreate(BaseModel):
 class FarmRead(FarmCreate):
     id: int
     user_id: int
+    owner_name: str | None = None
+    owner_email: EmailStr | None = None
     status: str
     created_at: datetime
 
@@ -191,3 +193,18 @@ class AuditLogRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AdminActivityLogRead(BaseModel):
+    id: int
+    user_id: int | None
+    user_name: str | None
+    user_email: EmailStr | None
+    user_role: str | None
+    action: str
+    resource_type: str | None
+    resource_id: str | None
+    ip_address: str | None
+    user_agent: str | None
+    metadata_json: dict[str, Any] | None
+    created_at: datetime

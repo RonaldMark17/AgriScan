@@ -21,7 +21,7 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
@@ -689,7 +689,7 @@ function HistoryList({ history, onSelect, t }) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="history-grid">
         {displayedHistory.map((scan) => (
           <button
             key={scan.id}
@@ -698,15 +698,15 @@ function HistoryList({ history, onSelect, t }) {
             type="button"
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-wide text-stone-400">{scan.soil_type}</p>
-                <h3 className="mt-2 text-lg font-bold text-stone-950">{scan.best_crop}</h3>
+                <h3 className="mt-2 break-words text-lg font-bold text-stone-950">{scan.best_crop}</h3>
                 <p className="mt-1 text-sm text-stone-500">{new Date(scan.created_at).toLocaleString()}</p>
                 {(scan.location?.label || scan.province) && (
                   <p className="mt-1 text-xs font-semibold text-stone-500">{scan.location?.label || scan.province}</p>
                 )}
               </div>
-              <span className="rounded-full bg-leaf-50 px-3 py-1 text-xs font-bold text-leaf-700">
+              <span className="shrink-0 rounded-full bg-leaf-50 px-3 py-1 text-xs font-bold text-leaf-700">
                 {Math.round(scan.confidence * 100)}%
               </span>
             </div>
@@ -819,21 +819,21 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
 function CropCard({ crop, onGuide, weatherSummary, t }) {
   return (
-    <article className="surface overflow-hidden rounded-lg">
-      <div className="p-5">
+    <article className="surface flex h-full flex-col overflow-hidden rounded-lg">
+      <div className="flex flex-1 flex-col p-4 sm:p-5">
         <div className="flex flex-col gap-4 min-[440px]:flex-row min-[440px]:items-start min-[440px]:justify-between">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-600 sm:h-14 sm:w-14">
-              <Leaf className="h-7 w-7" />
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-600">
+              <Leaf className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <h2 className="break-words text-xl font-bold text-stone-950 sm:text-2xl">{crop.name}</h2>
-              <p className="text-base text-stone-500">{translatedCategory(crop.variety, t)}</p>
+              <h2 className="break-words text-xl font-bold leading-tight text-stone-950">{crop.name}</h2>
+              <p className="mt-0.5 text-sm text-stone-500">{translatedCategory(crop.variety, t)}</p>
             </div>
           </div>
           <div className="text-left min-[440px]:text-right">
-            <p className="text-3xl font-bold text-leaf-600 sm:text-4xl">{crop.score}%</p>
-            <p className="text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
+            <p className="text-3xl font-bold leading-none text-leaf-600">{crop.score}%</p>
+            <p className="mt-1 text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
           </div>
         </div>
 
@@ -854,10 +854,10 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
           ))}
         </div>
 
-        <div className="my-7 border-t border-dashed border-stone-200" />
-        <div className="flex items-center justify-between gap-4 text-sm font-semibold text-stone-600">
+        <div className="my-5 border-t border-dashed border-stone-200" />
+        <div className="grid gap-2 text-sm font-semibold text-stone-600 min-[460px]:grid-cols-[120px_minmax(0,1fr)]">
           <span className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4" /> {t('plantingWindow')}</span>
-          <TranslatedText as="span" className="text-right" text={crop.window} />
+          <TranslatedText as="span" className="min-w-0 break-words min-[460px]:text-right" text={crop.window} />
         </div>
 
         <div className="mt-5 rounded-lg bg-leaf-50/60 p-4">
@@ -865,12 +865,12 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
         </div>
       </div>
 
-      <footer className="flex items-center justify-between border-t border-stone-100 px-5 py-4 text-sm">
-        <span className="inline-flex items-center gap-2 text-stone-500">
-          <Droplets className="h-4 w-4" />
+      <footer className="flex flex-col gap-3 border-t border-stone-100 px-4 py-4 text-sm min-[460px]:flex-row min-[460px]:items-center min-[460px]:justify-between sm:px-5">
+        <span className="inline-flex min-w-0 items-center gap-2 text-stone-500">
+          <Droplets className="h-4 w-4 shrink-0" />
           {weatherSummary ? <TranslatedText text={weatherSummary} /> : t('waitingLiveWeather')}
         </span>
-        <button className="inline-flex items-center gap-2 font-bold text-leaf-700" onClick={() => onGuide(crop)} type="button">
+        <button className="inline-flex shrink-0 items-center gap-2 font-bold text-leaf-700" onClick={() => onGuide(crop)} type="button">
           {t('viewGuide')} <ArrowRight className="h-4 w-4" />
         </button>
       </footer>
@@ -898,19 +898,6 @@ export default function Scan() {
     label: '',
     coords: null,
   });
-
-  useEffect(() => {
-    const savedScans = readStoredScans();
-    setHistory(savedScans);
-    if (savedScans.length > 0) {
-      const latest = savedScans[0];
-      setResult(latest);
-      setForm(buildFormFromInputs(latest.inputs || latest));
-      setLocationState(buildLocationStateFromScan(latest));
-      return;
-    }
-    requestCurrentLocation(true);
-  }, []);
 
   useEffect(() => {
     const handleOnlineChange = () => setOnline(navigator.onLine);
@@ -977,7 +964,7 @@ export default function Scan() {
     };
   }
 
-  function requestCurrentLocation(silent = false) {
+  const requestCurrentLocation = useCallback((silent = false) => {
     if (!navigator.geolocation) {
       if (!silent) {
         setLocationState((current) => ({
@@ -1053,7 +1040,20 @@ export default function Scan() {
         maximumAge: 300000,
       }
     );
-  }
+  }, [t]);
+
+  useEffect(() => {
+    const savedScans = readStoredScans();
+    setHistory(savedScans);
+    if (savedScans.length > 0) {
+      const latest = savedScans[0];
+      setResult(latest);
+      setForm(buildFormFromInputs(latest.inputs || latest));
+      setLocationState(buildLocationStateFromScan(latest));
+      return;
+    }
+    requestCurrentLocation(true);
+  }, [requestCurrentLocation]);
 
   function resetForm() {
     setForm(initialForm);
@@ -1151,7 +1151,7 @@ export default function Scan() {
     : t('basedOnLatestSoilScan');
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <CropGuideModal
         crop={selectedCrop}
         weatherSummary={result?.weather_summary}
@@ -1160,7 +1160,7 @@ export default function Scan() {
         t={t}
       />
 
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="eyebrow">{t('manualSoilScan')}</p>
           <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">
@@ -1176,8 +1176,8 @@ export default function Scan() {
         </div>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] xl:gap-6">
-        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 xl:sticky xl:top-24 xl:self-start">
+      <div className="split-layout">
+        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 xl:sticky sticky-panel xl:self-start">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-stone-950">{t('soilDetails')}</h2>
@@ -1384,7 +1384,7 @@ export default function Scan() {
               </div>
             </div>
 
-            <div className="mb-6 flex gap-3 overflow-x-auto pb-1">
+            <div className="pill-strip mb-6">
               {categories.map((item) => (
                 <button
                   key={item}
@@ -1406,7 +1406,7 @@ export default function Scan() {
             )}
 
             {result ? (
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="card-grid">
                 {visibleCrops.map((crop) => (
                   <CropCard key={crop.id} crop={crop} onGuide={setSelectedCrop} weatherSummary={result?.weather_summary} t={t} />
                 ))}
@@ -1431,7 +1431,7 @@ export default function Scan() {
 
           <SoilActions result={result} t={t} />
 
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
             {[
               [FlaskConical, t('soilType'), form.soil_type],
               [Gauge, 'pH', form.ph_level || '--'],

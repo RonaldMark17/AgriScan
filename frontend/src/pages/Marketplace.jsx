@@ -1,5 +1,5 @@
 import { ArrowRight, Crosshair, Droplets, Filter, Leaf, Loader2, MapPin, Play, TrendingUp, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
@@ -203,21 +203,21 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
 function CropCard({ crop, onGuide, weatherSummary, t }) {
   return (
-    <article className="surface overflow-hidden rounded-lg">
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="grid h-14 w-14 place-items-center rounded-lg bg-leaf-50 text-leaf-600">
-              <Leaf className="h-7 w-7" />
+    <article className="surface flex h-full flex-col overflow-hidden rounded-lg">
+      <div className="flex flex-1 flex-col p-4 sm:p-5">
+        <div className="flex flex-col gap-4 min-[440px]:flex-row min-[440px]:items-start min-[440px]:justify-between">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-600">
+              <Leaf className="h-6 w-6" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-stone-950">{crop.name}</h2>
-              <p className="text-base text-stone-500">{translatedCategory(crop.variety, t)}</p>
+            <div className="min-w-0">
+              <h2 className="break-words text-xl font-bold leading-tight text-stone-950">{crop.name}</h2>
+              <p className="mt-0.5 text-sm text-stone-500">{translatedCategory(crop.variety, t)}</p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-4xl font-bold text-leaf-600">{crop.score}%</p>
-            <p className="text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
+          <div className="text-left min-[440px]:text-right">
+            <p className="text-3xl font-bold leading-none text-leaf-600">{crop.score}%</p>
+            <p className="mt-1 text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
           </div>
         </div>
 
@@ -238,10 +238,10 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
           ))}
         </div>
 
-        <div className="my-7 border-t border-dashed border-stone-200" />
-        <div className="flex items-center justify-between gap-4 text-sm font-semibold text-stone-600">
+        <div className="my-5 border-t border-dashed border-stone-200" />
+        <div className="grid gap-2 text-sm font-semibold text-stone-600 min-[460px]:grid-cols-[120px_minmax(0,1fr)]">
           <span className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4" /> {t('plantingWindow')}</span>
-          <TranslatedText as="span" className="text-right" text={crop.window} />
+          <TranslatedText as="span" className="min-w-0 break-words min-[460px]:text-right" text={crop.window} />
         </div>
 
         <div className="mt-5 rounded-lg bg-leaf-50/60 p-4">
@@ -249,12 +249,12 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
         </div>
       </div>
 
-      <footer className="flex items-center justify-between border-t border-stone-100 px-5 py-4 text-sm">
-        <span className="inline-flex items-center gap-2 text-stone-500">
-          <Droplets className="h-4 w-4" />
+      <footer className="flex flex-col gap-3 border-t border-stone-100 px-4 py-4 text-sm min-[460px]:flex-row min-[460px]:items-center min-[460px]:justify-between sm:px-5">
+        <span className="inline-flex min-w-0 items-center gap-2 text-stone-500">
+          <Droplets className="h-4 w-4 shrink-0" />
           {weatherSummary ? <TranslatedText text={weatherSummary} /> : t('waitingLiveWeather')}
         </span>
-        <button className="inline-flex items-center gap-2 font-bold text-leaf-700" onClick={() => onGuide(crop)} type="button">
+        <button className="inline-flex shrink-0 items-center gap-2 font-bold text-leaf-700" onClick={() => onGuide(crop)} type="button">
           {t('viewGuide')} <ArrowRight className="h-4 w-4" />
         </button>
       </footer>
@@ -279,7 +279,7 @@ export default function Marketplace() {
   });
   const [scanSource, setScanSource] = useState('default');
 
-  async function loadRecommendations(useCurrentLocation = true) {
+  const loadRecommendations = useCallback(async (useCurrentLocation = true) => {
     setLoading(true);
     setError('');
     setAudioStatus('');
@@ -314,11 +314,11 @@ export default function Marketplace() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [t]);
 
   useEffect(() => {
     loadRecommendations(true);
-  }, []);
+  }, [loadRecommendations]);
 
   useEffect(() => {
     if (!selectedCrop) return undefined;
@@ -374,7 +374,7 @@ export default function Marketplace() {
     : t('basedOnLatestSoilScan');
 
   return (
-    <div>
+    <div className="page-stack">
       <CropGuideModal
         crop={selectedCrop}
         weatherSummary={result?.weather_summary}
@@ -383,8 +383,8 @@ export default function Marketplace() {
         t={t}
       />
 
-      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
           <p className="eyebrow">{t('recommendations')}</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">{t('cropRecommendations')}</h1>
           <TranslatedText
@@ -416,18 +416,18 @@ export default function Marketplace() {
       </div>
 
       {(gpsState.error || error) && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
           {gpsState.error || error}
         </div>
       )}
 
       {audioStatus && (
-        <div className="mb-6 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800">
+        <div className="rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800">
           {audioStatus}
         </div>
       )}
 
-      <section className="mb-8 rounded-lg border border-sky-100 bg-sky-50 p-5">
+      <section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-sky-700">{t('locationAndWeather')}</p>
@@ -448,7 +448,7 @@ export default function Marketplace() {
         </div>
       </section>
 
-      <div className="mb-8 flex gap-3 overflow-x-auto pb-1">
+      <div className="pill-strip">
         {categories.map((item) => (
           <button
             key={item}
@@ -470,7 +470,7 @@ export default function Marketplace() {
           <p className="mt-2 text-sm text-stone-500">{t('completeManualSoilScan')}</p>
         </div>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="card-grid">
           {visibleCrops.map((crop) => <CropCard key={crop.id} crop={crop} onGuide={setSelectedCrop} weatherSummary={result?.weather_summary} t={t} />)}
           {visibleCrops.length === 0 && (
             <div className="surface rounded-lg p-8 text-center xl:col-span-2">

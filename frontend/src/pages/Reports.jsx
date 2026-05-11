@@ -97,7 +97,7 @@ export default function Reports() {
         </div>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="content-sidebar-layout">
         <section className="surface rounded-lg p-4 sm:p-5">
           <h2 className="section-title flex items-center gap-2">
             <FileText className="h-5 w-5 text-leaf-700" />
@@ -137,7 +137,7 @@ export default function Reports() {
           ) : null}
         </section>
 
-        <aside className="surface rounded-lg p-4 sm:p-5">
+        <aside className="surface rounded-lg p-4 sm:p-5 min-[1440px]:sticky sticky-panel min-[1440px]:self-start">
           <h3 className="section-title">Recommendation</h3>
           <p className="mt-2 text-sm leading-6 text-stone-600">
             {report?.recommendation || 'Scan more crops and register farm locations to generate richer analytics.'}

@@ -149,18 +149,12 @@ async def create_scan(
         detector.detect(
             str(file_path),
             crop_type=crop_type,
-            original_filename=image.filename if image is not None else None,
+            original_filename=None,
             allow_online_lookup=not offline_mode,
         )
         if file_path is not None
         else manual_entry_diagnosis(crop_type, affected_part, symptoms, severity, field_notes)
     )
-    if file_path is not None and detection.disease_name == "Invalid crop or leaf image":
-        file_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=detection.cause or "Upload a clear crop or leaf photo for disease analysis.",
-        )
     if file_path is not None:
         detection = await apply_verified_feedback(db, str(file_path), detection, crop_type)
         if detection.disease_name == "Invalid crop or leaf image":

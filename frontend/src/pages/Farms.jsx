@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client.js';
 import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 import { reverseGeocodeLocation } from '../utils/openStreetMap.js';
@@ -35,6 +36,10 @@ function hasCoordinates(item) {
 
 function formatFarmLocation(farm, t) {
   return [farm.barangay, farm.municipality, farm.province].filter(Boolean).join(', ') || t('locationDetailsNotSet');
+}
+
+function formatFarmOwner(farm) {
+  return farm.owner_name || farm.owner_email || (farm.user_id ? `User #${farm.user_id}` : '-');
 }
 
 function escapeHtml(value = '') {
@@ -165,7 +170,10 @@ function buildGpsErrorMessage(error, t) {
 }
 
 export default function Farms() {
+  const { user } = useAuth();
   const { t } = useI18n();
+  const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name;
+  const isAdmin = roleName === 'admin';
   const [farms, setFarms] = useState([]);
   const [selectedFarmId, setSelectedFarmId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -361,6 +369,7 @@ export default function Farms() {
           `<div style="min-width:220px;padding:4px 2px;font-family:Inter,Segoe UI,sans-serif;">
             <div style="font-size:15px;font-weight:700;color:#1c1917;">${escapeHtml(farm.name)}</div>
             <div style="margin-top:6px;font-size:12px;color:#57534e;">${escapeHtml(formatFarmLocation(farm, t))}</div>
+            ${isAdmin ? `<div style="margin-top:8px;font-size:12px;color:#44403c;">${escapeHtml(t('owner'))}: ${escapeHtml(formatFarmOwner(farm))}</div>` : ''}
             <div style="margin-top:10px;font-size:12px;color:#44403c;">${escapeHtml(t('statusLabel'))}: ${escapeHtml(farm.status)}</div>
             <div style="margin-top:4px;font-size:12px;color:#44403c;">${escapeHtml(t('area'))}: ${farm.area_hectares || '-'} ha</div>
           </div>`
@@ -447,7 +456,7 @@ export default function Farms() {
     }
 
     return undefined;
-  }, [draftBoundaryGeoJson, farms, form.latitude, form.longitude, selectedFarm, selectedFarmId, t]);
+  }, [draftBoundaryGeoJson, farms, form.latitude, form.longitude, isAdmin, selectedFarm, selectedFarmId, t]);
 
   async function submit(event) {
     event.preventDefault();
@@ -482,8 +491,8 @@ export default function Farms() {
         title={t('farmRegistry')}
         body={t('farmRegistryBody')}
       />
-      <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
-        <form className="surface rounded-lg p-4 sm:p-5" onSubmit={submit}>
+      <div className="split-layout">
+        <form className="surface rounded-lg p-4 sm:p-5 xl:sticky sticky-panel xl:self-start" onSubmit={submit}>
           <h2 className="section-title flex items-center gap-2">
             <Plus className="h-5 w-5 text-leaf-700" />
             {t('registerFarm')}
@@ -591,6 +600,11 @@ export default function Farms() {
                       <div className="min-w-0">
                         <h3 className="break-words font-bold text-stone-950">{farm.name}</h3>
                         <p className="mt-1 text-sm text-stone-500">{formatFarmLocation(farm, t)}</p>
+                        {isAdmin ? (
+                          <p className="mt-2 text-xs font-semibold text-stone-600">
+                            {t('owner')}: {formatFarmOwner(farm)}
+                          </p>
+                        ) : null}
                       </div>
                       <span className="shrink-0 rounded-full bg-leaf-100 px-2 py-1 text-xs font-bold uppercase text-leaf-800">{farm.status}</span>
                     </div>

@@ -238,8 +238,8 @@ export default function Topbar() {
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-[70] border-b border-stone-200/90 bg-white/95 shadow-[0_1px_2px_rgba(15,23,42,0.035)] backdrop-blur">
-        <div className="topbar-shell flex h-16 min-w-0 items-center justify-between lg:grid lg:h-[72px] lg:grid-cols-[256px_minmax(0,1fr)_auto]">
+      <header className="topbar fixed inset-x-0 top-0 z-[70] border-b border-stone-200/90 bg-white/95 shadow-[0_1px_2px_rgba(15,23,42,0.035)] backdrop-blur">
+        <div className="topbar-shell">
           <Link
             to="/"
             className="topbar-brand flex h-full min-w-0 flex-1 items-center gap-2 border-0 px-3 sm:gap-3 sm:px-5 lg:flex-none lg:px-6"

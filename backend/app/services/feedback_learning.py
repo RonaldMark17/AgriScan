@@ -48,8 +48,24 @@ FEATURE_DISTANCE_SCALES = {
     "max_fruit_aspect": 8.0,
 }
 
-LEARNED_MATCH_DISTANCE = 0.18
+LEARNED_MATCH_DISTANCE = 0.09
 LEARNED_CORRECTION_LIMIT = 400
+ADMIN_ACCEPTED_REASON = "Accepted by admin review."
+LEARNED_FEATURE_DELTA_LIMITS = {
+    "green_leaf_ratio": 0.18,
+    "lesion_ratio": 0.22,
+    "lesion_within_plant": 0.26,
+    "yellow_ratio": 0.18,
+    "rust_ratio": 0.12,
+    "dark_lesion_ratio": 0.16,
+    "center_green_ratio": 0.18,
+    "center_lesion_ratio": 0.22,
+    "center_fruit_ratio": 0.24,
+    "center_tan_ratio": 0.24,
+    "banana_fruit_ratio": 0.24,
+    "max_green_area_ratio": 0.18,
+    "max_fruit_area_ratio": 0.24,
+}
 INVALID_FEEDBACK_TERMS = {
     "invalid crop image",
     "invalid crop or leaf image",
@@ -84,6 +100,18 @@ def _signature_distance(first: dict[str, Any], second: dict[str, Any]) -> float:
     if not distances:
         return 1.0
     return sum(distances) / len(distances)
+
+
+def _signatures_are_compatible(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    for key, limit in LEARNED_FEATURE_DELTA_LIMITS.items():
+        try:
+            left = float(first.get(key, 0.0))
+            right = float(second.get(key, 0.0))
+        except (TypeError, ValueError):
+            return False
+        if abs(left - right) > limit:
+            return False
+    return True
 
 
 def _normalize_condition_text(value: str) -> str:
@@ -183,6 +211,41 @@ def _verified_detection(
     )
 
 
+def _apply_verified_feedback_to_scan(scan: Scan, feedback: ScanFeedback) -> DiseaseDetection:
+    detection = _verified_detection(
+        corrected_crop_label=feedback.corrected_crop_label,
+        corrected_disease_name=feedback.corrected_disease_name,
+        corrected_class_key=feedback.corrected_class_key,
+    )
+    scan.disease_name = detection.disease_name
+    scan.confidence = detection.confidence
+    scan.cause = detection.cause
+    scan.treatment = detection.treatment
+    scan.crop_label = detection.crop_label
+    scan.analysis_mode = detection.analysis_mode
+    scan.status = "rejected" if feedback.corrected_class_key == "invalid_crop_image" else "corrected"
+    setattr(feedback, "applied_disease_name", detection.disease_name)
+    setattr(feedback, "applied_confidence", detection.confidence)
+    setattr(feedback, "applied_cause", detection.cause)
+    setattr(feedback, "applied_treatment", detection.treatment)
+    setattr(feedback, "applied_analysis_mode", detection.analysis_mode)
+    return detection
+
+
+def _restore_scan_from_feedback(scan: Scan, feedback: ScanFeedback) -> None:
+    fallback_metadata = detector._metadata_for_key(feedback.original_disease_name)
+    scan.disease_name = feedback.original_disease_name
+    scan.crop_label = feedback.original_crop_label
+    scan.status = feedback.original_status or "detected"
+    if feedback.original_confidence is not None:
+        scan.confidence = feedback.original_confidence
+    else:
+        scan.confidence = min(scan.confidence, 0.86)
+    scan.cause = feedback.original_cause if feedback.original_cause is not None else fallback_metadata["cause"]
+    scan.treatment = feedback.original_treatment if feedback.original_treatment is not None else fallback_metadata["treatment"]
+    scan.analysis_mode = feedback.original_analysis_mode or "admin undo restore"
+
+
 def _verify_feedback(
     features: dict[str, float],
     *,
@@ -196,14 +259,21 @@ def _verify_feedback(
     original_crop_key = detector._normalize_crop_type(original_crop_label)
     corrected_crop_key = detector._normalize_crop_type(corrected_crop_label)
     corrected_condition = _normalize_condition_text(corrected_disease_name)
+    class_crop_key = detector._crop_key_from_class_key(detector._canonical_key_for_label(corrected_class_key))
 
     if original_condition == corrected_condition and original_crop_key == corrected_crop_key:
         return "rejected", "The correction matches the existing scan result, so there is nothing new to learn."
+
+    if class_crop_key and corrected_crop_key and class_crop_key != corrected_crop_key:
+        return "pending", "The corrected disease label does not match the corrected crop, so an admin should review it before learning."
 
     if corrected_class_key == "invalid_crop_image":
         if detector._looks_like_non_crop_foreground(features, None):
             return "verified", "The image matches a non-crop foreground pattern, so it will be rejected in future scans."
         return "pending", "AgriScan could not prove this is a non-crop image automatically, so an admin should review it before learning."
+
+    if original_crop_key != corrected_crop_key:
+        return "pending", "Crop-changing corrections need admin review before they teach the detector."
 
     is_healthy_correction = corrected_disease_name == "Healthy crop" or corrected_class_key.endswith("_healthy")
     if is_healthy_correction:
@@ -228,12 +298,14 @@ async def apply_verified_feedback(
     crop_type: str | None = None,
 ) -> DiseaseDetection:
     path = Path(image_path)
-    if not path.exists() or detection.disease_name == "Invalid crop or leaf image":
+    if not path.exists():
         return detection
 
     features = detector._extract_leaf_features(str(path))
     current_signature = _feature_signature(features)
     explicit_crop_key = detector._normalize_crop_type(crop_type)
+    detected_crop_key = detector._normalize_crop_type(detection.crop_label)
+    detected_condition = _normalize_condition_text(detection.disease_name)
 
     result = await db.execute(
         select(ScanFeedback)
@@ -246,8 +318,24 @@ async def apply_verified_feedback(
     for feedback in result.scalars().all():
         if not isinstance(feedback.feature_signature, dict):
             continue
+        if feedback.verification_reason != ADMIN_ACCEPTED_REASON:
+            continue
         corrected_crop_key = detector._normalize_crop_type(feedback.corrected_crop_label)
-        if explicit_crop_key and corrected_crop_key and explicit_crop_key != corrected_crop_key:
+        corrected_class_key = detector._canonical_key_for_label(feedback.corrected_class_key)
+        class_crop_key = detector._crop_key_from_class_key(corrected_class_key)
+        if not corrected_crop_key:
+            continue
+        if explicit_crop_key and corrected_crop_key != explicit_crop_key:
+            continue
+        if class_crop_key and class_crop_key != corrected_crop_key:
+            continue
+        if (
+            corrected_crop_key == detected_crop_key
+            and _normalize_condition_text(feedback.corrected_disease_name)
+            == detected_condition
+        ):
+            continue
+        if not _signatures_are_compatible(current_signature, feedback.feature_signature):
             continue
         distance = _signature_distance(current_signature, feedback.feature_signature)
         if distance < best_distance:
@@ -278,7 +366,7 @@ async def create_scan_feedback(
 
     features = detector._extract_leaf_features(str(image_path))
     signature = _feature_signature(features)
-    original_crop_label = detector._crop_label_from_key(scan.disease_name)
+    original_crop_label = scan.crop_label or detector._crop_label_from_key(scan.disease_name)
     corrected_class_key, corrected_disease_name = _class_key_from_feedback(
         payload.corrected_crop_label,
         payload.corrected_condition,
@@ -300,6 +388,11 @@ async def create_scan_feedback(
         user_id=current_user.id,
         original_disease_name=scan.disease_name,
         original_crop_label=original_crop_label,
+        original_confidence=scan.confidence,
+        original_cause=scan.cause,
+        original_treatment=scan.treatment,
+        original_analysis_mode=scan.analysis_mode,
+        original_status=scan.status,
         corrected_crop_label=corrected_crop_label,
         corrected_disease_name=corrected_disease_name,
         corrected_class_key=corrected_class_key,
@@ -312,16 +405,7 @@ async def create_scan_feedback(
 
     applied_detection: DiseaseDetection | None = None
     if verification_status == "verified":
-        applied_detection = _verified_detection(
-            corrected_crop_label=corrected_crop_label,
-            corrected_disease_name=corrected_disease_name,
-            corrected_class_key=corrected_class_key,
-        )
-        scan.disease_name = applied_detection.disease_name
-        scan.confidence = applied_detection.confidence
-        scan.cause = applied_detection.cause
-        scan.treatment = applied_detection.treatment
-        scan.status = "rejected" if corrected_class_key == "invalid_crop_image" else "corrected"
+        applied_detection = _apply_verified_feedback_to_scan(scan, feedback)
 
     await db.flush()
     setattr(feedback, "applied_disease_name", applied_detection.disease_name if applied_detection else None)
@@ -329,4 +413,62 @@ async def create_scan_feedback(
     setattr(feedback, "applied_cause", applied_detection.cause if applied_detection else None)
     setattr(feedback, "applied_treatment", applied_detection.treatment if applied_detection else None)
     setattr(feedback, "applied_analysis_mode", applied_detection.analysis_mode if applied_detection else None)
+    return feedback
+
+
+async def accept_scan_feedback(
+    db: AsyncSession,
+    feedback: ScanFeedback,
+    scan: Scan,
+    reason: str = "Accepted by admin review.",
+) -> ScanFeedback:
+    if feedback.verification_status == "rejected":
+        raise ValueError("This correction was already rejected.")
+
+    feedback.verification_status = "verified"
+    feedback.verification_reason = reason
+    _apply_verified_feedback_to_scan(scan, feedback)
+    await db.flush()
+    return feedback
+
+
+async def reject_scan_feedback(
+    db: AsyncSession,
+    feedback: ScanFeedback,
+    reason: str = "Rejected by admin review.",
+) -> ScanFeedback:
+    if feedback.verification_status == "verified":
+        raise ValueError("This correction was already accepted and applied.")
+
+    feedback.verification_status = "rejected"
+    feedback.verification_reason = reason
+    setattr(feedback, "applied_disease_name", None)
+    setattr(feedback, "applied_confidence", None)
+    setattr(feedback, "applied_cause", None)
+    setattr(feedback, "applied_treatment", None)
+    setattr(feedback, "applied_analysis_mode", None)
+    await db.flush()
+    return feedback
+
+
+async def undo_scan_feedback_decision(
+    db: AsyncSession,
+    feedback: ScanFeedback,
+    scan: Scan,
+    reason: str = "Decision undone by admin review.",
+) -> ScanFeedback:
+    if feedback.verification_status == "pending":
+        raise ValueError("This correction is already pending review.")
+
+    if feedback.verification_status == "verified":
+        _restore_scan_from_feedback(scan, feedback)
+
+    feedback.verification_status = "pending"
+    feedback.verification_reason = reason
+    setattr(feedback, "applied_disease_name", None)
+    setattr(feedback, "applied_confidence", None)
+    setattr(feedback, "applied_cause", None)
+    setattr(feedback, "applied_treatment", None)
+    setattr(feedback, "applied_analysis_mode", None)
+    await db.flush()
     return feedback

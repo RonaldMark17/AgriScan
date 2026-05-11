@@ -10,6 +10,7 @@ from app.schemas.auth import (
 )
 from app.schemas.common import MessageResponse
 from app.schemas.domain import (
+    AdminActivityLogRead,
     AuditLogRead,
     CropCreate,
     CropRead,
@@ -24,6 +25,7 @@ from app.schemas.domain import (
 )
 
 __all__ = [
+    "AdminActivityLogRead",
     "AuditLogRead",
     "CropCreate",
     "CropRead",

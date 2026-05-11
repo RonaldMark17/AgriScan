@@ -362,6 +362,8 @@ UNSUPPORTED_CROP_ALIASES = {
     "sitaw": "Yardlong Bean",
     "yardlong bean": "Yardlong Bean",
     "string bean": "String Bean",
+    "sigarilyas": "Winged Bean / Sigarilyas",
+    "winged bean": "Winged Bean / Sigarilyas",
     "soybean": "Soybean",
     "peanut": "Peanut",
     "mani": "Peanut",
@@ -1732,7 +1734,6 @@ class CropDiseaseDetector:
 
         hint_values = [
             example.get("id"),
-            example.get("source_file"),
             example.get("crop_label"),
             example.get("disease_name"),
             example.get("class_key"),
@@ -1745,10 +1746,12 @@ class CropDiseaseDetector:
         return any(re.search(rf"\b{re.escape(token)}\b", context) for token in hints)
 
     def _visual_memory_crop_allowed(self, example: dict[str, Any], selected_crop_key: str | None) -> bool:
-        if not selected_crop_key:
-            return True
         class_key = self._canonical_key_for_label(str(example.get("class_key") or ""))
         if class_key == "invalid_crop_image":
+            return selected_crop_key is None
+        if str(example.get("crop_scope") or "").lower() == "any":
+            return True
+        if not selected_crop_key:
             return True
         crop_label = str(example.get("crop_label") or "")
         example_crop_key = self._normalize_crop_type(crop_label)
@@ -1797,11 +1800,11 @@ class CropDiseaseDetector:
 
         class_key = self._canonical_key_for_label(str(best_example.get("class_key") or "review_needed"))
         crop_label = str(best_example.get("crop_label") or "") or self._crop_label_from_key(class_key)
+        if str(best_example.get("crop_scope") or "").lower() == "any" and selected_crop_key:
+            crop_label = self._display_crop_label(selected_crop_key) or crop_label
         metadata = self._metadata_for_key(class_key)
         base_confidence = float(best_example.get("confidence") or 0.88)
         confidence = max(0.72, min(0.96, base_confidence - best_distance * 1.25))
-        source_name = str(best_example.get("source_file") or best_example.get("id") or "a verified example")
-
         if class_key == "invalid_crop_image":
             return DiseaseDetection(
                 disease_name=metadata["name"],
@@ -1819,7 +1822,7 @@ class CropDiseaseDetector:
             display_crop = crop_label.removeprefix("Possible ").strip() or crop_label
             disease_name = "Possible healthy crop" if class_key == "healthy" else "Crop scan needs review"
             cause = (
-                f"AgriScan matched this image to a verified {display_crop} sample ({source_name}). "
+                f"AgriScan matched this image to a verified {display_crop} sample. "
                 "This crop is not in the trained crop list, so the result is shown as a possible crop match."
             )
             treatment = (
@@ -1839,7 +1842,7 @@ class CropDiseaseDetector:
         disease_name = str(best_example.get("disease_name") or metadata["name"])
         cause = metadata["cause"]
         if best_has_hint or selected_crop_key:
-            cause = f"{cause} This result matched a verified AgriScan training example ({source_name})."
+            cause = f"{cause} This result matched a verified AgriScan training example."
         detection = DiseaseDetection(
             disease_name=disease_name,
             confidence=confidence,
@@ -1948,7 +1951,7 @@ class CropDiseaseDetector:
         has_leaf_or_plant_subject = self._has_crop_subject_in_foreground(features, None) or (
             features["green_leaf_ratio"] >= 0.16
             and (features["max_green_area_ratio"] >= 0.08 or features["lesion_ratio"] >= 0.035)
-        )
+        ) or self._has_crop_part_signal(features, None)
         if not has_leaf_or_plant_subject:
             return None
         if features["banana_fruit_ratio"] >= 0.12 or features["max_fruit_area_ratio"] >= 0.10:
@@ -2206,7 +2209,7 @@ class CropDiseaseDetector:
             and (features["center_green_ratio"] >= 0.035 or features["green_leaf_ratio"] >= 0.10)
         )
         centered_fruit_or_stem = (
-            fruit_or_stem_crop
+            (fruit_or_stem_crop or features["center_fruit_ratio"] >= 0.14)
             and features["center_fruit_ratio"] >= 0.18
             and (
                 features["center_green_ratio"] >= 0.035
@@ -2215,6 +2218,53 @@ class CropDiseaseDetector:
             )
         )
         return centered_leaf or centered_disease_tissue or centered_fruit_or_stem
+
+    def _has_crop_part_signal(self, features: dict[str, float], crop_key: str | None) -> bool:
+        if self._has_crop_subject_in_foreground(features, crop_key):
+            return True
+        if self._looks_like_corn_ear_morphology(features):
+            return True
+        if self._looks_like_banana_fruit_issue(features, crop_key):
+            return True
+        if self._looks_like_healthy_rice_panicle(features) or self._looks_like_healthy_banana_bunch(features):
+            return True
+
+        produce_signal = (
+            features["banana_fruit_ratio"] >= 0.08
+            or features["max_fruit_area_ratio"] >= 0.055
+            or features["center_fruit_ratio"] >= 0.10
+            or (features["fruit_component_count"] >= 2 and features["max_fruit_area_ratio"] >= 0.025)
+        )
+        diseased_produce = (
+            produce_signal
+            and features["center_lesion_ratio"] >= 0.055
+            and features["lesion_ratio"] >= 0.032
+            and (
+                features["dark_lesion_ratio"] >= 0.018
+                or features["rust_ratio"] >= 0.018
+                or features["yellow_ratio"] >= 0.035
+                or features["green_leaf_ratio"] >= 0.08
+            )
+        )
+        green_pod_or_leaf_cluster = (
+            features["green_leaf_ratio"] >= 0.16
+            and features["max_green_area_ratio"] >= 0.07
+            and (
+                features["center_green_ratio"] >= 0.08
+                or features["green_component_count"] >= 3
+                or features["max_green_aspect"] >= 1.6
+            )
+        )
+        damaged_plant_tissue = (
+            features["green_leaf_ratio"] >= 0.08
+            and features["lesion_ratio"] >= 0.035
+            and (
+                features["center_lesion_ratio"] >= 0.045
+                or features["green_edge_ratio"] >= 0.16
+                or features["adjacent_nonleaf_ratio"] >= 0.16
+            )
+        )
+        return diseased_produce or green_pod_or_leaf_cluster or damaged_plant_tissue
 
     def _has_foreground_leaf_disease_signal(self, features: dict[str, float], crop_key: str | None) -> bool:
         if not self._has_strong_visual_disease_signal(features, crop_key):
@@ -2297,6 +2347,8 @@ class CropDiseaseDetector:
 
     def _looks_like_non_crop_foreground(self, features: dict[str, float], crop_key: str | None) -> bool:
         has_foreground_crop = self._has_crop_subject_in_foreground(features, crop_key)
+        if self._has_crop_part_signal(features, crop_key):
+            return False
         if self._has_foreground_leaf_disease_signal(features, crop_key):
             return False
         synthetic_green_background = (
@@ -2446,6 +2498,9 @@ class CropDiseaseDetector:
             key = "corn_stalk_rot"
             crop_key = crop_key or "corn"
             confidence = 0.84
+        elif crop_key == "corn" and any(term in text for term in ["earworm", "borer", "cob", "ear", "kernel", "husk"]):
+            key = "corn_ear_pest_damage"
+            confidence = 0.84
         elif "sigatoka" in text:
             key = "banana_black_sigatoka" if "black" in text else "banana_yellow_sigatoka"
             crop_key = "banana"
@@ -2455,6 +2510,15 @@ class CropDiseaseDetector:
             confidence = 0.83
         elif crop_key == "banana" and any(term in text for term in ["fruit", "rot", "anthracnose", "black", "disease", "spot"]):
             key = "banana_fruit_rot"
+            confidence = 0.82
+        elif crop_key == "guava" and ("phytophthora" in text or "phytopthora" in text):
+            key = "guava_phytophthora"
+            confidence = 0.86
+        elif crop_key == "guava" and ("red rust" in text or "rust" in text):
+            key = "guava_red_rust"
+            confidence = 0.84
+        elif crop_key == "guava" and "scab" in text:
+            key = "guava_scab"
             confidence = 0.82
 
         return crop_key, key, confidence
@@ -2534,6 +2598,13 @@ class CropDiseaseDetector:
 
     def _looks_like_healthy_rice_panicle(self, features: dict[str, float]) -> bool:
         warm_grain_ratio = features["banana_fruit_ratio"] + features["yellow_ratio"]
+        mango_blight_like = self._looks_like_mango_leaf(features) and (
+            features["dark_lesion_ratio"] >= 0.018
+            or features["lesion_ratio"] >= 0.028
+            or features["center_tan_ratio"] >= 0.08
+        )
+        if mango_blight_like:
+            return False
         rust_spot_disease = (
             features["component_count"] >= 8
             and features["rust_ratio"] >= 0.025
@@ -2664,11 +2735,6 @@ class CropDiseaseDetector:
             and warm_grain_ratio < 0.13
             and features["yellow_ratio"] < 0.08
         )
-        mango_blight_like = self._looks_like_mango_leaf(features) and (
-            features["dark_lesion_ratio"] >= 0.025
-            or features["lesion_ratio"] >= 0.07
-            or features["yellow_ratio"] >= 0.08
-        )
         leaf_structure = grass_leaf_structure or rice_canopy_with_grain or rice_grain_canopy
         return (
             warm_grain_signal
@@ -2696,6 +2762,12 @@ class CropDiseaseDetector:
 
     def _looks_like_healthy_banana_bunch(self, features: dict[str, float]) -> bool:
         if self._looks_like_healthy_rice_panicle(features):
+            return False
+        if self._looks_like_mango_leaf(features) and (
+            features["center_tan_ratio"] >= 0.08
+            or features["lesion_ratio"] >= 0.028
+            or features["green_edge_ratio"] >= 0.16
+        ):
             return False
 
         clean_green_banana_bunch = (
@@ -2810,6 +2882,16 @@ class CropDiseaseDetector:
         hint_crop, hint_key, hint_confidence = self._filename_context(original_filename, crop_type)
         rice_allowed = hint_crop in {None, "rice"}
         banana_allowed = hint_crop in {None, "banana"}
+        mango_allowed = hint_crop in {None, "mango"}
+        if mango_allowed and self._looks_like_mango_leaf(features):
+            key, confidence = self._offline_key_from_features(features, "mango")
+            return self._make_detection(
+                key,
+                max(confidence, 0.78),
+                crop_type="mango",
+                analysis_mode="mango leaf visual analysis",
+                allow_online_lookup=allow_online_lookup,
+            )
         if rice_allowed and self._looks_like_healthy_rice_panicle(features):
             return self._rice_panicle_detection()
         if banana_allowed and self._looks_like_healthy_banana_bunch(features):
@@ -2856,17 +2938,50 @@ class CropDiseaseDetector:
             and features["max_green_aspect"] >= 2.6
             and features["max_green_aspect"] <= 7.5
         )
+        dominant_broad_leaf = (
+            features["green_leaf_ratio"] >= 0.40
+            and features["max_green_area_ratio"] >= 0.30
+            and features["green_component_count"] <= 6
+            and features["max_fruit_area_ratio"] < 0.08
+        )
+        broad_blighted_leaf = (
+            dominant_broad_leaf
+            and features["max_green_aspect"] >= 1.70
+            and features["center_green_ratio"] >= 0.28
+            and (
+                features["center_tan_ratio"] >= 0.08
+                or features["green_edge_ratio"] >= 0.16
+                or features["lesion_within_plant"] >= 0.045
+            )
+        )
         spotted_or_blighted = (
             features["component_count"] >= 4
             or features["lesion_ratio"] >= 0.025
             or features["dark_lesion_ratio"] >= 0.018
+            or features["center_tan_ratio"] >= 0.08
         )
-        not_fruit_cluster = features["banana_fruit_ratio"] < 0.12 and features["yellow_ratio"] < 0.09
-        return broad_lanceolate_leaf and spotted_or_blighted and not_fruit_cluster
+        not_fruit_cluster = (
+            (features["banana_fruit_ratio"] < 0.12 and features["yellow_ratio"] < 0.11)
+            or (
+                dominant_broad_leaf
+                and features["max_fruit_area_ratio"] < 0.06
+                and features["center_fruit_ratio"] < 0.20
+                and features["fruit_component_count"] <= 16
+            )
+        )
+        not_rice_panicle = not (
+            features["max_fruit_area_ratio"] >= 0.10
+            and features["banana_fruit_ratio"] >= 0.22
+            and features["yellow_ratio"] >= 0.16
+        )
+        return (broad_lanceolate_leaf or broad_blighted_leaf) and spotted_or_blighted and not_fruit_cluster and not_rice_panicle
 
     def _infer_crop_key_from_features(self, features: dict[str, float]) -> str | None:
         if features["green_leaf_ratio"] < 0.08 and features["lesion_ratio"] < 0.018:
             return None
+
+        if self._looks_like_mango_leaf(features):
+            return "mango"
 
         if self._looks_like_healthy_rice_panicle(features):
             return "rice"
@@ -2965,6 +3080,9 @@ class CropDiseaseDetector:
         return None
 
     def _offline_key_from_features(self, features: dict[str, float], crop_key: str | None) -> tuple[str, float]:
+        if crop_key is None and self._looks_like_mango_leaf(features):
+            crop_key = "mango"
+
         if crop_key in {None, "rice"} and self._looks_like_healthy_rice_panicle(features):
             return "rice_healthy", 0.80
 
@@ -3094,8 +3212,13 @@ class CropDiseaseDetector:
                 features["max_component_area_ratio"] >= 0.035
                 or features["dark_lesion_ratio"] >= 0.055
                 or features["lesion_ratio"] >= 0.12
+                or (features["edge_lesion_ratio"] >= 0.14 and features["lesion_ratio"] >= 0.07)
+                or (features["lesion_within_plant"] >= 0.10 and features["center_tan_ratio"] >= 0.10)
             )
-            scorched_mango_leaf = features["yellow_ratio"] >= 0.055 and features["dark_lesion_ratio"] >= 0.025
+            scorched_mango_leaf = (
+                features["yellow_ratio"] >= 0.055
+                and (features["dark_lesion_ratio"] >= 0.025 or features["center_tan_ratio"] >= 0.10)
+            )
             if large_blight_patch and (scorched_mango_leaf or features["lesion_within_plant"] >= 0.11):
                 key = "mango_phoma_blight"
             elif many_spots:
@@ -3198,18 +3321,20 @@ class CropDiseaseDetector:
         original_filename: str | None = None,
         allow_online_lookup: bool = True,
     ) -> DiseaseDetection:
+        original_filename = None
         features = self._extract_leaf_features(image_path)
         normalized_crop = self._normalize_crop_type(crop_type)
         filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
 
-        strict_visual_memory = self._visual_memory_detection(
-            features,
-            crop_type=None,
-            original_filename=None,
-            allow_online_lookup=allow_online_lookup,
-        )
-        if strict_visual_memory is not None:
-            return strict_visual_memory
+        if normalized_crop is None:
+            strict_visual_memory = self._visual_memory_detection(
+                features,
+                crop_type=None,
+                original_filename=None,
+                allow_online_lookup=allow_online_lookup,
+            )
+            if strict_visual_memory is not None:
+                return strict_visual_memory
 
         if not filename_unsupported_crop and self._looks_like_non_crop_foreground(features, normalized_crop):
             return self._invalid_crop_image_detection()
@@ -3251,7 +3376,12 @@ class CropDiseaseDetector:
         if self._looks_like_non_crop_foreground(features, normalized_crop):
             return self._invalid_crop_image_detection()
         filename_crop, _, _ = self._filename_context(original_filename, crop_type)
-        inferred_crop = normalized_crop or filename_crop or feature_crop
+        reliable_feature_crop = (
+            feature_crop
+            if feature_crop and self._is_reliable_visual_crop_inference(features, feature_crop)
+            else None
+        )
+        inferred_crop = normalized_crop or reliable_feature_crop or filename_crop or feature_crop
         key, confidence = self._offline_key_from_features(features, inferred_crop)
         feature_inferred_only = normalized_crop is None and filename_crop is None and inferred_crop is not None
         class_key = self._canonical_key_for_label(key)
@@ -3289,24 +3419,30 @@ class CropDiseaseDetector:
         original_filename: str | None = None,
         allow_online_lookup: bool = True,
     ) -> DiseaseDetection:
+        original_filename = None
         if self._has_non_crop_filename_context(original_filename):
             return self._invalid_crop_image_detection()
 
         features = self._extract_leaf_features(image_path)
-        strict_visual_memory = self._visual_memory_detection(
-            features,
-            crop_type=None,
-            original_filename=None,
-            allow_online_lookup=allow_online_lookup,
-        )
-        if strict_visual_memory is not None:
-            return strict_visual_memory
+        normalized_crop = self._normalize_crop_type(crop_type)
+        if normalized_crop is None:
+            strict_visual_memory = self._visual_memory_detection(
+                features,
+                crop_type=None,
+                original_filename=None,
+                allow_online_lookup=allow_online_lookup,
+            )
+            if strict_visual_memory is not None:
+                return strict_visual_memory
 
         filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
-        if not filename_unsupported_crop and self._is_obvious_non_crop_image(image_path):
+        if (
+            not filename_unsupported_crop
+            and not self._has_crop_part_signal(features, normalized_crop)
+            and self._is_obvious_non_crop_image(image_path)
+        ):
             return self._invalid_crop_image_detection()
 
-        normalized_crop = self._normalize_crop_type(crop_type)
         if not filename_unsupported_crop and self._looks_like_non_crop_foreground(features, normalized_crop):
             return self._invalid_crop_image_detection()
 

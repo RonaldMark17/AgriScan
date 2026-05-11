@@ -69,12 +69,29 @@ async def _find_duplicate_farm(db: AsyncSession, user_id: int, farm_data: dict[s
     return None
 
 
+def _attach_owner_details(farm: Farm, owner: User | None) -> Farm:
+    setattr(farm, "owner_name", owner.full_name if owner else None)
+    setattr(farm, "owner_email", owner.email if owner else None)
+    return farm
+
+
 @router.get("", response_model=list[FarmRead])
 async def list_farms(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> list[Farm]:
-    query = select(Farm).order_by(Farm.created_at.desc())
-    if current_user.role.name == "farmer":
-        query = query.where(Farm.user_id == current_user.id)
-    result = await db.execute(query.limit(200))
+    if current_user.role.name == "admin":
+        result = await db.execute(
+            select(Farm, User)
+            .join(User, User.id == Farm.user_id)
+            .order_by(Farm.created_at.desc())
+            .limit(200)
+        )
+        return [_attach_owner_details(farm, owner) for farm, owner in result.all()]
+
+    result = await db.execute(
+        select(Farm)
+        .where(Farm.user_id == current_user.id)
+        .order_by(Farm.created_at.desc())
+        .limit(200)
+    )
     return list(result.scalars().all())
 
 

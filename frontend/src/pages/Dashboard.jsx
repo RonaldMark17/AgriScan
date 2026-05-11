@@ -328,6 +328,23 @@ function buildPhChartData(scans) {
     });
 }
 
+function formatPhTick(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return value;
+  return number.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function getPhChartDomain(data) {
+  const values = data.map((item) => Number(item.ph)).filter(Number.isFinite);
+  if (values.length === 0) return [5.5, 7.5];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const padding = min === max ? 0.35 : 0.2;
+  const lower = Math.max(0, Math.floor((min - padding) * 10) / 10);
+  const upper = Math.min(14, Math.ceil((max + padding) * 10) / 10);
+  return [lower, upper];
+}
+
 function translateDiseaseLabel(value, t) {
   const key = String(value || '').trim().toLowerCase();
   const labels = {
@@ -435,6 +452,7 @@ export default function Dashboard() {
   );
   const nutrientMetric = useMemo(() => buildNutrientMetric(latestSoilScan, t), [latestSoilScan, t]);
   const phChartData = useMemo(() => buildPhChartData(soilScans), [soilScans]);
+  const phChartDomain = useMemo(() => getPhChartDomain(phChartData), [phChartData]);
   const featuredAlert = summary.featured_alert;
   const alertToneClasses = getAlertToneClasses(featuredAlert?.tone || 'green');
   const featuredAlertTitle = featuredAlert?.title === 'Crop disease alert' ? t('cropDiseaseAlert') : featuredAlert?.title;
@@ -443,8 +461,8 @@ export default function Dashboard() {
     featuredAlert?.action_label === 'Open Disease Detector' ? t('openDiseaseDetector') : featuredAlert?.action_label;
 
   return (
-    <div>
-      <div className="mb-5 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-end lg:justify-between">
+    <div className="page-stack">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="eyebrow">{t('overview')}</p>
           <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">{t('dashboardGreeting', { name: firstName })}</h1>
@@ -456,7 +474,7 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      <section className={`mb-6 flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${alertToneClasses.wrapper}`}>
+      <section className={`flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${alertToneClasses.wrapper}`}>
         <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
           <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${alertToneClasses.iconBadge}`}>
             <AlertTriangle className="h-6 w-6" />
@@ -477,9 +495,9 @@ export default function Dashboard() {
         ) : null}
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="content-sidebar-layout">
         <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
             <MetricCard icon={Droplets} label={t('soilMoisture')} value={moistureMetric.value} unit={moistureMetric.unit} status={moistureMetric.status} tone={moistureMetric.tone} helper={moistureMetric.helper} to="/scan" />
             <MetricCard icon={Thermometer} label={t('soilTemp')} value={temperatureMetric.value} unit={temperatureMetric.unit} status={temperatureMetric.status} tone={temperatureMetric.tone} helper={temperatureMetric.helper} to="/scan" />
             <MetricCard icon={Zap} label={t('nutrientLevel')} value={nutrientMetric.value} unit={nutrientMetric.unit} status={nutrientMetric.status} tone={nutrientMetric.tone} helper={nutrientMetric.helper} to="/scan" />
@@ -499,12 +517,19 @@ export default function Dashboard() {
             </div>
             {phChartData.length > 0 ? (
               <>
-                <div className="mt-6 h-72 sm:mt-8 sm:h-[360px] xl:h-[420px]">
+                <div className="mt-6 h-64 sm:mt-8 sm:h-80 xl:h-[340px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={phChartData} margin={{ left: 0, right: 20, top: 10, bottom: 10 }}>
+                    <LineChart data={phChartData} margin={{ left: 8, right: 20, top: 10, bottom: 10 }}>
                       <CartesianGrid stroke="#e7e5e4" strokeDasharray="6 8" vertical={false} />
                       <XAxis dataKey="day" tick={{ fontSize: 13, fill: '#78716c' }} axisLine={false} tickLine={false} />
-                      <YAxis domain={['dataMin - 0.4', 'dataMax + 0.4']} tick={{ fontSize: 13, fill: '#78716c' }} axisLine={false} tickLine={false} />
+                      <YAxis
+                        width={44}
+                        domain={phChartDomain}
+                        tick={{ fontSize: 13, fill: '#78716c' }}
+                        tickFormatter={formatPhTick}
+                        axisLine={false}
+                        tickLine={false}
+                      />
                       <Tooltip />
                       <Line type="monotone" dataKey="ph" stroke="#22c55e" strokeWidth={3} dot={{ r: 5, fill: '#22c55e' }} />
                     </LineChart>
@@ -525,7 +550,7 @@ export default function Dashboard() {
           </section>
         </div>
 
-        <aside className="space-y-5">
+        <aside className="space-y-5 min-[1440px]:sticky sticky-panel min-[1440px]:self-start">
           <section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
             <div className="flex items-start justify-between gap-4">
               <div>

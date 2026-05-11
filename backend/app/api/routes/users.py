@@ -36,6 +36,9 @@ async def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
     data = payload.model_dump(exclude_unset=True)
+    if data.get("is_active") is False and user.id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot disable your own account.")
+
     if "role" in data and data["role"]:
         role_result = await db.execute(select(Role).where(Role.name == data.pop("role")))
         role = role_result.scalar_one_or_none()
@@ -45,7 +48,11 @@ async def update_user(
     for field, value in data.items():
         setattr(user, field, value)
 
-    await write_audit_log(db, request, "admin.user_updated", actor=current_user, resource_type="user", resource_id=user.id)
+    action = "admin.user_updated"
+    if "is_active" in data:
+        action = "admin.user_enabled" if data["is_active"] else "admin.user_disabled"
+
+    await write_audit_log(db, request, action, actor=current_user, resource_type="user", resource_id=user.id)
     await db.commit()
     await db.refresh(user, ["role"])
     return user

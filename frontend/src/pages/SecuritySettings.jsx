@@ -1,7 +1,8 @@
-import { BellRing, CheckCircle2, ClipboardList, Cloud, Copy, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
+import { BellRing, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Cloud, Copy, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
+import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
@@ -14,6 +15,8 @@ import {
   rememberNotificationIds,
 } from '../utils/browserNotifications.js';
 import { deviceNameFromUserAgent, isGenericDeviceName } from '../utils/deviceName.js';
+
+const ACTIVITY_LOG_PAGE_SIZE = 8;
 
 export default function SecuritySettings() {
   const { user } = useAuth();
@@ -32,6 +35,9 @@ export default function SecuritySettings() {
   const [settingsStatus, setSettingsStatus] = useState('');
   const [pushLoading, setPushLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
@@ -55,6 +61,19 @@ export default function SecuritySettings() {
       setHistoryLoading(false);
     }
   }, []);
+
+  const fetchActivityLogs = useCallback(async () => {
+    if (!isAdmin) return;
+    setActivityLoading(true);
+    try {
+      const { data } = await api.get('/admin/activity-logs');
+      setActivityLogs(Array.isArray(data) ? data : []);
+    } catch {
+      setActivityLogs([]);
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [isAdmin]);
 
   const checkPushStatus = useCallback(async () => {
     setPushChecking(true);
@@ -91,6 +110,15 @@ export default function SecuritySettings() {
   useEffect(() => {
     fetchDevices();
   }, [fetchDevices]);
+
+  useEffect(() => {
+    fetchActivityLogs();
+  }, [fetchActivityLogs]);
+
+  useEffect(() => {
+    const pageCount = Math.max(1, Math.ceil(activityLogs.length / ACTIVITY_LOG_PAGE_SIZE));
+    setActivityPage((current) => Math.min(Math.max(current, 1), pageCount));
+  }, [activityLogs.length]);
 
   useEffect(() => {
     checkPushStatus();
@@ -193,6 +221,11 @@ export default function SecuritySettings() {
   const pushStatusLabel = pushEnabled ? t('enabled') : pushChecking ? t('checking') : t('notEnabled');
   const syncStatusLabel = toggles.autoSync ? t('active') : t('notEnabled');
   const recentDevices = devices.slice(0, 5);
+  const activityPageCount = Math.max(1, Math.ceil(activityLogs.length / ACTIVITY_LOG_PAGE_SIZE));
+  const activityStartIndex = (activityPage - 1) * ACTIVITY_LOG_PAGE_SIZE;
+  const visibleActivityLogs = activityLogs.slice(activityStartIndex, activityStartIndex + ACTIVITY_LOG_PAGE_SIZE);
+  const activityShowingStart = activityLogs.length === 0 ? 0 : activityStartIndex + 1;
+  const activityShowingEnd = Math.min(activityStartIndex + ACTIVITY_LOG_PAGE_SIZE, activityLogs.length);
   const getDeviceDisplayName = useCallback(
     (device) => {
       if (device.device_name && !isGenericDeviceName(device.device_name)) {
@@ -202,6 +235,46 @@ export default function SecuritySettings() {
     },
     [t],
   );
+
+  function formatActivityAction(action) {
+    const labels = {
+      'admin.force_mfa': 'Admin required MFA',
+      'admin.user_disabled': 'Account disabled',
+      'admin.user_enabled': 'Account enabled',
+      'admin.user_updated': 'Account updated',
+      'auth.login_failed': 'Login failed',
+      'auth.login_success': 'Logged in',
+      'auth.mfa_enabled': 'MFA enabled',
+      'auth.mfa_failed': 'MFA failed',
+      'auth.mfa_success': 'MFA verified',
+      'auth.mfa_trusted_device': 'Trusted device used',
+      'auth.password_reset_completed': 'Password reset completed',
+      'auth.password_reset_requested': 'Password reset requested',
+      'auth.password_verified': 'Password verified',
+      'auth.recovery_codes_failed': 'Recovery code request failed',
+      'auth.recovery_codes_rotated': 'Recovery codes generated',
+      'auth.token_refreshed': 'Session refreshed',
+      'farm.approved': 'Farm approved',
+      'farm.created': 'Farm registered',
+      'marketplace.created': 'Marketplace listing created',
+      'marketplace.status_updated': 'Marketplace status updated',
+      'prediction.created': 'Prediction created',
+      'prediction.soil_scan': 'Manual soil scan',
+      'scan.created': 'Disease scan created',
+      'scan.feedback.accepted': 'Flagged review accepted',
+      'scan.feedback.created': 'Flagged review submitted',
+      'scan.feedback.rejected': 'Flagged review rejected',
+      'scan.feedback.undone': 'Flagged review undone',
+      'user.registered': 'Account registered',
+    };
+    return labels[action] || String(action || '').replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function formatActivityResource(log) {
+    if (!log.resource_type && !log.resource_id) return '-';
+    if (!log.resource_id) return log.resource_type;
+    return `${log.resource_type || t('resource')} #${log.resource_id}`;
+  }
 
   return (
     <div className="page-stack">
@@ -247,7 +320,7 @@ export default function SecuritySettings() {
         </div>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
+      <div className="content-sidebar-layout">
         <div className="space-y-5">
           <SettingsSection icon={ShieldCheck} title={t('systemLanguage')} body={t('languageChoiceBody')}>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -327,9 +400,26 @@ export default function SecuritySettings() {
               </div>
             </SettingsSection>
           </div>
+
+          {isAdmin ? (
+            <ActivityLogPanel
+              activityLoading={activityLoading}
+              activityLogs={activityLogs}
+              activityPage={activityPage}
+              activityPageCount={activityPageCount}
+              activityShowingEnd={activityShowingEnd}
+              activityShowingStart={activityShowingStart}
+              fetchActivityLogs={fetchActivityLogs}
+              formatActivityAction={formatActivityAction}
+              formatActivityResource={formatActivityResource}
+              setActivityPage={setActivityPage}
+              t={t}
+              visibleActivityLogs={visibleActivityLogs}
+            />
+          ) : null}
         </div>
 
-        <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+        <aside className="space-y-5">
           <SettingsSection icon={KeyRound} title={t('mfaTitle')} body={t('mfaBody')}>
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm">
               <div className="flex flex-col gap-1">
@@ -458,6 +548,7 @@ export default function SecuritySettings() {
           </SettingsSection>
         </aside>
       </div>
+
     </div>
   );
 }
@@ -478,6 +569,118 @@ function SettingsSection({ icon: Icon, title, body, actions, children }) {
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
       {children ? <div className="mt-5">{children}</div> : null}
+    </section>
+  );
+}
+
+function ActivityLogPanel({
+  activityLoading,
+  activityLogs,
+  activityPage,
+  activityPageCount,
+  activityShowingEnd,
+  activityShowingStart,
+  fetchActivityLogs,
+  formatActivityAction,
+  formatActivityResource,
+  setActivityPage,
+  t,
+  visibleActivityLogs,
+}) {
+  return (
+    <section className="surface rounded-lg p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
+            <Clock3 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-stone-950">{t('userActivityLog')}</h2>
+            <p className="mt-1 text-sm leading-6 text-stone-600">{t('userActivityEmptyBody')}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <span className="status-pill border border-stone-200 bg-white text-stone-700">
+            {activityLogs.length} {t('total')}
+          </span>
+          <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={fetchActivityLogs} disabled={activityLoading} type="button">
+            <RefreshCw className={`h-4 w-4 ${activityLoading ? 'animate-spin' : ''}`} />
+            {t('refresh')}
+          </button>
+        </div>
+      </div>
+
+      {activityLogs.length === 0 ? (
+        <div className="mt-4">
+          <EmptyState title={t('noUserActivity')} body={t('userActivityEmptyBody')} />
+        </div>
+      ) : (
+        <>
+          <div className="table-shell mt-4">
+            <table className="activity-table w-full table-fixed text-left text-sm">
+              <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase text-stone-500">
+                <tr>
+                  <th className="w-[24%] px-4 py-3">{t('user')}</th>
+                  <th className="w-[24%] px-4 py-3">{t('activity')}</th>
+                  <th className="w-[18%] px-4 py-3">{t('resource')}</th>
+                  <th className="w-[14%] px-4 py-3">{t('ipAddress')}</th>
+                  <th className="w-[20%] px-4 py-3">{t('time')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {visibleActivityLogs.map((log) => (
+                  <tr key={log.id} className="transition hover:bg-stone-50/70">
+                    <td className="px-4 py-3 align-top">
+                      <p className="break-words font-semibold text-stone-900">{log.user_name || t('systemActivity')}</p>
+                      <p className="break-all text-xs text-stone-500">{log.user_email || '-'}</p>
+                      {log.user_role ? (
+                        <span className="mt-2 inline-flex rounded-full bg-stone-100 px-2 py-1 text-[11px] font-bold text-stone-600">
+                          {log.user_role}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <p className="break-words font-semibold text-stone-900">{formatActivityAction(log.action)}</p>
+                      <p className="mt-1 break-all text-xs text-stone-500">{log.action}</p>
+                    </td>
+                    <td className="break-words px-4 py-3 align-top text-stone-600">{formatActivityResource(log)}</td>
+                    <td className="break-words px-4 py-3 align-top text-stone-600">{log.ip_address || '-'}</td>
+                    <td className="break-words px-4 py-3 align-top text-stone-600">{new Date(log.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-stone-600">
+              {t('paginationSummary', { start: activityShowingStart, end: activityShowingEnd, total: activityLogs.length })}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                type="button"
+                onClick={() => setActivityPage((current) => Math.max(1, current - 1))}
+                disabled={activityPage <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                {t('previous')}
+              </button>
+              <span className="status-pill border border-stone-200 bg-white text-stone-700">
+                {t('pageOf', { page: activityPage, total: activityPageCount })}
+              </span>
+              <button
+                className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                type="button"
+                onClick={() => setActivityPage((current) => Math.min(activityPageCount, current + 1))}
+                disabled={activityPage >= activityPageCount}
+              >
+                {t('next')}
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </section>
   );
 }
