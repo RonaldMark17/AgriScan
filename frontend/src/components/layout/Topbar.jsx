@@ -9,6 +9,8 @@ import { notifyUnreadNotifications } from '../../utils/browserNotifications.js';
 import { connectRealtimeAlertStream } from '../../utils/realtimeAlerts.js';
 import LanguageToggle from '../shared/LanguageToggle.jsx';
 
+const NOTIFICATION_AJAX_REFRESH_MS = 10000;
+
 function formatNotificationTime(value) {
   if (!value) return '';
   const parsed = new Date(value);
@@ -146,7 +148,7 @@ export default function Topbar() {
       }
     };
 
-    const intervalId = window.setInterval(pollNotifications, 60000);
+    const intervalId = window.setInterval(pollNotifications, NOTIFICATION_AJAX_REFRESH_MS);
     window.addEventListener('focus', pollNotifications);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -160,7 +162,10 @@ export default function Topbar() {
   useEffect(() => {
     return connectRealtimeAlertStream({
       token: accessToken,
-      onSignal: () => {
+      onSignal: (message) => {
+        if (message?.payload || message?.title || message?.body) {
+          window.dispatchEvent(new CustomEvent('agriscan:notification', { detail: { notification: message } }));
+        }
         void loadNotifications({ silent: true });
       },
     });

@@ -158,7 +158,7 @@ For production, set the same-origin frontend API URL before rebuilding:
 
 ```env
 VITE_API_BASE_URL=/api/v1
-VITE_ENABLE_REALTIME_ALERTS=false
+VITE_ENABLE_REALTIME_ALERTS=true
 ```
 
 Configure Firebase Cloud Messaging in `backend/.env` to enable closed-browser push delivery:
@@ -206,7 +206,7 @@ sudo systemctl start agriscan
 New scan image uploads are mirrored to Firebase Storage automatically when `FIREBASE_MIRROR_UPLOADS=true`. If a local
 `/uploads/<file>` is missing, the backend will try to restore it from Firebase Storage before returning 404.
 
-Realtime WebSocket alerts are optional; leave `VITE_ENABLE_REALTIME_ALERTS=false` unless the host Nginx WebSocket proxy has been applied and verified. The frontend still polls notifications every minute and whenever the tab regains focus.
+Realtime WebSocket alerts are enabled by default and backed by AJAX polling every 10 seconds, so the notification bell updates without a manual refresh. Set `VITE_ENABLE_REALTIME_ALERTS=false` only if the host proxy cannot pass WebSocket traffic yet.
 
 ## Notification Flow
 

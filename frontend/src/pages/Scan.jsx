@@ -808,7 +808,7 @@ function NutrientControl({ label, value, onChange, t }) {
 }
 
 function FieldHelp({ children }) {
-  return <p className="mt-1 text-[11px] leading-4 text-stone-500">{children}</p>;
+  return <p className="text-wrap-anywhere mt-1 text-[11px] leading-4 text-stone-500">{children}</p>;
 }
 
 function formatScoreValue(value) {
@@ -1326,13 +1326,13 @@ export default function Scan() {
         t={t}
       />
 
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <header className="manual-scan-header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <p className="eyebrow">{t('manualSoilScan')}</p>
-          <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">
+          <h1 className="mt-1 break-words text-[1.35rem] font-bold leading-tight tracking-normal text-stone-950 sm:text-3xl">
             {t('manualScanRecommendationsTitle')}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+          <p className="mt-2 max-w-2xl text-[13px] leading-5 text-stone-600 sm:text-sm sm:leading-6">
             {t('manualScanRecommendationsBody')}
           </p>
         </div>
@@ -1343,10 +1343,10 @@ export default function Scan() {
       </header>
 
       <div className="split-layout">
-        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 xl:sticky sticky-panel xl:self-start">
+        <form onSubmit={submit} className="manual-scan-form surface rounded-lg p-3.5 sm:p-5 xl:sticky sticky-panel xl:self-start">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-stone-950">{t('soilDetails')}</h2>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('soilDetails')}</h2>
               <p className="mt-1 text-sm text-stone-500">{t('soilDetailsBody')}</p>
             </div>
             <button className="btn-icon" type="button" onClick={resetForm} title={t('resetForm')}>
@@ -1354,7 +1354,7 @@ export default function Scan() {
             </button>
           </div>
 
-          <div className="mt-6 space-y-5">
+          <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-5">
             <label className="block">
               <span className="text-sm font-bold text-stone-700">{t('soilType')}</span>
               <select className="field mt-2 h-12" value={form.soil_type} onChange={(event) => updateField('soil_type', event.target.value)}>

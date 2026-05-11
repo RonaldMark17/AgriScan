@@ -419,6 +419,40 @@ button {
 }
 
 @media (max-width: 480px) {
+  :root {
+    --topbar-height: 3.5rem;
+    --mobile-nav-height: calc(4rem + env(safe-area-inset-bottom));
+    --page-gutter: 0.55rem;
+  }
+
+  .app-main {
+    padding-top: 0.8rem;
+    padding-bottom: calc(var(--mobile-nav-height) + 1rem);
+  }
+
+  .page-stack {
+    @apply space-y-4;
+  }
+
+  .manual-scan-header {
+    padding-inline: 0.1rem;
+  }
+
+  .manual-scan-form {
+    border-radius: 0.75rem;
+  }
+
+  .manual-scan-form .field {
+    min-height: 2.75rem;
+    height: 2.75rem !important;
+    padding-inline: 0.75rem;
+  }
+
+  .manual-scan-form .btn-icon {
+    height: 2.25rem;
+    width: 2.25rem;
+  }
+
   .flagged-review-person {
     flex-direction: column;
   }
