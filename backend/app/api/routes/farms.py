@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -15,6 +16,7 @@ from app.services.push_notifications import create_notification, dispatch_push_t
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 TEXT_FIELDS = ("name", "barangay", "municipality", "province")
+logger = logging.getLogger(__name__)
 
 
 def _clean_text(value: str | None) -> str | None:
@@ -135,6 +137,13 @@ async def _create_admin_farm_registration_notifications(
     return pushes
 
 
+async def _dispatch_farm_notification_safely(db: AsyncSession, **push: Any) -> None:
+    try:
+        await dispatch_push_to_user(db, **push)
+    except Exception as exc:
+        logger.exception("Farm notification dispatch failed after the farm action was saved.", exc_info=exc)
+
+
 @router.get("", response_model=list[FarmRead])
 async def list_farms(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> list[Farm]:
     if current_user.role.name == "admin":
@@ -184,7 +193,7 @@ async def create_farm(
     await db.commit()
     await db.refresh(farm)
     for push in admin_registration_pushes:
-        await dispatch_push_to_user(db, **push)
+        await _dispatch_farm_notification_safely(db, **push)
     return farm
 
 
@@ -217,7 +226,7 @@ async def approve_farm(
     await db.commit()
     await db.refresh(farm)
     if approval_notification is not None:
-        await dispatch_push_to_user(
+        await _dispatch_farm_notification_safely(
             db,
             user_id=farm.user_id,
             title=approval_notification.title,
@@ -270,7 +279,7 @@ async def reject_farm(
     await db.commit()
     await db.refresh(farm)
     if rejection_notification is not None:
-        await dispatch_push_to_user(
+        await _dispatch_farm_notification_safely(
             db,
             user_id=farm.user_id,
             title=rejection_notification.title,
