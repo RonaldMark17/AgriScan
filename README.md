@@ -131,6 +131,9 @@ Set real secrets and API keys before deployment:
 - `FERNET_KEY`
 - `DATABASE_URL`
 - `SMTP_*`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
 - `WEATHER_API_KEY`
 - `GOOGLE_MAPS_API_KEY`
 
@@ -160,22 +163,27 @@ VITE_API_BASE_URL=/api/v1
 VITE_ENABLE_REALTIME_ALERTS=false
 ```
 
-Browser notifications are shown manually through the service worker while AgriScan is open or running in a background tab, so no notification keys are required.
+Configure VAPID keys in `backend/.env` to enable closed-browser Web Push delivery:
+
+```env
+VAPID_SUBJECT=mailto:admin@example.com
+VAPID_PUBLIC_KEY=your-vapid-public-key
+VAPID_PRIVATE_KEY=your-vapid-private-key
+```
+
 Realtime WebSocket alerts are optional; leave `VITE_ENABLE_REALTIME_ALERTS=false` unless the host Nginx WebSocket proxy has been applied and verified. The frontend still polls notifications every minute and whenever the tab regains focus.
 
 ## Notification Flow
 
-AgriScan notifications are not true Web Push. They do not use browser push subscriptions, PushManager, pywebpush, webpush, or VAPID keys.
-
-Current flow:
+AgriScan supports Web Push for closed-browser delivery when VAPID keys are configured.
 
 - Backend saves notifications in the database, then sends a realtime WebSocket signal from `backend/app/main.py`.
-- Frontend listens with `connectRealtimeAlertStream` in `frontend/src/utils/realtimeAlerts.js`.
+- Backend also sends Web Push through stored browser subscriptions in `backend/app/services/push_notifications.py`.
+- Frontend subscribes with `PushManager` from the Security settings screen and stores the subscription through `/api/v1/notifications/push/subscribe`.
+- `frontend/public/sw.js` handles native `push` events and displays notifications through `self.registration.showNotification(...)`.
+- Frontend listens with `connectRealtimeAlertStream` in `frontend/src/utils/realtimeAlerts.js` when realtime alerts are enabled.
 - `frontend/src/components/layout/Topbar.jsx` reloads notifications on realtime signals and every 60 seconds while the app is running.
-- New unread items show an in-app toast plus a browser/local notification when permission is enabled.
-- Browser/local notifications are displayed through `frontend/public/sw.js` using `self.registration.showNotification(...)`.
-
-This means notifications work while AgriScan is open or in a background tab. True closed-browser delivery would require real Web Push, which is intentionally not enabled here.
+- New unread items show an in-app toast while AgriScan is open; Web Push handles notifications when the app is closed or in the background.
 
 Seed or refresh the production demo data without wiping the SQLite volume:
 

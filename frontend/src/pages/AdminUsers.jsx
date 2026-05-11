@@ -1,5 +1,5 @@
 import { CheckCircle2, ChevronLeft, ChevronRight, Flag, Loader2, RefreshCw, RotateCcw, ShieldCheck, UserRoundCheck, XCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
@@ -13,6 +13,7 @@ const REVIEW_STATUS_ORDER = {
   verified: 1,
   rejected: 1,
 };
+const ADMIN_AJAX_REFRESH_MS = 30000;
 
 function sortFlaggedReviews(reviews) {
   return [...reviews].sort((first, second) => {
@@ -31,14 +32,16 @@ export default function AdminUsers() {
   const [flaggedReviews, setFlaggedReviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [farmActionError, setFarmActionError] = useState('');
   const [togglingUserId, setTogglingUserId] = useState(null);
   const [userActionError, setUserActionError] = useState('');
   const [reviewDecision, setReviewDecision] = useState(null);
   const [reviewActionError, setReviewActionError] = useState('');
   const [flaggedPage, setFlaggedPage] = useState(1);
 
-  async function load() {
-    setLoading(true);
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [usersResponse, farmsResponse, flaggedReviewsResponse] = await Promise.all([
         api.get('/users'),
@@ -49,13 +52,35 @@ export default function AdminUsers() {
       setFarms(farmsResponse.data);
       setFlaggedReviews(sortFlaggedReviews(flaggedReviewsResponse.data));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     load().catch(() => {});
-  }, []);
+  }, [load]);
+
+  useEffect(() => {
+    function refreshSilently() {
+      if (document.visibilityState === 'hidden') return;
+      void load({ silent: true }).catch(() => {});
+    }
+
+    function handleFarmNotification(event) {
+      if (event.detail?.notification?.type !== 'farm_pending') return;
+      refreshSilently();
+    }
+
+    const intervalId = window.setInterval(refreshSilently, ADMIN_AJAX_REFRESH_MS);
+    window.addEventListener('focus', refreshSilently);
+    window.addEventListener('agriscan:notification', handleFarmNotification);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshSilently);
+      window.removeEventListener('agriscan:notification', handleFarmNotification);
+    };
+  }, [load]);
 
   useEffect(() => {
     const pageCount = Math.max(1, Math.ceil(flaggedReviews.length / FLAGGED_REVIEWS_PAGE_SIZE));
@@ -64,11 +89,27 @@ export default function AdminUsers() {
 
   async function approveFarm(id) {
     setApprovingId(id);
+    setFarmActionError('');
     try {
       await api.patch(`/farms/${id}/approve`);
       await load();
+    } catch (error) {
+      setFarmActionError(getApiErrorMessage(error, t('farmActionFailed')));
     } finally {
       setApprovingId(null);
+    }
+  }
+
+  async function rejectFarm(id) {
+    setRejectingId(id);
+    setFarmActionError('');
+    try {
+      await api.patch(`/farms/${id}/reject`);
+      await load();
+    } catch (error) {
+      setFarmActionError(getApiErrorMessage(error, t('farmActionFailed')));
+    } finally {
+      setRejectingId(null);
     }
   }
 
@@ -127,7 +168,7 @@ export default function AdminUsers() {
         title={t('usersAndApprovals')}
         body={t('usersAndApprovalsBody')}
         actions={
-          <button className="btn-secondary" onClick={load} disabled={loading}>
+          <button className="btn-secondary" onClick={() => load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {t('refresh')}
           </button>
@@ -382,6 +423,7 @@ export default function AdminUsers() {
               <ShieldCheck className="h-5 w-5 text-leaf-700" />
               {t('pendingFarms')}
             </h2>
+            {farmActionError ? <div className="danger-message mt-4">{farmActionError}</div> : null}
             {farms.length === 0 ? (
               <div className="mt-4">
                 <EmptyState title={t('noPendingApprovals')} body={t('pendingFarmsBody')} />
@@ -395,10 +437,26 @@ export default function AdminUsers() {
                       {t('owner')}: {farm.owner_name || farm.owner_email || `User #${farm.user_id}`}
                     </p>
                     <p className="text-sm text-stone-500">{farm.municipality}, {farm.province}</p>
-                    <button className="btn-primary mt-3 w-full sm:w-auto" onClick={() => approveFarm(farm.id)} disabled={approvingId === farm.id}>
-                      {approvingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                      {t('approve')}
-                    </button>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <button
+                        className="btn-primary w-full sm:w-auto"
+                        onClick={() => approveFarm(farm.id)}
+                        disabled={approvingId !== null || rejectingId !== null}
+                        type="button"
+                      >
+                        {approvingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                        {t('approve')}
+                      </button>
+                      <button
+                        className="btn-secondary w-full border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 sm:w-auto"
+                        onClick={() => rejectFarm(farm.id)}
+                        disabled={approvingId !== null || rejectingId !== null}
+                        type="button"
+                      >
+                        {rejectingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                        {t('rejectFarm')}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

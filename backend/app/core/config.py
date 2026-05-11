@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_from: str = "noreply@agriscanproject.com"
+    vapid_subject: str = "mailto:noreply@agriscanproject.com"
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
 
     weather_api_key: str | None = None
     weather_api_base_url: str = "https://api.openweathermap.org/data/2.5"

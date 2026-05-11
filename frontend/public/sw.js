@@ -1,6 +1,6 @@
 /* global Response */
 
-const CACHE_NAME = 'agriscan-cache-v31';
+const CACHE_NAME = 'agriscan-cache-v32';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -49,6 +49,19 @@ function showAgriScanNotification(data = {}) {
   return self.registration.showNotification(data.title || 'AgriScan', notificationOptions(data));
 }
 
+function parsePushPayload(event) {
+  if (!event.data) return {};
+  try {
+    return event.data.json();
+  } catch {
+    return {
+      title: 'AgriScan',
+      body: event.data.text() || 'Open AgriScan for details.',
+      url: '/'
+    };
+  }
+}
+
 function replyToMessage(event, message) {
   if (event.ports?.[0]) {
     event.ports[0].postMessage(message);
@@ -78,6 +91,10 @@ self.addEventListener('message', (event) => {
         )
     );
   }
+});
+
+self.addEventListener('push', (event) => {
+  event.waitUntil(showAgriScanNotification(parsePushPayload(event)));
 });
 
 self.addEventListener('fetch', (event) => {

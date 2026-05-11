@@ -9,10 +9,10 @@ import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 import {
-  browserNotificationsSupported,
-  ensureManualNotificationsEnabled,
-  manualNotificationsEnabled,
+  ensureWebPushNotificationsEnabled,
+  getWebPushSubscriptionState,
   rememberNotificationIds,
+  webPushNotificationsSupported,
 } from '../utils/browserNotifications.js';
 import { deviceNameFromUserAgent, isGenericDeviceName } from '../utils/deviceName.js';
 
@@ -74,7 +74,7 @@ export default function SecuritySettings() {
   const checkPushStatus = useCallback(async () => {
     setPushChecking(true);
 
-    if (!browserNotificationsSupported()) {
+    if (!webPushNotificationsSupported()) {
       setPushEnabled(false);
       setPushStatus(t('pushUnsupported'));
       setPushChecking(false);
@@ -82,14 +82,18 @@ export default function SecuritySettings() {
     }
 
     try {
-      if (manualNotificationsEnabled()) {
+      const pushState = await getWebPushSubscriptionState();
+      if (!pushState.serverEnabled) {
+        setPushEnabled(false);
+        setPushStatus(t('pushServerNotConfigured'));
+      } else if (pushState.subscribed) {
         setPushEnabled(true);
         setPushStatus(t('pushAlreadyEnabled'));
       } else {
         setPushEnabled(false);
-        if (Notification.permission === 'granted') {
+        if (pushState.permission === 'granted') {
           setPushStatus(t('pushGrantedNotSubscribed'));
-        } else if (Notification.permission === 'denied') {
+        } else if (pushState.permission === 'denied') {
           setPushStatus(t('pushBlocked'));
         } else {
           setPushStatus(t('pushNotEnabledYet'));
@@ -168,9 +172,9 @@ export default function SecuritySettings() {
   async function enablePush() {
     setPushLoading(true);
     try {
-      const enabled = await ensureManualNotificationsEnabled();
+      const enabled = await ensureWebPushNotificationsEnabled();
       if (!enabled) {
-        setPushStatus(browserNotificationsSupported() ? t('pushDenied') : t('pushUnsupported'));
+        setPushStatus(webPushNotificationsSupported() ? t('pushDenied') : t('pushUnsupported'));
         setPushEnabled(false);
         return;
       }
@@ -225,6 +229,7 @@ export default function SecuritySettings() {
       'auth.token_refreshed': 'Session refreshed',
       'farm.approved': 'Farm approved',
       'farm.created': 'Farm registered',
+      'farm.rejected': 'Farm rejected',
       'marketplace.created': 'Marketplace listing created',
       'marketplace.status_updated': 'Marketplace status updated',
       'prediction.created': 'Prediction created',

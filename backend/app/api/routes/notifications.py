@@ -1,15 +1,34 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models import Notification, User
 from app.schemas.common import MessageResponse
 from app.schemas.domain import NotificationRead
-from app.services.push_notifications import create_notification, dispatch_push_to_user
+from app.services.push_notifications import (
+    create_notification,
+    dispatch_push_to_user,
+    remove_push_subscription,
+    upsert_push_subscription,
+    web_push_enabled,
+)
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+settings = get_settings()
+
+
+class BrowserPushKeys(BaseModel):
+    p256dh: str = Field(min_length=1)
+    auth: str = Field(min_length=1)
+
+
+class BrowserPushSubscription(BaseModel):
+    endpoint: str = Field(min_length=1, max_length=700)
+    keys: BrowserPushKeys
 
 
 @router.get("", response_model=list[NotificationRead])
@@ -32,6 +51,43 @@ async def mark_all_read(
     )
     await db.commit()
     return MessageResponse(message="All notifications marked as read.")
+
+
+@router.get("/push/public-key")
+async def web_push_public_key(_: User = Depends(get_current_user)) -> dict:
+    return {
+        "enabled": web_push_enabled(),
+        "public_key": settings.vapid_public_key if web_push_enabled() else None,
+    }
+
+
+@router.post("/push/subscribe", response_model=MessageResponse)
+async def subscribe_web_push(
+    payload: BrowserPushSubscription,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    if not web_push_enabled():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Web Push is not configured.")
+    await upsert_push_subscription(
+        db,
+        user_id=current_user.id,
+        endpoint=payload.endpoint,
+        keys=payload.keys.model_dump(),
+    )
+    await db.commit()
+    return MessageResponse(message="Web Push notifications enabled.")
+
+
+@router.post("/push/unsubscribe", response_model=MessageResponse)
+async def unsubscribe_web_push(
+    payload: BrowserPushSubscription,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    await remove_push_subscription(db, user_id=current_user.id, endpoint=payload.endpoint)
+    await db.commit()
+    return MessageResponse(message="Web Push notifications disabled.")
 
 
 @router.patch("/{notification_id}/read", response_model=MessageResponse)
@@ -77,5 +133,7 @@ async def send_test_notification(
         payload={"notification_id": notification.id, "type": "system"},
     )
     if dispatch.sent:
-        return MessageResponse(message=f"Test notification saved. Realtime signal sent to {dispatch.sent} open device(s).")
-    return MessageResponse(message="Test notification saved. The service worker will show it while AgriScan is open.")
+        if dispatch.web_push_sent:
+            return MessageResponse(message=f"Test notification saved. Web Push sent to {dispatch.web_push_sent} device(s).")
+        return MessageResponse(message=f"Test notification saved. Realtime signal sent to {dispatch.realtime_sent} open device(s).")
+    return MessageResponse(message="Test notification saved. Enable Web Push to receive alerts when AgriScan is closed.")

@@ -10,6 +10,8 @@ import { getApiErrorMessage } from '../utils/apiErrors.js';
 import { reverseGeocodeLocation } from '../utils/openStreetMap.js';
 
 const DEFAULT_CENTER = { lat: 12.8797, lng: 121.774 };
+const FARM_AJAX_REFRESH_MS = 30000;
+const FARM_NOTIFICATION_TYPES = new Set(['farm_pending', 'farm_approved', 'farm_rejected']);
 const EMPTY_FORM = {
   name: '',
   barangay: '',
@@ -201,7 +203,7 @@ export default function Farms() {
     [farms, selectedFarmId]
   );
 
-  async function loadFarms(preferredFarmId = null) {
+  const loadFarms = useCallback(async (preferredFarmId = null) => {
     const { data } = await api.get('/farms');
     setFarms(data);
     setSelectedFarmId((current) => {
@@ -209,11 +211,33 @@ export default function Farms() {
       if (current && data.some((farm) => farm.id === current)) return current;
       return data.find((farm) => hasCoordinates(farm))?.id || data[0]?.id || null;
     });
-  }
+  }, []);
 
   useEffect(() => {
     loadFarms().catch(() => setFarms([]));
-  }, []);
+  }, [loadFarms]);
+
+  useEffect(() => {
+    function refreshSilently() {
+      if (document.visibilityState === 'hidden') return;
+      void loadFarms().catch(() => {});
+    }
+
+    function handleFarmNotification(event) {
+      if (!FARM_NOTIFICATION_TYPES.has(event.detail?.notification?.type)) return;
+      refreshSilently();
+    }
+
+    const intervalId = window.setInterval(refreshSilently, FARM_AJAX_REFRESH_MS);
+    window.addEventListener('focus', refreshSilently);
+    window.addEventListener('agriscan:notification', handleFarmNotification);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshSilently);
+      window.removeEventListener('agriscan:notification', handleFarmNotification);
+    };
+  }, [loadFarms]);
 
   const destroyLeafletMapArtifacts = useCallback(() => {
     if (leafletMapRef.current && leafletMapClickHandlerRef.current) {

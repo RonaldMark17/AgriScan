@@ -17,6 +17,8 @@ function formatNotificationTime(value) {
 }
 
 function notificationTarget(notification) {
+  if (notification?.payload?.url) return notification.payload.url;
+
   switch (notification?.type) {
     case 'weather':
     case 'inspection':
@@ -26,7 +28,10 @@ function notificationTarget(notification) {
       return '/scan';
     case 'disease_scan':
       return '/disease-detector';
+    case 'farm_pending':
+      return '/admin/users';
     case 'farm_approved':
+    case 'farm_rejected':
       return '/farms';
     default:
       return '/reports';
@@ -35,6 +40,13 @@ function notificationTarget(notification) {
 
 function notificationId(notification) {
   return notification?.id === undefined || notification?.id === null ? '' : String(notification.id);
+}
+
+function dispatchNotificationEvents(notifications) {
+  if (typeof window === 'undefined' || !Array.isArray(notifications)) return;
+  notifications.forEach((notification) => {
+    window.dispatchEvent(new CustomEvent('agriscan:notification', { detail: { notification } }));
+  });
 }
 
 function voiceGuideKey(pathname) {
@@ -96,6 +108,7 @@ export default function Topbar() {
       );
       if (notificationsInitializedRef.current && newUnreadNotifications.length > 0) {
         setNotificationToast(newUnreadNotifications[0]);
+        dispatchNotificationEvents(newUnreadNotifications);
       }
       knownNotificationIdsRef.current = new Set(nextNotifications.map(notificationId).filter(Boolean));
       notificationsInitializedRef.current = true;

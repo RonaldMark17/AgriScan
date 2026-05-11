@@ -1,3 +1,5 @@
+import { api } from '../api/client.js';
+
 const MANUAL_NOTIFICATIONS_KEY = 'agriscan_manual_notifications';
 const SHOWN_NOTIFICATION_IDS_PREFIX = 'agriscan_shown_notification_ids';
 
@@ -106,6 +108,99 @@ async function showWithServiceWorker(payload) {
 
 export function browserNotificationsSupported() {
   return typeof window !== 'undefined' && 'Notification' in window;
+}
+
+export function webPushNotificationsSupported() {
+  return (
+    browserNotificationsSupported() &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window &&
+    window.isSecureContext
+  );
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
+}
+
+async function getWebPushPublicKey() {
+  const { data } = await api.get('/notifications/push/public-key');
+  if (!data?.enabled || !data?.public_key) {
+    throw new Error('Web Push is not configured.');
+  }
+  return data.public_key;
+}
+
+async function getServiceWorkerRegistration({ create = true } = {}) {
+  if (!('serviceWorker' in navigator)) return null;
+
+  let registration = await navigator.serviceWorker.getRegistration();
+  if (!registration && create) {
+    registration = await navigator.serviceWorker.register('/sw.js');
+  }
+  return registration || null;
+}
+
+export async function getWebPushSubscriptionState() {
+  if (!webPushNotificationsSupported()) {
+    return {
+      supported: false,
+      serverEnabled: false,
+      subscribed: false,
+      permission: browserNotificationsSupported() ? window.Notification.permission : 'unsupported',
+    };
+  }
+
+  let serverEnabled = false;
+  try {
+    await getWebPushPublicKey();
+    serverEnabled = true;
+  } catch {
+    serverEnabled = false;
+  }
+
+  let subscribed = false;
+  try {
+    const registration = await getServiceWorkerRegistration({ create: false });
+    const subscription = await registration?.pushManager?.getSubscription();
+    subscribed = Boolean(subscription);
+  } catch {
+    subscribed = false;
+  }
+
+  return {
+    supported: true,
+    serverEnabled,
+    subscribed,
+    permission: window.Notification.permission,
+  };
+}
+
+export async function ensureWebPushNotificationsEnabled() {
+  if (!webPushNotificationsSupported()) return false;
+
+  let permission = window.Notification.permission;
+  if (permission === 'default') {
+    permission = await window.Notification.requestPermission();
+  }
+  if (permission !== 'granted') return false;
+
+  const publicKey = await getWebPushPublicKey();
+  const registration = await getServiceWorkerRegistration({ create: true });
+  if (!registration?.pushManager) return false;
+
+  const subscription = await (
+    (await registration.pushManager.getSubscription()) ||
+    registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    })
+  );
+  await api.post('/notifications/push/subscribe', subscription.toJSON());
+  return true;
 }
 
 export function manualNotificationsEnabled() {

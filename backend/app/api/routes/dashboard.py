@@ -97,7 +97,9 @@ def _build_notification_alert(notification: Notification) -> dict:
         "marketplace": "green",
         "recommendation": "green",
         "disease_scan": "red",
+        "farm_pending": "amber",
         "farm_approved": "green",
+        "farm_rejected": "red",
     }
     action_by_type = {
         "weather": ("/farms", "View Map"),
@@ -105,7 +107,9 @@ def _build_notification_alert(notification: Notification) -> dict:
         "marketplace": ("/scan", "Open Manual Scan"),
         "recommendation": ("/scan", "Open Manual Scan"),
         "disease_scan": ("/disease-detector", "Open Disease Detector"),
+        "farm_pending": ("/admin/users", "Review Farm"),
         "farm_approved": ("/farms", "View Farms"),
+        "farm_rejected": ("/farms", "View Farms"),
     }
     action_to, action_label = action_by_type.get(notification.type, ("/scan", "Open Manual Scan"))
     return _build_alert_payload(

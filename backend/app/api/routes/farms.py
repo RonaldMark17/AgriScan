@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_roles
 from app.core.database import get_db
-from app.models import Crop, Farm, User
+from app.models import Crop, Farm, FarmStatus, Role, User
 from app.schemas.common import MessageResponse
 from app.schemas.domain import CropCreate, CropRead, FarmCreate, FarmRead
 from app.services.audit import write_audit_log
@@ -75,6 +75,66 @@ def _attach_owner_details(farm: Farm, owner: User | None) -> Farm:
     return farm
 
 
+def _farm_location_summary(farm: Farm) -> str:
+    return ", ".join(part for part in [farm.barangay, farm.municipality, farm.province] if part)
+
+
+async def _create_admin_farm_registration_notifications(
+    db: AsyncSession,
+    *,
+    farm: Farm,
+    farmer: User,
+) -> list[dict[str, Any]]:
+    result = await db.execute(
+        select(User)
+        .join(Role, Role.id == User.role_id)
+        .where(Role.name == "admin", User.is_active.is_(True))
+    )
+    admins = list(result.scalars().all())
+    if not admins:
+        return []
+
+    farm_name = farm.name or "a new farm"
+    location = _farm_location_summary(farm)
+    title = "New farm registration"
+    body = f"{farmer.full_name} registered {farm_name} for approval."
+    if location:
+        body = f"{farmer.full_name} registered {farm_name} in {location}. Review it for approval."
+
+    pushes: list[dict[str, Any]] = []
+    notification_payload = {
+        "farm_id": farm.id,
+        "farmer_user_id": farmer.id,
+        "farmer_name": farmer.full_name,
+        "farm_status": FarmStatus.pending.value,
+        "url": "/admin/users",
+    }
+    for admin in admins:
+        notification = await create_notification(
+            db,
+            user_id=admin.id,
+            title=title,
+            body=body,
+            notification_type="farm_pending",
+            payload=notification_payload,
+        )
+        pushes.append(
+            {
+                "user_id": admin.id,
+                "title": title,
+                "body": body,
+                "url": "/admin/users",
+                "payload": {
+                    **notification_payload,
+                    "notification_id": notification.id,
+                    "type": "farm_pending",
+                    "tag": f"farm-pending-{farm.id}",
+                },
+            }
+        )
+    return pushes
+
+
 @router.get("", response_model=list[FarmRead])
 async def list_farms(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> list[Farm]:
     if current_user.role.name == "admin":
@@ -113,9 +173,18 @@ async def create_farm(
     farm = Farm(user_id=current_user.id, **farm_data)
     db.add(farm)
     await db.flush()
+    admin_registration_pushes: list[dict[str, Any]] = []
+    if current_user.role.name == "farmer":
+        admin_registration_pushes = await _create_admin_farm_registration_notifications(
+            db,
+            farm=farm,
+            farmer=current_user,
+        )
     await write_audit_log(db, request, "farm.created", actor=current_user, resource_type="farm", resource_id=farm.id)
     await db.commit()
     await db.refresh(farm)
+    for push in admin_registration_pushes:
+        await dispatch_push_to_user(db, **push)
     return farm
 
 
@@ -131,9 +200,9 @@ async def approve_farm(
     if farm is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found.")
     previous_status = farm.status
-    farm.status = "approved"
+    farm.status = FarmStatus.approved.value
     approval_notification = None
-    if previous_status != "approved":
+    if previous_status != FarmStatus.approved.value:
         title = "Farm approved"
         body = f"Your farm {farm.name} has been approved. You can now use AgriScan farm features."
         approval_notification = await create_notification(
@@ -159,6 +228,59 @@ async def approve_farm(
                 "notification_id": approval_notification.id,
                 "type": "farm_approved",
                 "tag": f"farm-approved-{farm.id}",
+            },
+        )
+    return farm
+
+
+@router.patch("/{farm_id}/reject", response_model=FarmRead)
+async def reject_farm(
+    farm_id: int,
+    request: Request,
+    current_user: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> Farm:
+    result = await db.execute(select(Farm).where(Farm.id == farm_id))
+    farm = result.scalar_one_or_none()
+    if farm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found.")
+    previous_status = farm.status
+    farm.status = FarmStatus.rejected.value
+    rejection_notification = None
+    if previous_status != FarmStatus.rejected.value:
+        title = "Farm registration rejected"
+        body = f"Your farm {farm.name} was rejected. Please review the details or contact the agriculture office."
+        rejection_notification = await create_notification(
+            db,
+            user_id=farm.user_id,
+            title=title,
+            body=body,
+            notification_type="farm_rejected",
+            payload={"farm_id": farm.id, "url": "/farms", "rejected_by_user_id": current_user.id},
+        )
+    await write_audit_log(
+        db,
+        request,
+        "farm.rejected",
+        actor=current_user,
+        resource_type="farm",
+        resource_id=farm.id,
+        metadata={"previous_status": previous_status},
+    )
+    await db.commit()
+    await db.refresh(farm)
+    if rejection_notification is not None:
+        await dispatch_push_to_user(
+            db,
+            user_id=farm.user_id,
+            title=rejection_notification.title,
+            body=rejection_notification.body,
+            url="/farms",
+            payload={
+                "farm_id": farm.id,
+                "notification_id": rejection_notification.id,
+                "type": "farm_rejected",
+                "tag": f"farm-rejected-{farm.id}",
             },
         )
     return farm

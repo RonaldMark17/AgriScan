@@ -1,0 +1,220 @@
+erDiagram
+    audit_logs {
+        INTEGER id PK
+        INTEGER actor_user_id FK
+        VARCHAR(120) action
+        VARCHAR(80) resource_type
+        VARCHAR(80) resource_id
+        VARCHAR(80) ip_address
+        VARCHAR(500) user_agent
+        JSON metadata
+        DATETIME created_at
+    }
+    crop_recommendation_feedback {
+        INTEGER id PK
+        INTEGER prediction_id FK
+        INTEGER user_id FK
+        VARCHAR(120) crop_name
+        INTEGER rating
+        BOOLEAN planted
+        VARCHAR(40) outcome
+        TEXT notes
+        DATETIME created_at
+    }
+    crops {
+        INTEGER id PK
+        INTEGER farm_id FK
+        VARCHAR(80) crop_type
+        VARCHAR(120) variety
+        VARCHAR(80) soil_type
+        DATE planting_date
+        DATE expected_harvest_date
+        DATETIME created_at
+    }
+    device_login_history {
+        INTEGER id PK
+        INTEGER user_id FK
+        VARCHAR(80) ip_address
+        VARCHAR(500) user_agent
+        VARCHAR(160) device_name
+        VARCHAR(160) location_hint
+        BOOLEAN success
+        DATETIME created_at
+    }
+    farms {
+        INTEGER id PK
+        INTEGER user_id FK
+        VARCHAR(160) name
+        VARCHAR(120) barangay
+        VARCHAR(120) municipality
+        VARCHAR(120) province
+        FLOAT latitude
+        FLOAT longitude
+        FLOAT area_hectares
+        JSON boundary_geojson
+        VARCHAR(24) status
+        DATETIME created_at
+    }
+    login_attempts {
+        INTEGER id PK
+        VARCHAR(255) email
+        VARCHAR(80) ip_address
+        BOOLEAN success
+        DATETIME created_at
+    }
+    marketplace {
+        INTEGER id PK
+        INTEGER user_id FK
+        INTEGER farm_id FK
+        VARCHAR(120) crop_name
+        FLOAT quantity_kg
+        FLOAT price_per_kg
+        DATE harvest_date
+        TEXT description
+        VARCHAR(32) contact_phone
+        VARCHAR(24) status
+        DATETIME created_at
+    }
+    mfa_settings {
+        INTEGER id PK
+        INTEGER user_id FK
+        BLOB secret_encrypted
+        BOOLEAN enabled
+        DATETIME verified_at
+        DATETIME created_at
+    }
+    notifications {
+        INTEGER id PK
+        INTEGER user_id FK
+        VARCHAR(160) title
+        TEXT body
+        VARCHAR(60) type
+        BOOLEAN is_read
+        JSON payload
+        DATETIME created_at
+    }
+    password_reset_otps {
+        INTEGER id PK
+        INTEGER user_id FK
+        VARCHAR(255) otp_hash
+        DATETIME expires_at
+        INTEGER attempts
+        DATETIME used_at
+        DATETIME created_at
+    }
+    predictions {
+        INTEGER id PK
+        INTEGER farm_id FK
+        INTEGER crop_id FK
+        VARCHAR(80) prediction_type
+        JSON result
+        FLOAT confidence
+        DATETIME created_at
+        INTEGER user_id
+    }
+    push_subscriptions {
+        INTEGER id PK
+        INTEGER user_id FK
+        VARCHAR(700) endpoint
+        JSON subscription_keys
+        DATETIME created_at
+    }
+    recovery_codes {
+        INTEGER id PK
+        INTEGER user_id FK
+        VARCHAR(255) code_hash
+        DATETIME used_at
+        DATETIME created_at
+    }
+    refresh_tokens {
+        INTEGER id PK
+        INTEGER user_id FK
+        VARCHAR(255) token_hash
+        VARCHAR(160) device_name
+        VARCHAR(80) ip_address
+        VARCHAR(500) user_agent
+        DATETIME expires_at
+        DATETIME revoked_at
+        DATETIME created_at
+    }
+    roles {
+        INTEGER id PK
+        VARCHAR(32) name
+        VARCHAR(255) description
+        BOOLEAN requires_mfa
+    }
+    scan_feedback {
+        INTEGER id PK
+        INTEGER scan_id FK
+        INTEGER user_id FK
+        VARCHAR(160) original_disease_name
+        VARCHAR(120) original_crop_label
+        VARCHAR(120) corrected_crop_label
+        VARCHAR(160) corrected_disease_name
+        VARCHAR(160) corrected_class_key
+        TEXT user_note
+        VARCHAR(32) verification_status
+        TEXT verification_reason
+        JSON feature_signature
+        DATETIME created_at
+        FLOAT original_confidence
+        TEXT original_cause
+        TEXT original_treatment
+        VARCHAR(120) original_analysis_mode
+        VARCHAR(40) original_status
+    }
+    scans {
+        INTEGER id PK
+        INTEGER user_id FK
+        INTEGER farm_id FK
+        INTEGER crop_id FK
+        VARCHAR(500) image_path
+        VARCHAR(160) disease_name
+        FLOAT confidence
+        TEXT cause
+        TEXT treatment
+        VARCHAR(40) status
+        DATETIME created_at
+        VARCHAR(120) crop_label
+        VARCHAR(120) analysis_mode
+        VARCHAR(700) reference_url
+        VARCHAR(240) reference_title
+        JSON detections
+    }
+    users {
+        INTEGER id PK
+        VARCHAR(255) email
+        VARCHAR(32) phone
+        VARCHAR(160) full_name
+        VARCHAR(255) hashed_password
+        INTEGER role_id FK
+        BOOLEAN is_active
+        BOOLEAN is_verified
+        INTEGER failed_login_attempts
+        DATETIME locked_until
+        DATETIME last_login_at
+        DATETIME created_at
+        DATETIME updated_at
+    }
+    users ||--o{ audit_logs : "audit_logs.actor_user_id->users.id"
+    users ||--o{ crop_recommendation_feedback : "crop_recommendation_feedback.user_id->users.id"
+    predictions ||--o{ crop_recommendation_feedback : "crop_recommendation_feedback.prediction_id->predictions.id"
+    farms ||--o{ crops : "crops.farm_id->farms.id"
+    users ||--o{ device_login_history : "device_login_history.user_id->users.id"
+    users ||--o{ farms : "farms.user_id->users.id"
+    farms ||--o{ marketplace : "marketplace.farm_id->farms.id"
+    users ||--o{ marketplace : "marketplace.user_id->users.id"
+    users ||--o{ mfa_settings : "mfa_settings.user_id->users.id"
+    users ||--o{ notifications : "notifications.user_id->users.id"
+    users ||--o{ password_reset_otps : "password_reset_otps.user_id->users.id"
+    crops ||--o{ predictions : "predictions.crop_id->crops.id"
+    farms ||--o{ predictions : "predictions.farm_id->farms.id"
+    users ||--o{ push_subscriptions : "push_subscriptions.user_id->users.id"
+    users ||--o{ recovery_codes : "recovery_codes.user_id->users.id"
+    users ||--o{ refresh_tokens : "refresh_tokens.user_id->users.id"
+    users ||--o{ scan_feedback : "scan_feedback.user_id->users.id"
+    scans ||--o{ scan_feedback : "scan_feedback.scan_id->scans.id"
+    crops ||--o{ scans : "scans.crop_id->crops.id"
+    farms ||--o{ scans : "scans.farm_id->farms.id"
+    users ||--o{ scans : "scans.user_id->users.id"
+    roles ||--o{ users : "users.role_id->roles.id"
