@@ -135,12 +135,14 @@ class AdminFlaggedReviewRead(BaseModel):
     scan_confidence: float
     scan_crop_label: str | None
     image_url: str | None
+    duplicate_count: int = 1
     created_at: datetime
 
 
 class PredictionRead(BaseModel):
     id: int
-    farm_id: int
+    user_id: int | None = None
+    farm_id: int | None
     crop_id: int | None
     prediction_type: str
     result: dict[str, Any]

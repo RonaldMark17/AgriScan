@@ -1302,7 +1302,16 @@ class CropDiseaseDetector:
             & (saturation > 0.07)
             & (max_channel < 0.92)
         )
-        return green_leaf | brown_or_dark | yellow_or_kernel | tan_stem_or_husk
+        red_purple_bulb = (
+            (red > 0.24)
+            & (blue > 0.10)
+            & (red > green * 1.06)
+            & (red >= blue * 0.90)
+            & (saturation > 0.08)
+            & (max_channel > 0.28)
+            & (max_channel < 0.98)
+        )
+        return green_leaf | brown_or_dark | yellow_or_kernel | tan_stem_or_husk | red_purple_bulb
 
     def _subject_focus_image(self, image_path: str, size: int) -> Image.Image:
         image = Image.open(image_path).convert("RGB")
@@ -1455,13 +1464,23 @@ class CropDiseaseDetector:
             & (saturation > 0.12)
             & ((green > blue * 1.08) | (green > 0.35))
         )
-        plant_pixels = green_leaf_pixels | disease_tone_pixels
+        red_purple_bulb_pixels = (
+            (red > 0.24)
+            & (blue > 0.10)
+            & (red > green * 1.06)
+            & (red >= blue * 0.90)
+            & (saturation > 0.08)
+            & (max_channel > 0.28)
+            & (max_channel < 0.98)
+        )
+        plant_pixels = green_leaf_pixels | disease_tone_pixels | red_purple_bulb_pixels
 
         green_dominant_ratio = float(np.mean(green_leaf_pixels))
         chroma_green_ratio = float(np.mean(chroma_green_pixels))
         natural_green_ratio = float(np.mean(natural_green_pixels))
         warm_plant_ratio = float(np.mean(disease_tone_pixels))
-        overall_signal = max(green_dominant_ratio, warm_plant_ratio)
+        red_purple_bulb_ratio = float(np.mean(red_purple_bulb_pixels))
+        overall_signal = max(green_dominant_ratio, warm_plant_ratio, red_purple_bulb_ratio)
         nonwhite_mask = (red < 0.95) | (green < 0.95) | (blue < 0.95)
         nonwhite_ratio = float(np.mean(nonwhite_mask))
         plant_within_nonwhite = float(np.mean(plant_pixels[nonwhite_mask])) if np.any(nonwhite_mask) else 0.0
@@ -1473,6 +1492,7 @@ class CropDiseaseDetector:
         center_chroma_green_ratio = float(np.mean(chroma_green_pixels[center_mask]))
         center_natural_green_ratio = float(np.mean(natural_green_pixels[center_mask]))
         center_plant_ratio = float(np.mean(plant_pixels[center_mask]))
+        center_red_purple_bulb_ratio = float(np.mean(red_purple_bulb_pixels[center_mask]))
 
         neutral_subject_pixels = (saturation < 0.18) & (max_channel > 0.25) & (max_channel < 0.95)
         tan_subject_pixels = (
@@ -1486,12 +1506,18 @@ class CropDiseaseDetector:
         neutral_subject_ratio = float(np.mean(neutral_subject_pixels))
         center_neutral_subject_ratio = float(np.mean(neutral_subject_pixels[center_mask]))
         center_tan_subject_ratio = float(np.mean(tan_subject_pixels[center_mask]))
+        red_purple_crop_subject = (
+            red_purple_bulb_ratio >= 0.08
+            and center_red_purple_bulb_ratio >= 0.10
+            and green_dominant_ratio < 0.12
+        )
 
         centered_non_leaf_subject = (
             center_green_ratio < 0.08
             and green_dominant_ratio < 0.38
             and center_plant_ratio < 0.65
             and (center_tan_subject_ratio > 0.20 or neutral_subject_ratio > 0.34)
+            and not red_purple_crop_subject
         )
         animal_on_green_background = (
             green_dominant_ratio >= 0.12
@@ -1503,7 +1529,12 @@ class CropDiseaseDetector:
         has_crop_signal = (
             nonwhite_ratio >= 0.05
             and plant_within_nonwhite >= 0.35
-            and (overall_signal >= 0.12 or center_green_ratio >= 0.12 or center_plant_ratio >= 0.35)
+            and (
+                overall_signal >= 0.12
+                or center_green_ratio >= 0.12
+                or center_plant_ratio >= 0.35
+                or red_purple_crop_subject
+            )
         )
         synthetic_green_background = (
             chroma_green_ratio >= 0.35
@@ -1573,6 +1604,17 @@ class CropDiseaseDetector:
             & (blue_channel < 0.24)
             & (red_channel > green_channel * 1.20)
         )
+        red_purple_bulb_pixels = (
+            (red_channel > 0.24)
+            & (blue_channel > 0.10)
+            & (red_channel > green_channel * 1.06)
+            & (red_channel >= blue_channel * 0.90)
+            & (saturation > 0.08)
+            & (max_channel > 0.28)
+            & (max_channel < 0.98)
+            & ~green_leaf_pixels
+        )
+        plant_pixels = green_leaf_pixels | lesion_pixels | red_purple_bulb_pixels
         banana_fruit_pixels = (
             (red_channel > 0.36)
             & (green_channel > 0.32)
@@ -1696,6 +1738,7 @@ class CropDiseaseDetector:
             "green_edge_ratio": green_edge_ratio,
             "adjacent_nonleaf_ratio": adjacent_nonleaf_ratio,
             "banana_fruit_ratio": float(np.mean(banana_fruit_pixels)),
+            "red_purple_bulb_ratio": float(np.mean(red_purple_bulb_pixels)),
             "fruit_component_count": float(fruit_component_count),
             "max_fruit_area_ratio": max_fruit_area_ratio,
             "max_fruit_aspect": max_fruit_aspect,
@@ -1706,6 +1749,7 @@ class CropDiseaseDetector:
             "center_natural_green_ratio": float(np.mean(natural_green_pixels[center_mask])),
             "center_lesion_ratio": float(np.mean(lesion_pixels[center_mask])),
             "center_fruit_ratio": float(np.mean(banana_fruit_pixels[center_mask])),
+            "center_red_purple_bulb_ratio": float(np.mean(red_purple_bulb_pixels[center_mask])),
             "center_neutral_ratio": float(np.mean(neutral_subject_pixels[center_mask])),
             "center_tan_ratio": float(np.mean(tan_subject_pixels[center_mask])),
         }
@@ -1726,6 +1770,307 @@ class CropDiseaseDetector:
         if not distances:
             return 1.0
         return sum(distances) / len(distances)
+
+    def _image_quality_report(self, image_path: str, features: dict[str, float]) -> dict[str, Any]:
+        warnings: list[dict[str, str]] = []
+
+        def add_warning(code: str, title: str, message: str, severity: str = "warning") -> None:
+            warnings.append(
+                {
+                    "code": code,
+                    "severity": severity,
+                    "title": title,
+                    "message": message,
+                }
+            )
+
+        metrics: dict[str, float | int] = {}
+        try:
+            with Image.open(image_path) as image:
+                image = image.convert("RGB")
+                width, height = image.size
+                resized = image.resize((min(width, 320), min(height, 320)))
+                gray = np.asarray(resized.convert("L"), dtype=np.float32)
+                brightness = float(gray.mean())
+                contrast = float(gray.std())
+                horizontal_gradient = np.abs(np.diff(gray, axis=1)).mean() if gray.shape[1] > 1 else 0.0
+                vertical_gradient = np.abs(np.diff(gray, axis=0)).mean() if gray.shape[0] > 1 else 0.0
+                sharpness = float((horizontal_gradient + vertical_gradient) / 2)
+                metrics = {
+                    "width": int(width),
+                    "height": int(height),
+                    "brightness": round(brightness, 2),
+                    "contrast": round(contrast, 2),
+                    "sharpness": round(sharpness, 2),
+                    "plant_subject_ratio": round(
+                        float(
+                            features.get("green_leaf_ratio", 0.0)
+                            + features.get("banana_fruit_ratio", 0.0)
+                            + features.get("red_purple_bulb_ratio", 0.0)
+                        ),
+                        4,
+                    ),
+                }
+        except Exception:
+            logger.exception("Could not compute image quality metrics for %s.", image_path)
+            return {"kind": "quality_report", "overall": "unknown", "metrics": metrics, "warnings": warnings}
+
+        if min(int(metrics.get("width", 0)), int(metrics.get("height", 0))) < 320:
+            add_warning(
+                "low_resolution",
+                "Low image resolution",
+                "Retake or upload a larger photo so small lesions and pest damage are visible.",
+            )
+        if float(metrics.get("brightness", 0.0)) < 45:
+            add_warning(
+                "too_dark",
+                "Photo is too dark",
+                "Use natural light or move closer to the crop before scanning.",
+            )
+        if float(metrics.get("brightness", 0.0)) > 225:
+            add_warning(
+                "overexposed",
+                "Photo is overexposed",
+                "Avoid harsh glare because pale disease spots can disappear.",
+            )
+        if float(metrics.get("contrast", 0.0)) < 18:
+            add_warning(
+                "low_contrast",
+                "Low contrast",
+                "Place the affected leaf, fruit, or stem against a clearer background.",
+            )
+        if float(metrics.get("sharpness", 0.0)) < 4.5:
+            add_warning(
+                "blurry",
+                "Photo may be blurry",
+                "Hold the camera steady and tap the crop area to focus.",
+            )
+        if (
+            not self._has_crop_part_signal(features, None)
+            and features.get("center_green_ratio", 0.0) < 0.08
+            and features.get("center_fruit_ratio", 0.0) < 0.08
+            and features.get("center_red_purple_bulb_ratio", 0.0) < 0.08
+        ):
+            add_warning(
+                "subject_not_centered",
+                "Crop subject is not clear",
+                "Center one affected crop part in the frame instead of a wide scene.",
+            )
+
+        overall = "needs_better_photo" if warnings else "good"
+        return {"kind": "quality_report", "overall": overall, "metrics": metrics, "warnings": warnings}
+
+    def _quality_warning_entries(self, report: dict[str, Any]) -> list[dict[str, Any]]:
+        warnings = report.get("warnings")
+        if not isinstance(warnings, list):
+            return []
+        return [
+            {
+                "kind": "quality_warning",
+                "code": warning.get("code"),
+                "severity": warning.get("severity", "warning"),
+                "title": warning.get("title"),
+                "message": warning.get("message"),
+            }
+            for warning in warnings
+            if isinstance(warning, dict)
+        ]
+
+    def _pipeline_stage_entries(
+        self,
+        detection: DiseaseDetection,
+        features: dict[str, float],
+        crop_type: str | None,
+        quality_report: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        invalid = detection.disease_name == "Invalid crop or leaf image"
+        review = "review" in (detection.disease_name or "").lower() or detection.confidence < 0.58
+        selected_crop = self._normalize_crop_type(crop_type)
+        detected_crop = self._normalize_crop_type(detection.crop_label)
+        crop_part_visible = self._has_crop_part_signal(features, selected_crop or detected_crop)
+        quality_ok = not quality_report.get("warnings")
+
+        return [
+            {
+                "kind": "pipeline_stage",
+                "stage": "image_quality",
+                "label": "Image quality",
+                "status": "pass" if quality_ok else "warning",
+                "detail": "Photo quality is usable." if quality_ok else "Photo can still be analyzed, but a clearer image would improve accuracy.",
+            },
+            {
+                "kind": "pipeline_stage",
+                "stage": "valid_crop_image",
+                "label": "Crop image check",
+                "status": "fail" if invalid else "pass",
+                "detail": "A crop or plant part was found." if not invalid else "The upload did not look like a diagnosable crop image.",
+            },
+            {
+                "kind": "pipeline_stage",
+                "stage": "crop_identification",
+                "label": "Crop identification",
+                "status": "pass" if detection.crop_label and not invalid else "review",
+                "detail": detection.crop_label or "Crop could not be identified confidently.",
+            },
+            {
+                "kind": "pipeline_stage",
+                "stage": "crop_part_check",
+                "label": "Plant part check",
+                "status": "pass" if crop_part_visible else "warning",
+                "detail": "Leaf, fruit, stem, or root features are visible." if crop_part_visible else "Retake closer to one affected plant part.",
+            },
+            {
+                "kind": "pipeline_stage",
+                "stage": "disease_classification",
+                "label": "Disease classification",
+                "status": "review" if review else "pass",
+                "detail": f"{detection.disease_name} ({round(detection.confidence * 100)}%).",
+            },
+        ]
+
+    def _append_unique_alternative(
+        self,
+        alternatives: list[dict[str, Any]],
+        seen: set[tuple[str, str]],
+        *,
+        class_key: str,
+        confidence: float,
+        crop_label: str | None,
+        source: str,
+        primary: DiseaseDetection,
+    ) -> None:
+        canonical_key = self._canonical_key_for_label(class_key)
+        metadata = self._metadata_for_key(canonical_key)
+        disease_name = metadata["name"]
+        display_crop = crop_label or self._crop_label_from_key(canonical_key) or "General crop leaf"
+        identity = (display_crop.lower(), disease_name.lower())
+        primary_identity = ((primary.crop_label or "").lower(), (primary.disease_name or "").lower())
+        if identity == primary_identity or identity in seen:
+            return
+        seen.add(identity)
+        alternatives.append(
+            {
+                "kind": "alternative",
+                "label": disease_name,
+                "class_key": canonical_key,
+                "crop_label": display_crop,
+                "confidence": round(max(0.0, min(float(confidence), 0.96)), 4),
+                "source": source,
+            }
+        )
+
+    def _heuristic_alternatives(
+        self,
+        features: dict[str, float],
+        crop_type: str | None,
+        primary: DiseaseDetection,
+    ) -> list[dict[str, Any]]:
+        alternatives: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        crop_candidates: list[str | None] = []
+        selected_crop = self._normalize_crop_type(crop_type)
+        primary_crop = self._normalize_crop_type(primary.crop_label)
+        inferred_crop = self._infer_crop_key_from_features(features)
+        if selected_crop or primary_crop:
+            candidate_source = [selected_crop, primary_crop, None]
+        else:
+            candidate_source = [inferred_crop, "rice", "corn", "tomato", "banana", "mango", "guava"]
+        for crop_key in candidate_source:
+            if crop_key not in crop_candidates:
+                crop_candidates.append(crop_key)
+
+        for crop_key in crop_candidates:
+            key, confidence = self._offline_key_from_features(features, crop_key)
+            crop_label = self._display_crop_label(crop_key) if crop_key else self._crop_label_from_key(key)
+            if key == "review_needed":
+                continue
+            self._append_unique_alternative(
+                alternatives,
+                seen,
+                class_key=key,
+                confidence=max(confidence - 0.08, 0.45),
+                crop_label=crop_label,
+                source="visual heuristic",
+                primary=primary,
+            )
+
+        preferred_crop = selected_crop or primary_crop
+        if preferred_crop and len(alternatives) < 3:
+            peer_labels = [label for label in (self._labels or DEFAULT_LABELS) if self._crop_key_from_class_key(self._canonical_key_for_label(label)) == preferred_crop]
+            for label in peer_labels:
+                if len(alternatives) >= 3:
+                    break
+                peer_key = self._canonical_key_for_label(label)
+                if peer_key.endswith("_healthy") and "healthy" not in (primary.disease_name or "").lower():
+                    continue
+                self._append_unique_alternative(
+                    alternatives,
+                    seen,
+                    class_key=peer_key,
+                    confidence=max(primary.confidence - 0.18 - len(alternatives) * 0.04, 0.42),
+                    crop_label=self._display_crop_label(preferred_crop),
+                    source="same-crop fallback",
+                    primary=primary,
+                )
+        alternatives.sort(key=lambda item: float(item.get("confidence", 0.0)), reverse=True)
+        return alternatives[:3]
+
+    def _prediction_alternatives(
+        self,
+        predictions: np.ndarray,
+        labels: list[str],
+        *,
+        selected_index: int,
+        crop_type: str | None,
+        primary: DiseaseDetection,
+    ) -> list[dict[str, Any]]:
+        alternatives: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        selected_crop = self._normalize_crop_type(crop_type)
+        top_indices = np.argsort(predictions)[::-1][:8]
+        for raw_index in top_indices:
+            index = int(raw_index)
+            if index == selected_index or index >= len(labels):
+                continue
+            class_key = self._canonical_key_for_label(labels[index])
+            if selected_crop and not self._is_class_compatible_with_crop(class_key, selected_crop):
+                continue
+            self._append_unique_alternative(
+                alternatives,
+                seen,
+                class_key=class_key,
+                confidence=float(predictions[index]),
+                crop_label=self._crop_label_from_key(class_key, crop_type=crop_type),
+                source="trained classifier",
+                primary=primary,
+            )
+        return alternatives[:3]
+
+    def _enrich_detection(
+        self,
+        detection: DiseaseDetection,
+        features: dict[str, float],
+        crop_type: str | None,
+        quality_report: dict[str, Any],
+        *,
+        model_alternatives: list[dict[str, Any]] | None = None,
+    ) -> DiseaseDetection:
+        existing = [
+            item
+            for item in (detection.detections or [])
+            if not isinstance(item, dict)
+            or item.get("kind") not in {"pipeline_stage", "quality_warning", "alternative", "quality_report"}
+        ]
+        metadata_entries: list[dict[str, Any]] = [
+            {"kind": "quality_report", **{key: value for key, value in quality_report.items() if key != "kind"}},
+            *self._pipeline_stage_entries(detection, features, crop_type, quality_report),
+            *self._quality_warning_entries(quality_report),
+        ]
+
+        alternatives = model_alternatives or self._heuristic_alternatives(features, crop_type, detection)
+        metadata_entries.extend(alternatives[:3])
+        detection.detections = existing + metadata_entries
+        return detection
 
     def _visual_memory_has_text_hint(self, example: dict[str, Any], original_filename: str | None, crop_type: str | None) -> bool:
         context = self._context_text(f"{original_filename or ''} {crop_type or ''}")
@@ -2181,6 +2526,17 @@ class CropDiseaseDetector:
             and not has_foreground_crop
         )
 
+    def _looks_like_red_purple_bulb(self, features: dict[str, float], crop_key: str | None) -> bool:
+        if crop_key not in {None, "onion"}:
+            return False
+        return (
+            features.get("red_purple_bulb_ratio", 0.0) >= 0.08
+            and features.get("center_red_purple_bulb_ratio", 0.0) >= 0.10
+            and features.get("green_leaf_ratio", 0.0) < 0.12
+            and features.get("max_green_area_ratio", 0.0) < 0.08
+            and features.get("banana_fruit_ratio", 0.0) < 0.08
+        )
+
     def _has_crop_subject_in_foreground(self, features: dict[str, float], crop_key: str | None) -> bool:
         fruit_or_stem_crop = crop_key in {
             "banana",
@@ -2193,6 +2549,7 @@ class CropDiseaseDetector:
             "cacao",
             "coffee",
         }
+        red_purple_bulb = self._looks_like_red_purple_bulb(features, crop_key)
         centered_leaf = (
             features["center_green_ratio"] >= 0.075
             or (features["max_green_area_ratio"] >= 0.12 and features["green_leaf_ratio"] >= 0.18)
@@ -2217,10 +2574,12 @@ class CropDiseaseDetector:
                 or features["lesion_ratio"] >= 0.065
             )
         )
-        return centered_leaf or centered_disease_tissue or centered_fruit_or_stem
+        return centered_leaf or centered_disease_tissue or centered_fruit_or_stem or red_purple_bulb
 
     def _has_crop_part_signal(self, features: dict[str, float], crop_key: str | None) -> bool:
         if self._has_crop_subject_in_foreground(features, crop_key):
+            return True
+        if self._looks_like_red_purple_bulb(features, crop_key):
             return True
         if self._looks_like_corn_ear_morphology(features):
             return True
@@ -2308,6 +2667,8 @@ class CropDiseaseDetector:
             return self._looks_like_corn_ear_issue(features, None)
         if crop_key == "mango":
             return self._looks_like_mango_leaf(features)
+        if crop_key == "onion":
+            return self._looks_like_red_purple_bulb(features, crop_key)
         if crop_key in {"cabbage", "pechay", "gabi_taro"}:
             return (
                 features["green_leaf_ratio"] >= 0.25
@@ -2977,6 +3338,9 @@ class CropDiseaseDetector:
         return (broad_lanceolate_leaf or broad_blighted_leaf) and spotted_or_blighted and not_fruit_cluster and not_rice_panicle
 
     def _infer_crop_key_from_features(self, features: dict[str, float]) -> str | None:
+        if self._looks_like_red_purple_bulb(features, None):
+            return "onion"
+
         if features["green_leaf_ratio"] < 0.08 and features["lesion_ratio"] < 0.018:
             return None
 
@@ -3080,6 +3444,9 @@ class CropDiseaseDetector:
         return None
 
     def _offline_key_from_features(self, features: dict[str, float], crop_key: str | None) -> tuple[str, float]:
+        if crop_key in {None, "onion"} and self._looks_like_red_purple_bulb(features, crop_key):
+            return "onion_healthy", 0.78
+
         if crop_key is None and self._looks_like_mango_leaf(features):
             crop_key = "mango"
 
@@ -3424,6 +3791,21 @@ class CropDiseaseDetector:
             return self._invalid_crop_image_detection()
 
         features = self._extract_leaf_features(image_path)
+        quality_report = self._image_quality_report(image_path, features)
+
+        def finalize(
+            detection: DiseaseDetection,
+            *,
+            model_alternatives: list[dict[str, Any]] | None = None,
+        ) -> DiseaseDetection:
+            return self._enrich_detection(
+                detection,
+                features,
+                crop_type,
+                quality_report,
+                model_alternatives=model_alternatives,
+            )
+
         normalized_crop = self._normalize_crop_type(crop_type)
         if normalized_crop is None:
             strict_visual_memory = self._visual_memory_detection(
@@ -3433,7 +3815,7 @@ class CropDiseaseDetector:
                 allow_online_lookup=allow_online_lookup,
             )
             if strict_visual_memory is not None:
-                return strict_visual_memory
+                return finalize(strict_visual_memory)
 
         filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
         if (
@@ -3441,10 +3823,10 @@ class CropDiseaseDetector:
             and not self._has_crop_part_signal(features, normalized_crop)
             and self._is_obvious_non_crop_image(image_path)
         ):
-            return self._invalid_crop_image_detection()
+            return finalize(self._invalid_crop_image_detection())
 
         if not filename_unsupported_crop and self._looks_like_non_crop_foreground(features, normalized_crop):
-            return self._invalid_crop_image_detection()
+            return finalize(self._invalid_crop_image_detection())
 
         visual_memory = self._visual_memory_detection(
             features,
@@ -3453,7 +3835,7 @@ class CropDiseaseDetector:
             allow_online_lookup=allow_online_lookup,
         )
         if visual_memory is not None:
-            return visual_memory
+            return finalize(visual_memory)
 
         feature_crop = self._infer_crop_key_from_features(features)
         possible_unsupported_crop = self._possible_unsupported_crop_label(
@@ -3463,10 +3845,12 @@ class CropDiseaseDetector:
             supported_inferred_crop=feature_crop,
         )
         if possible_unsupported_crop:
-            return self._possible_unsupported_crop_detection(
-                features,
-                possible_unsupported_crop,
-                allow_online_lookup=allow_online_lookup,
+            return finalize(
+                self._possible_unsupported_crop_detection(
+                    features,
+                    possible_unsupported_crop,
+                    allow_online_lookup=allow_online_lookup,
+                )
             )
 
         contextual = self._contextual_detection(
@@ -3476,24 +3860,43 @@ class CropDiseaseDetector:
             allow_online_lookup=allow_online_lookup,
         )
         if contextual is not None:
-            return contextual
+            return finalize(contextual)
+
+        if (
+            feature_crop
+            and self._is_reliable_visual_crop_inference(features, feature_crop)
+            and not self._has_trained_labels_for_crop(feature_crop)
+        ):
+            return finalize(
+                self._fallback_detect(
+                    image_path,
+                    feature_crop,
+                    original_filename=original_filename,
+                    allow_online_lookup=allow_online_lookup,
+                )
+            )
 
         self._load_model()
         if self._model is None:
-            return self._fallback_detect(
-                image_path,
-                crop_type,
-                original_filename=original_filename,
-                allow_online_lookup=allow_online_lookup,
+            return finalize(
+                self._fallback_detect(
+                    image_path,
+                    crop_type,
+                    original_filename=original_filename,
+                    allow_online_lookup=allow_online_lookup,
+                )
             )
         if normalized_crop and not self._has_trained_labels_for_crop(normalized_crop):
-            return self._fallback_detect(
-                image_path,
-                crop_type,
-                original_filename=original_filename,
-                allow_online_lookup=allow_online_lookup,
+            return finalize(
+                self._fallback_detect(
+                    image_path,
+                    crop_type,
+                    original_filename=original_filename,
+                    allow_online_lookup=allow_online_lookup,
+                )
             )
         predicted_key = None
+        model_alternatives: list[dict[str, Any]] | None = None
         if self._model_type == "ultralytics":
             detection = self._detect_with_ultralytics(image_path, crop_type)
         else:
@@ -3509,6 +3912,13 @@ class CropDiseaseDetector:
                 treatment=meta["treatment"],
                 crop_label=self._infer_crop_label_from_scores(predictions, self._labels, predicted_key=key, crop_type=crop_type),
             )
+            model_alternatives = self._prediction_alternatives(
+                predictions,
+                self._labels,
+                selected_index=index,
+                crop_type=crop_type,
+                primary=detection,
+            )
 
         if detection.disease_name == "Healthy crop" and self._has_strong_visual_disease_signal(features, normalized_crop):
             fallback = self._fallback_detect(
@@ -3518,7 +3928,7 @@ class CropDiseaseDetector:
                 allow_online_lookup=allow_online_lookup,
             )
             if fallback.disease_name != "Healthy crop":
-                return fallback
+                return finalize(fallback)
 
         if crop_type is None and detection.disease_name in {"Pest-related leaf damage", "Leaf spot or blight symptoms", "Healthy crop"}:
             feature_crop = self._infer_crop_key_from_features(features)
@@ -3534,7 +3944,7 @@ class CropDiseaseDetector:
                 allow_online_lookup=allow_online_lookup,
             )
             if fallback.confidence >= detection.confidence:
-                return fallback
+                return finalize(fallback)
 
         if crop_type is None and (not detection.crop_label or detection.disease_name == "Healthy crop"):
             fallback = self._fallback_detect(
@@ -3546,7 +3956,7 @@ class CropDiseaseDetector:
             fallback_has_more_detail = fallback.crop_label and fallback.crop_label != "General crop leaf"
             fallback_found_problem = fallback.disease_name != "Healthy crop"
             if fallback_found_problem or (fallback_has_more_detail and detection.confidence < 0.82):
-                return fallback
+                return finalize(fallback)
 
         if crop_type is None and detection.confidence < 0.58:
             fallback = self._fallback_detect(
@@ -3556,14 +3966,17 @@ class CropDiseaseDetector:
                 allow_online_lookup=allow_online_lookup,
             )
             if fallback.confidence >= detection.confidence:
-                return fallback
-            return DiseaseDetection(
-                disease_name="Low-confidence crop image",
-                confidence=detection.confidence,
-                cause="AgriScan could not confidently verify the crop or disease from this image alone.",
-                treatment="Retake a closer photo of one leaf under natural light and keep the crop leaf centered in the frame.",
-                crop_label=detection.crop_label or "General crop leaf",
-                analysis_mode="low-confidence ml",
+                return finalize(fallback)
+            return finalize(
+                DiseaseDetection(
+                    disease_name="Low-confidence crop image",
+                    confidence=detection.confidence,
+                    cause="AgriScan could not confidently verify the crop or disease from this image alone.",
+                    treatment="Retake a closer photo of one leaf under natural light and keep the crop leaf centered in the frame.",
+                    crop_label=detection.crop_label or "General crop leaf",
+                    analysis_mode="low-confidence ml",
+                ),
+                model_alternatives=model_alternatives,
             )
 
         if not detection.crop_label:
@@ -3576,8 +3989,8 @@ class CropDiseaseDetector:
             analysis_mode="ml visual review",
         )
         if review is not None:
-            return review
-        return detection
+            return finalize(review)
+        return finalize(detection, model_alternatives=model_alternatives)
 
     def _detect_with_ultralytics(self, image_path: str, crop_type: str | None = None) -> DiseaseDetection:
         result = self._model(image_path, verbose=False)[0]

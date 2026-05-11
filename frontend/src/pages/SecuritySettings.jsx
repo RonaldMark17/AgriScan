@@ -1,4 +1,4 @@
-import { BellRing, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Cloud, Copy, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
+import { BellRing, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Cloud, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
@@ -38,10 +38,6 @@ export default function SecuritySettings() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
-  const [recoveryPassword, setRecoveryPassword] = useState('');
-  const [recoveryCodes, setRecoveryCodes] = useState([]);
-  const [recoveryLoading, setRecoveryLoading] = useState(false);
-  const [recoveryStatus, setRecoveryStatus] = useState('');
   const [toggles, setToggles] = useState(() => ({
     autoSync: localStorage.getItem('agriscan_auto_sync') !== 'false',
   }));
@@ -187,33 +183,6 @@ export default function SecuritySettings() {
       setPushStatus(getApiErrorMessage(error, t('pushFailed')));
     } finally {
       setPushLoading(false);
-    }
-  }
-
-  async function generateRecoveryCodes(event) {
-    event.preventDefault();
-    setRecoveryLoading(true);
-    setRecoveryStatus('');
-    setRecoveryCodes([]);
-    try {
-      const { data } = await api.post('/auth/mfa/recovery-codes', { password: recoveryPassword });
-      setRecoveryCodes(data?.recovery_codes || []);
-      setRecoveryPassword('');
-      setRecoveryStatus(data?.message || t('recoveryCodesGenerated'));
-    } catch (error) {
-      setRecoveryStatus(getApiErrorMessage(error, t('recoveryCodesFailed')));
-    } finally {
-      setRecoveryLoading(false);
-    }
-  }
-
-  async function copyRecoveryCodes() {
-    if (!recoveryCodes.length) return;
-    try {
-      await navigator.clipboard.writeText(recoveryCodes.join('\n'));
-      setRecoveryStatus(t('recoveryCodesCopied'));
-    } catch {
-      setRecoveryStatus(t('recoveryCodesCopyFailed'));
     }
   }
 
@@ -460,45 +429,6 @@ export default function SecuritySettings() {
               </Link>
             )}
           </SettingsSection>
-
-          {isAdmin ? (
-            <SettingsSection icon={KeyRound} title={t('adminRecoveryCodes')} body={t('adminRecoveryCodesBody')}>
-              <form className="space-y-3" onSubmit={generateRecoveryCodes}>
-                <input
-                  className="field"
-                  type="password"
-                  autoComplete="current-password"
-                  aria-label={t('password')}
-                  placeholder={t('confirmPassword')}
-                  value={recoveryPassword}
-                  onChange={(event) => setRecoveryPassword(event.target.value)}
-                  required
-                  disabled={!mfaEnabled || recoveryLoading}
-                />
-                <button className="btn-secondary w-full" type="submit" disabled={!mfaEnabled || recoveryLoading}>
-                  <RefreshCw className={`h-4 w-4 ${recoveryLoading ? 'animate-spin' : ''}`} />
-                  {recoveryLoading ? t('generatingRecoveryCodes') : t('generateRecoveryCodes')}
-                </button>
-              </form>
-              {!mfaEnabled ? <p className="mt-3 text-xs font-semibold text-amber-700">{t('recoveryCodesSetupRequired')}</p> : null}
-              {recoveryStatus ? <p className="mt-3 text-xs font-semibold text-amber-800">{recoveryStatus}</p> : null}
-              {recoveryCodes.length > 0 ? (
-                <div className="mt-4 rounded-lg border border-amber-200 bg-white p-3">
-                  <div className="grid gap-2 min-[380px]:grid-cols-2">
-                    {recoveryCodes.map((code) => (
-                      <code key={code} className="rounded border border-stone-200 bg-stone-50 px-2 py-2 text-center text-xs font-bold text-stone-900">
-                        {code}
-                      </code>
-                    ))}
-                  </div>
-                  <button className="btn-secondary mt-3 w-full" type="button" onClick={copyRecoveryCodes}>
-                    <Copy className="h-4 w-4" />
-                    {t('copyRecoveryCodes')}
-                  </button>
-                </div>
-              ) : null}
-            </SettingsSection>
-          ) : null}
 
           <SettingsSection icon={BellRing} title={t('pushNotificationStatus')}>
             <div className={`rounded-lg border p-4 text-sm ${pushEnabled ? 'border-leaf-100 bg-leaf-50' : 'border-stone-200 bg-stone-50'}`}>

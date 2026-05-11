@@ -151,6 +151,9 @@ def build_dataset_feature_record(
     manual_features: dict[str, float | str],
     metadata: dict[str, Any] | None = None,
     *,
+    nitrogen_ppm: float | None = None,
+    phosphorus_ppm: float | None = None,
+    potassium_ppm: float | None = None,
     air_temperature_c: float | None = None,
     humidity_percent: float | None = None,
     rainfall_mm: float | None = None,
@@ -170,9 +173,9 @@ def build_dataset_feature_record(
     ph = _bounded_number(manual_features["ph_level"], NUMERIC_DEFAULTS["ph_level"], 0.0, 14.0)
 
     return {
-        "N": _metadata_nutrient_value(metadata, "N", nitrogen_level),
-        "P": _metadata_nutrient_value(metadata, "P", phosphorus_level),
-        "K": _metadata_nutrient_value(metadata, "K", potassium_level),
+        "N": _bounded_number(nitrogen_ppm, _metadata_nutrient_value(metadata, "N", nitrogen_level), 0.0, 300.0),
+        "P": _bounded_number(phosphorus_ppm, _metadata_nutrient_value(metadata, "P", phosphorus_level), 0.0, 300.0),
+        "K": _bounded_number(potassium_ppm, _metadata_nutrient_value(metadata, "K", potassium_level), 0.0, 500.0),
         "temperature": temperature,
         "humidity": humidity,
         "ph": ph,
@@ -230,6 +233,9 @@ def predict_manual_crop_recommendations(
     nitrogen_level: str | None = None,
     phosphorus_level: str | None = None,
     potassium_level: str | None = None,
+    nitrogen_ppm: float | None = None,
+    phosphorus_ppm: float | None = None,
+    potassium_ppm: float | None = None,
     drainage: str | None = None,
     sunlight: str | None = None,
     season: str | None = None,
@@ -259,6 +265,9 @@ def predict_manual_crop_recommendations(
     model_features = build_dataset_feature_record(
         features,
         metadata,
+        nitrogen_ppm=nitrogen_ppm,
+        phosphorus_ppm=phosphorus_ppm,
+        potassium_ppm=potassium_ppm,
         air_temperature_c=air_temperature_c if soil_temperature_c is None else None,
         humidity_percent=humidity_percent,
         rainfall_mm=rainfall_mm,

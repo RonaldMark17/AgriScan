@@ -1135,6 +1135,7 @@ function isReliableVisualCropInference(features, crop) {
   if (crop === 'rice') return looksLikeHealthyRicePanicle(features);
   if (crop === 'corn') return looksLikeCornEarIssue(features, '');
   if (crop === 'mango') return looksLikeMangoLeaf(features);
+  if (crop === 'onion') return looksLikeRedPurpleBulb(features, crop);
   if (['cabbage', 'pechay', 'gabi_taro'].includes(crop)) {
     return (
       features.greenLeafRatio >= 0.25 &&
@@ -1202,6 +1203,10 @@ function looksLikeMangoLeaf(features) {
 }
 
 function pickOfflineDiseaseKey(crop, features) {
+  if ((!crop || crop === 'onion') && looksLikeRedPurpleBulb(features, crop)) {
+    return 'onion_healthy';
+  }
+
   if ((!crop || crop === 'rice') && looksLikeHealthyRicePanicle(features)) {
     return 'healthy';
   }
@@ -1305,9 +1310,22 @@ function computeOfflineConfidence(features, crop) {
   return Math.min(Math.max(confidence, 0.6), 0.86);
 }
 
+function looksLikeRedPurpleBulb(features, crop) {
+  const cropKey = normalizeCropKey(crop);
+  if (cropKey && cropKey !== 'onion') return false;
+  return (
+    (features.redPurpleBulbRatio || 0) >= 0.08 &&
+    (features.centerRedPurpleBulbRatio || 0) >= 0.1 &&
+    features.greenLeafRatio < 0.12 &&
+    features.maxGreenAreaRatio < 0.08 &&
+    features.bananaFruitRatio < 0.08
+  );
+}
+
 function hasCropSubjectInForeground(features, crop) {
   const cropKey = normalizeCropKey(crop);
   const fruitOrProduceCrop = ['banana', 'corn', 'mango', 'guava', 'tomato', 'pepper', 'eggplant', 'cacao', 'coffee'].includes(cropKey);
+  const redPurpleBulb = looksLikeRedPurpleBulb(features, cropKey);
   const centeredLeaf = features.centerGreenRatio >= 0.075 || (features.maxGreenAreaRatio >= 0.12 && features.greenLeafRatio >= 0.18);
   const animalLikeCenter =
     features.centerGreenRatio < 0.04 &&
@@ -1323,12 +1341,13 @@ function hasCropSubjectInForeground(features, crop) {
     features.centerFruitRatio >= 0.18 &&
     (features.centerGreenRatio >= 0.035 || features.greenLeafRatio >= 0.1 || features.lesionRatio >= 0.065);
 
-  return centeredLeaf || centeredDiseaseTissue || centeredFruitOrStem;
+  return centeredLeaf || centeredDiseaseTissue || centeredFruitOrStem || redPurpleBulb;
 }
 
 function hasCropPartSignal(features, crop) {
   const cropKey = normalizeCropKey(crop);
   if (hasCropSubjectInForeground(features, crop)) return true;
+  if (looksLikeRedPurpleBulb(features, cropKey)) return true;
   if (looksLikeCornEarIssue(features, cropKey || '')) return true;
   if (looksLikeBananaFruitIssue(features, cropKey || '')) return true;
   if (looksLikeHealthyRicePanicle(features) || looksLikeHealthyBananaBunch(features)) return true;
@@ -1353,6 +1372,86 @@ function hasCropPartSignal(features, crop) {
     (features.centerLesionRatio >= 0.045 || features.greenEdgeRatio >= 0.16 || features.adjacentNonleafRatio >= 0.16);
 
   return diseasedProduce || greenPodOrLeafCluster || damagedPlantTissue;
+}
+
+function offlineQualityWarnings(features) {
+  const warnings = [];
+  const addWarning = (code, title, message) => warnings.push({ kind: 'quality_warning', code, severity: 'warning', title, message });
+  if (Math.min(features.sourceWidth || 0, features.sourceHeight || 0) < 320) {
+    addWarning('low_resolution', 'Low image resolution', 'Retake or upload a larger photo so small lesions and pest damage are visible.');
+  }
+  if (features.contrast < 18) {
+    addWarning('low_contrast', 'Low contrast', 'Place the affected leaf, fruit, or stem against a clearer background.');
+  }
+  if (
+    !hasCropPartSignal(features, '') &&
+    features.centerGreenRatio < 0.08 &&
+    features.centerFruitRatio < 0.08 &&
+    (features.centerRedPurpleBulbRatio || 0) < 0.08
+  ) {
+    addWarning('subject_not_centered', 'Crop subject is not clear', 'Center one affected crop part in the frame instead of a wide scene.');
+  }
+  return warnings;
+}
+
+function offlineAnalysisStages(result, features, cropType, warnings) {
+  const invalid = result.disease_name === 'Invalid crop or leaf image';
+  const needsReview = /review/i.test(result.disease_name) || result.confidence < 0.58;
+  const cropVisible = hasCropPartSignal(features, cropType || result.crop_label);
+  return [
+    {
+      kind: 'pipeline_stage',
+      stage: 'image_quality',
+      label: 'Image quality',
+      status: warnings.length ? 'warning' : 'pass',
+      detail: warnings.length ? 'Photo can still be analyzed, but a clearer image would improve accuracy.' : 'Photo quality is usable.',
+    },
+    {
+      kind: 'pipeline_stage',
+      stage: 'valid_crop_image',
+      label: 'Crop image check',
+      status: invalid ? 'fail' : 'pass',
+      detail: invalid ? 'The upload did not look like a diagnosable crop image.' : 'A crop or plant part was found.',
+    },
+    {
+      kind: 'pipeline_stage',
+      stage: 'crop_identification',
+      label: 'Crop identification',
+      status: result.crop_label ? 'pass' : 'review',
+      detail: result.crop_label || 'Crop could not be identified confidently.',
+    },
+    {
+      kind: 'pipeline_stage',
+      stage: 'crop_part_check',
+      label: 'Plant part check',
+      status: cropVisible ? 'pass' : 'warning',
+      detail: cropVisible ? 'Leaf, fruit, stem, or root features are visible.' : 'Retake closer to one affected plant part.',
+    },
+    {
+      kind: 'pipeline_stage',
+      stage: 'disease_classification',
+      label: 'Disease classification',
+      status: needsReview ? 'review' : 'pass',
+      detail: `${result.disease_name} (${Math.round(result.confidence * 100)}%).`,
+    },
+  ];
+}
+
+function offlineAlternativeMatches(features, cropType, primaryKey, primaryResult) {
+  const cropKey = normalizeCropKey(cropType || primaryResult.crop_label) || Object.keys(cropDisplayNamesByKey).find((key) => primaryKey.startsWith(`${key}_`)) || inferOfflineCrop(features);
+  if (!cropKey) return [];
+  const peerKeys = Object.keys(offlineDiseaseGuide).filter((key) => key.startsWith(`${cropKey}_`) && key !== primaryKey && !key.endsWith('_healthy'));
+  return peerKeys.slice(0, 3).map((key, index) => {
+    const guide = offlineDiseaseGuide[key];
+    return {
+      kind: 'alternative',
+      label: guide.disease_name,
+      class_key: key,
+      crop_label: cropDisplayName(cropKey),
+      confidence: Math.max(primaryResult.confidence - 0.16 - index * 0.04, 0.42),
+      source: 'browser visual fallback',
+    };
+  });
 }
 
 function shouldRejectNonCropForeground(features, crop) {
@@ -1440,6 +1539,8 @@ function shouldRejectNonCropForeground(features, crop) {
 }
 
 function inferOfflineCrop(features) {
+  if (looksLikeRedPurpleBulb(features, '')) return 'onion';
+
   if (features.greenLeafRatio < 0.08 && features.lesionRatio < 0.018) return '';
 
   if (looksLikeMangoLeaf(features)) return 'mango';
@@ -1756,6 +1857,7 @@ async function analyzeImageOffline(file, cropType) {
   let darkLesion = 0;
   let edgeLesion = 0;
   let bananaFruit = 0;
+  let redPurpleBulb = 0;
   let chromaGreen = 0;
   let naturalGreen = 0;
   let centerGreen = 0;
@@ -1763,6 +1865,7 @@ async function analyzeImageOffline(file, cropType) {
   let centerNaturalGreen = 0;
   let centerLesion = 0;
   let centerFruit = 0;
+  let centerRedPurpleBulb = 0;
   let centerNeutral = 0;
   let centerTan = 0;
   let sum = 0;
@@ -1795,6 +1898,15 @@ async function analyzeImageOffline(file, cropType) {
     const isChromaGreen = isGreenLeaf && green > 0.42 && red < 0.25 && blue < 0.32 && saturation > 0.36;
     const isNeutralSubject = saturation < 0.18 && maxChannel > 0.25 && maxChannel < 0.95;
     const isTanSubject = red > 0.42 && green > 0.25 && blue > 0.12 && red > green * 1.08 && green > blue * 1.05 && saturation > 0.1;
+    const isRedPurpleBulb =
+      red > 0.24 &&
+      blue > 0.1 &&
+      red > green * 1.06 &&
+      red >= blue * 0.9 &&
+      saturation > 0.08 &&
+      maxChannel > 0.28 &&
+      maxChannel < 0.98 &&
+      !isGreenLeaf;
     const isBananaFruit =
       red > 0.36 &&
       green > 0.32 &&
@@ -1821,6 +1933,7 @@ async function analyzeImageOffline(file, cropType) {
       bananaFruit += 1;
       fruitMask[index] = 1;
     }
+    if (isRedPurpleBulb) redPurpleBulb += 1;
     if (isYellow) yellow += 1;
     if (isRust) rust += 1;
     if (isDark) darkLesion += 1;
@@ -1835,10 +1948,11 @@ async function analyzeImageOffline(file, cropType) {
       if (isGreenLeaf && !isChromaGreen) centerNaturalGreen += 1;
       if (isLesion) centerLesion += 1;
       if (isBananaFruit) centerFruit += 1;
+      if (isRedPurpleBulb) centerRedPurpleBulb += 1;
       if (isNeutralSubject) centerNeutral += 1;
       if (isTanSubject) centerTan += 1;
     }
-    if (isGreenLeaf || isLesion) plant += 1;
+    if (isGreenLeaf || isLesion || isRedPurpleBulb) plant += 1;
   }
 
   const visited = new Uint8Array(size * size);
@@ -1999,6 +2113,8 @@ async function analyzeImageOffline(file, cropType) {
   const mean = sum / (size * size);
   const variance = sumSq / (size * size) - mean * mean;
   const features = {
+    sourceWidth: image.naturalWidth || image.width || size,
+    sourceHeight: image.naturalHeight || image.height || size,
     greenLeafRatio: greenLeaf / (size * size),
     lesionRatio: lesion / (size * size),
     lesionWithinPlant: lesion / Math.max(plant, 1),
@@ -2015,6 +2131,7 @@ async function analyzeImageOffline(file, cropType) {
     greenEdgeRatio: greenEdge / Math.max(greenLeaf, 1),
     adjacentNonleafRatio: adjacentNonleaf / Math.max(greenLeaf, 1),
     bananaFruitRatio: bananaFruit / (size * size),
+    redPurpleBulbRatio: redPurpleBulb / (size * size),
     fruitComponentCount,
     maxFruitAreaRatio,
     maxFruitAspect,
@@ -2025,6 +2142,7 @@ async function analyzeImageOffline(file, cropType) {
     centerNaturalGreenRatio: centerNaturalGreen / centerPixelCount,
     centerLesionRatio: centerLesion / centerPixelCount,
     centerFruitRatio: centerFruit / centerPixelCount,
+    centerRedPurpleBulbRatio: centerRedPurpleBulb / centerPixelCount,
     centerNeutralRatio: centerNeutral / centerPixelCount,
     centerTanRatio: centerTan / centerPixelCount,
     contrast: Math.sqrt(Math.max(variance, 0)) * 255,
@@ -2069,7 +2187,7 @@ async function analyzeImageOffline(file, cropType) {
         ? (analysisCrop ? 0.76 : 0.68)
         : computeOfflineConfidence(features, analysisCrop);
   const cropLabel = cropDisplayName(analysisCrop);
-  return {
+  const result = {
     id: Date.now(),
     user_id: 0,
     farm_id: null,
@@ -2100,11 +2218,36 @@ async function analyzeImageOffline(file, cropType) {
     reference_title: null,
     created_at: new Date().toISOString(),
   };
+  const warnings = offlineQualityWarnings(features);
+  result.detections = [
+    { kind: 'quality_report', overall: warnings.length ? 'needs_better_photo' : 'good', warnings },
+    ...offlineAnalysisStages(result, features, cropType, warnings),
+    ...warnings,
+    ...offlineAlternativeMatches(features, cropType, key, result),
+  ];
+  return result;
 }
 
 function getYoloDetections(result) {
   if (!Array.isArray(result?.detections)) return [];
   return result.detections.filter((detection) => detection?.box && Number.isFinite(Number(detection.confidence)));
+}
+
+function getDetectionMetadata(result, kind) {
+  if (!Array.isArray(result?.detections)) return [];
+  return result.detections.filter((detection) => detection?.kind === kind);
+}
+
+function getQualityWarnings(result) {
+  return getDetectionMetadata(result, 'quality_warning');
+}
+
+function getPipelineStages(result) {
+  return getDetectionMetadata(result, 'pipeline_stage');
+}
+
+function getAlternativeMatches(result) {
+  return getDetectionMetadata(result, 'alternative').filter((item) => Number.isFinite(Number(item.confidence)));
 }
 
 function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
@@ -2113,6 +2256,9 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
   const translatedCropLabel = translateCropLabel(cropLabel, t);
   const displayPreviewUrl = previewUrl || getScanImageUrl(result);
   const yoloDetections = getYoloDetections(result);
+  const qualityWarnings = getQualityWarnings(result);
+  const pipelineStages = getPipelineStages(result);
+  const alternativeMatches = getAlternativeMatches(result);
   const cropVerified = Boolean(result?.crop_label || result?.crop_type || inferCropLabel(result)) && cropLabel !== 'General crop leaf';
   const needsReview = /review/i.test(result?.disease_name || '');
   const statusClass = needsReview ? 'bg-amber-50 text-amber-700' : 'bg-leaf-50 text-leaf-700';
@@ -2228,6 +2374,42 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
             </article>
           </div>
 
+          {result && qualityWarnings.length > 0 ? (
+            <article className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-800">{t('photoQuality')}</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {qualityWarnings.slice(0, 4).map((warning) => (
+                  <div key={warning.code || warning.title} className="rounded-lg border border-amber-100 bg-white/70 p-3">
+                    <p className="text-sm font-bold text-amber-950">{warning.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-900">{warning.message}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ) : null}
+
+          {result && alternativeMatches.length > 0 ? (
+            <article className="mt-4 rounded-lg border border-stone-200 bg-white p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('topPossibleResults')}</p>
+              <div className="mt-3 space-y-2">
+                {alternativeMatches.slice(0, 3).map((match) => (
+                  <div
+                    key={`${match.crop_label}-${match.label}`}
+                    className="flex min-w-0 flex-col gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-bold leading-5 text-stone-950">{translateDiseaseName(match.label, t)}</p>
+                      <p className="mt-1 text-xs font-semibold text-stone-500">{translateCropLabel(match.crop_label, t)}</p>
+                    </div>
+                    <span className="shrink-0 self-start rounded-full bg-white px-2.5 py-1 text-xs font-bold text-leaf-700 ring-1 ring-leaf-100 sm:self-center">
+                      {Math.round(Number(match.confidence) * 100)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ) : null}
+
           {result && (
             <div className="mt-6 space-y-4">
               <article className="rounded-lg border border-stone-200 bg-white p-4">
@@ -2252,6 +2434,31 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                     {result.reference_title || t('openCropDiseaseReference')}
                   </a>
                 )}
+                {pipelineStages.length > 0 ? (
+                  <div className="mt-4 border-t border-sky-100 pt-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('analysisStages')}</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {pipelineStages.map((stage) => {
+                        const isPass = stage.status === 'pass';
+                        const isFail = stage.status === 'fail';
+                        const badgeClass = isPass
+                          ? 'bg-leaf-50 text-leaf-700'
+                          : isFail
+                            ? 'bg-red-50 text-red-700'
+                            : 'bg-amber-50 text-amber-700';
+                        return (
+                          <div key={stage.stage} className="rounded-lg border border-sky-100 bg-white p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-bold text-stone-900">{stage.label}</p>
+                              <span className={`rounded-full px-2 py-1 text-[11px] font-bold uppercase ${badgeClass}`}>{stage.status}</span>
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-stone-600">{stage.detail}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </article>
               {canGiveFeedback && (
                 <article className="rounded-lg border border-stone-200 bg-white p-4">

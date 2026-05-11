@@ -136,11 +136,26 @@ class Prediction(Base):
     __tablename__ = "predictions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    farm_id: Mapped[int] = mapped_column(ForeignKey("farms.id"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    farm_id: Mapped[int | None] = mapped_column(ForeignKey("farms.id"), index=True)
     crop_id: Mapped[int | None] = mapped_column(ForeignKey("crops.id"), index=True)
     prediction_type: Mapped[str] = mapped_column(String(80), index=True)
     result: Mapped[dict] = mapped_column(JSON)
     confidence: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CropRecommendationFeedback(Base):
+    __tablename__ = "crop_recommendation_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    prediction_id: Mapped[int | None] = mapped_column(ForeignKey("predictions.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    crop_name: Mapped[str] = mapped_column(String(120), index=True)
+    rating: Mapped[int | None] = mapped_column(Integer)
+    planted: Mapped[bool] = mapped_column(Boolean, default=False)
+    outcome: Mapped[str | None] = mapped_column(String(40))
+    notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

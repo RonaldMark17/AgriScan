@@ -52,6 +52,7 @@ def main() -> None:
     parser.add_argument("--fine-tune-epochs", type=int, default=0)
     args = parser.parse_args()
 
+    import numpy as np
     import tensorflow as tf
 
     data_dir = resolve_project_path(args.data)
@@ -140,6 +141,42 @@ def main() -> None:
         )
         final_history = model.fit(train_ds, validation_data=val_ds, epochs=args.fine_tune_epochs, callbacks=callbacks)
 
+    val_probabilities = model.predict(val_ds, verbose=0)
+    true_labels: list[int] = []
+    for _, labels in val_ds:
+        true_labels.extend(np.argmax(labels.numpy(), axis=1).astype(int).tolist())
+    y_true = np.asarray(true_labels, dtype=np.int32)
+    y_pred = np.argmax(val_probabilities, axis=1).astype(np.int32) if len(val_probabilities) else np.asarray([], dtype=np.int32)
+    class_count = len(class_names)
+    confusion_matrix = np.zeros((class_count, class_count), dtype=np.int32)
+    for actual, predicted in zip(y_true, y_pred):
+        if 0 <= actual < class_count and 0 <= predicted < class_count:
+            confusion_matrix[actual, predicted] += 1
+
+    per_class_metrics: dict[str, dict[str, float | int]] = {}
+    for index, class_name in enumerate(class_names):
+        true_positive = int(confusion_matrix[index, index])
+        false_positive = int(confusion_matrix[:, index].sum() - true_positive)
+        false_negative = int(confusion_matrix[index, :].sum() - true_positive)
+        support = int(confusion_matrix[index, :].sum())
+        precision = true_positive / max(true_positive + false_positive, 1)
+        recall = true_positive / max(true_positive + false_negative, 1)
+        f1_score = (2 * precision * recall / max(precision + recall, 1e-9)) if support else 0.0
+        per_class_metrics[class_name] = {
+            "precision": round(float(precision), 4),
+            "recall": round(float(recall), 4),
+            "f1_score": round(float(f1_score), 4),
+            "support": support,
+        }
+
+    top_k = min(3, class_count)
+    top_3_accuracy = None
+    if len(y_true) and top_k:
+        top_indices = np.argsort(val_probabilities, axis=1)[:, -top_k:]
+        top_3_accuracy = float(np.mean([actual in top for actual, top in zip(y_true, top_indices)]))
+    macro_f1 = float(np.mean([item["f1_score"] for item in per_class_metrics.values()])) if per_class_metrics else None
+    validation_accuracy = float(np.mean(y_true == y_pred)) if len(y_true) else None
+
     output_path = resolve_project_path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     model.save(output_path)
@@ -147,7 +184,13 @@ def main() -> None:
     metrics = {
         "classes": class_names,
         "last_train_accuracy": float(final_history.history["accuracy"][-1]),
-        "last_val_accuracy": float(final_history.history["val_accuracy"][-1]),
+        "last_val_accuracy": validation_accuracy if validation_accuracy is not None else float(final_history.history["val_accuracy"][-1]),
+        "top_3_accuracy": top_3_accuracy,
+        "macro_f1": macro_f1,
+        "per_class": per_class_metrics,
+        "confusion_matrix": confusion_matrix.astype(int).tolist(),
+        "validation_samples": int(len(y_true)),
+        "dataset_path": str(data_dir),
         "model_path": str(output_path),
         "labels_path": str(labels_path),
     }

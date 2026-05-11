@@ -250,9 +250,14 @@ export default function AdminUsers() {
                               ) : null}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-wrap-anywhere font-semibold text-stone-900">{review.user_name}</p>
-                              <p className="text-wrap-anywhere text-xs text-stone-500">{review.user_email}</p>
+                              <p className="truncate font-semibold text-stone-900" title={review.user_name}>{review.user_name}</p>
+                              <p className="truncate text-xs text-stone-500" title={review.user_email}>{review.user_email}</p>
                               <p className="mt-1 text-[11px] font-medium leading-4 text-stone-400">{new Date(review.created_at).toLocaleString()}</p>
+                              {review.duplicate_count > 1 ? (
+                                <span className="mt-2 inline-flex rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-bold text-stone-600">
+                                  {t('mergedDuplicates', { count: review.duplicate_count })}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
 

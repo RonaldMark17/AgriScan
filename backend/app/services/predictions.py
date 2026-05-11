@@ -306,6 +306,148 @@ FULL_SUN_FRIENDLY = {
 PARTIAL_SHADE_FRIENDLY = {"pechay", "gabi taro", "cacao", "coffee", "abaca"}
 DRY_SEASON_FRIENDLY = {"corn", "cassava", "mung bean", "sweet potato", "onion", "tomato", "pepper", "mango", "pineapple"}
 WET_SEASON_FRIENDLY = {"rice", "gabi taro", "sugarcane", "coconut", "banana", "abaca", "cacao"}
+HIGH_VALUE_VEGETABLES = {"tomato", "eggplant", "pechay", "onion", "cabbage", "bitter gourd", "pepper", "potato"}
+GRAIN_CROPS = {"rice", "corn", "mung bean"}
+FRUIT_TREE_CROPS = {"banana", "mango", "coconut", "pineapple", "calamansi", "guava", "cacao", "coffee"}
+HIGHLAND_FRIENDLY = {"cabbage", "potato", "coffee", "tomato", "onion", "pechay"}
+LOWLAND_RICE_CORN_FRIENDLY = {"rice", "corn", "onion", "mung bean", "eggplant", "pechay"}
+HUMID_ORCHARD_FRIENDLY = {"banana", "cacao", "coffee", "coconut", "abaca", "pineapple"}
+WATERLOGGING_SENSITIVE = {"tomato", "onion", "pepper", "potato", "cabbage", "mung bean"}
+HEAT_STRESS_SENSITIVE = {"pechay", "cabbage", "potato", "onion", "tomato"}
+DISEASE_HISTORY_IGNORE = {"healthy crop", "invalid crop or leaf image", "not a crop image", "possible healthy crop"}
+
+
+def _bounded_optional_number(value: float | int | str | None, low: float, high: float) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return min(max(number, low), high)
+
+
+def _nutrient_status(level: str | None, ppm: float | None, low_cutoff: float, high_cutoff: float) -> str:
+    if ppm is not None:
+        if ppm < low_cutoff:
+            return "low"
+        if ppm > high_cutoff:
+            return "high"
+        return "medium"
+    return (level or "medium").strip().lower()
+
+
+def _add_score_component(breakdown: list[dict], label: str, value: float, detail: str | None = None) -> None:
+    if abs(value) < 0.01:
+        return
+    item = {"label": label, "value": round(value, 1)}
+    if detail:
+        item["detail"] = detail
+    breakdown.append(item)
+
+
+def _location_adjustment(crop: str, province: str | None, latitude: float | None) -> tuple[int, str | None]:
+    province_key = _normalize_crop_name(province)
+    if any(name in province_key for name in ("benguet", "mountain province", "ifugao", "kalinga")):
+        if crop in HIGHLAND_FRIENDLY:
+            return 7, "Highland or cooler province favors this crop."
+        if crop in {"coconut", "banana", "rice", "sugarcane"}:
+            return -4, "Cooler upland conditions may reduce this crop's fit."
+
+    if any(name in province_key for name in ("nueva ecija", "pangasinan", "tarlac", "isabela", "cagayan", "ilocos")):
+        if crop in LOWLAND_RICE_CORN_FRIENDLY:
+            return 6, "Lowland grain and vegetable province favors this crop."
+
+    if any(name in province_key for name in ("davao", "bukidnon", "cotabato", "zamboanga", "misamis")):
+        if crop in HUMID_ORCHARD_FRIENDLY or crop == "corn":
+            return 6, "Warm humid production area favors this crop."
+
+    if any(name in province_key for name in ("laguna", "batangas", "cavite", "rizal", "bulacan", "quezon")):
+        if crop in HIGH_VALUE_VEGETABLES or crop in {"banana", "coconut", "corn"}:
+            return 4, "Nearby lowland market-garden conditions favor this crop."
+
+    if latitude is not None and latitude >= 16.0 and crop in HIGHLAND_FRIENDLY:
+        return 2, "Northern latitude slightly favors cooler-season crops."
+
+    return 0, None
+
+
+def _forecast_adjustment(crop: str, forecast: dict | None) -> tuple[int, list[str]]:
+    if not forecast:
+        return 0, []
+
+    adjustment = 0
+    risk_flags: list[str] = []
+    heavy_rain = bool(forecast.get("heavy_rain_risk"))
+    heat_risk = bool(forecast.get("heat_risk"))
+    rainfall_7d = float(forecast.get("rainfall_7d_mm") or 0)
+    wet_days = int(forecast.get("wet_days") or 0)
+
+    if heavy_rain or rainfall_7d >= 60 or wet_days >= 4:
+        if crop in WET_SEASON_FRIENDLY:
+            adjustment += 7
+        if crop in WATERLOGGING_SENSITIVE:
+            adjustment -= 8
+            risk_flags.append("7-day rain forecast raises waterlogging or disease risk.")
+
+    if rainfall_7d <= 8:
+        if crop in LOW_MOISTURE_FRIENDLY:
+            adjustment += 5
+        if crop in HIGH_MOISTURE_FRIENDLY:
+            adjustment -= 4
+            risk_flags.append("Dry 7-day forecast may require irrigation.")
+
+    if heat_risk:
+        if crop in WARM_SOIL_FRIENDLY:
+            adjustment += 4
+        if crop in HEAT_STRESS_SENSITIVE:
+            adjustment -= 6
+            risk_flags.append("Forecast heat may stress this crop.")
+
+    return adjustment, risk_flags
+
+
+def _disease_history_adjustment(crop: str, disease_history: list[dict] | None) -> tuple[int, list[str]]:
+    if not disease_history:
+        return 0, []
+
+    matching_events = []
+    for event in disease_history:
+        event_crop = _normalize_crop_name(event.get("crop_label") or event.get("crop") or "")
+        disease = _normalize_crop_name(event.get("disease_name") or "")
+        if not event_crop or crop not in event_crop:
+            continue
+        if disease in DISEASE_HISTORY_IGNORE:
+            continue
+        confidence = float(event.get("confidence") or 0)
+        if confidence >= 0.55 or "possible" not in disease:
+            matching_events.append(event)
+
+    if not matching_events:
+        return 0, []
+    return -8, [f"Recent {crop.title()} disease or pest history was found. Rotate crop or monitor before planting."]
+
+
+def _feedback_adjustment(crop: str, feedback_stats: dict | None) -> tuple[int, str | None]:
+    if not feedback_stats:
+        return 0, None
+    stats = feedback_stats.get(crop) or feedback_stats.get(crop.title()) or feedback_stats.get(_normalize_crop_name(crop))
+    if not stats:
+        return 0, None
+
+    average_rating = stats.get("average_rating")
+    good_outcomes = int(stats.get("good_outcomes") or 0)
+    poor_outcomes = int(stats.get("poor_outcomes") or 0)
+    adjustment = 0
+    if average_rating is not None:
+        adjustment += round((float(average_rating) - 3) * 2)
+    adjustment += min(good_outcomes, 3)
+    adjustment -= min(poor_outcomes * 2, 6)
+    if adjustment > 0:
+        return adjustment, "Past farmer feedback for this crop was positive."
+    if adjustment < 0:
+        return adjustment, "Past farmer feedback suggests caution for this crop."
+    return 0, None
 
 
 def _normalize_crop_name(value: str | None) -> str:
@@ -429,6 +571,9 @@ def build_soil_crop_recommendation(
     nitrogen_level: str | None = None,
     phosphorus_level: str | None = None,
     potassium_level: str | None = None,
+    nitrogen_ppm: float | None = None,
+    phosphorus_ppm: float | None = None,
+    potassium_ppm: float | None = None,
     drainage: str | None = None,
     sunlight: str | None = None,
     season: str | None = None,
@@ -437,28 +582,37 @@ def build_soil_crop_recommendation(
     longitude: float | None = None,
     location_label: str | None = None,
     weather: dict | None = None,
+    disease_history: list[dict] | None = None,
+    feedback_stats: dict | None = None,
 ) -> dict:
     soil = soil_type.lower()
     drainage_value = (drainage or "moderate").lower()
     sunlight_value = (sunlight or "full sun").lower()
     season_value = (season or "regular season").lower()
-    nitrogen = (nitrogen_level or "medium").lower()
-    phosphorus = (phosphorus_level or "medium").lower()
-    potassium = (potassium_level or "medium").lower()
+    nitrogen_ppm_value = _bounded_optional_number(nitrogen_ppm, 0, 300)
+    phosphorus_ppm_value = _bounded_optional_number(phosphorus_ppm, 0, 300)
+    potassium_ppm_value = _bounded_optional_number(potassium_ppm, 0, 500)
+    nitrogen = _nutrient_status(nitrogen_level, nitrogen_ppm_value, 40, 85)
+    phosphorus = _nutrient_status(phosphorus_level, phosphorus_ppm_value, 25, 70)
+    potassium = _nutrient_status(potassium_level, potassium_ppm_value, 80, 190)
     live_weather = weather if weather and weather.get("source") not in {None, "demo"} else None
     temperature = live_weather.get("temperature_c") if live_weather else None
     humidity = live_weather.get("humidity") if live_weather else None
     rain_probability = live_weather.get("rain_probability") if live_weather else None
     precipitation = live_weather.get("precipitation_mm") if live_weather else None
+    forecast = (weather or {}).get("forecast")
     guardrail = _soil_input_guardrail(ph_level, moisture_percent, soil_temperature_c)
 
     candidates = CROP_RECOMMENDATION_TEMPLATES
 
     scored = []
     for candidate in candidates:
-        score = candidate["base"]
+        score = float(candidate["base"])
         crop = _normalize_crop_name(candidate["crop"])
+        breakdown: list[dict] = [{"label": "Base crop fit", "value": candidate["base"], "detail": candidate["reason"]}]
+        risk_flags: list[str] = []
 
+        before = score
         if "clay" in soil:
             score += 12 if crop in CLAY_FRIENDLY else -4
         if "sandy" in soil:
@@ -467,58 +621,97 @@ def build_soil_crop_recommendation(
             score += 10 if crop in LOAM_FRIENDLY else 4
         if "alluvial" in soil:
             score += 12 if crop in ALLUVIAL_FRIENDLY else 5
+        _add_score_component(breakdown, "Soil texture", score - before)
 
+        before = score
         if ph_level is not None:
             if 6.0 <= ph_level <= 7.0:
                 score += 9 if crop in NEUTRAL_PH_FRIENDLY else 4
             elif ph_level < 5.6:
                 score += 8 if crop in ACID_TOLERANT else -10
+                if crop not in ACID_TOLERANT:
+                    risk_flags.append("Acidic pH can slow growth for this crop.")
             elif ph_level > 7.5:
                 score += -8 if crop in ALKALINE_SENSITIVE else 2
+                if crop in ALKALINE_SENSITIVE:
+                    risk_flags.append("Alkaline pH may lock nutrients for this crop.")
+        _add_score_component(breakdown, "pH match", score - before)
 
+        before = score
         if moisture_percent is not None:
             if moisture_percent >= 65:
                 score += 12 if crop in HIGH_MOISTURE_FRIENDLY else -6
+                if crop in WATERLOGGING_SENSITIVE:
+                    risk_flags.append("Current soil moisture may be too wet without raised beds or drainage.")
             elif moisture_percent <= 35:
                 score += 10 if crop in LOW_MOISTURE_FRIENDLY else -5
+                if crop in HIGH_MOISTURE_FRIENDLY:
+                    risk_flags.append("Current soil moisture is low for this crop.")
             else:
                 score += 8 if crop in MODERATE_MOISTURE_FRIENDLY else 3
+        _add_score_component(breakdown, "Moisture fit", score - before)
 
+        before = score
         if soil_temperature_c is not None:
             if soil_temperature_c >= 30:
                 score += 8 if crop in WARM_SOIL_FRIENDLY else 0
                 score -= 5 if crop in COOL_SOIL_FRIENDLY else 0
+                if crop in COOL_SOIL_FRIENDLY:
+                    risk_flags.append("Warm soil can stress this cooler-season crop.")
             elif 22 <= soil_temperature_c <= 29:
                 score += 7 if crop in (NEUTRAL_PH_FRIENDLY | MODERATE_MOISTURE_FRIENDLY) else 3
             elif soil_temperature_c < 22:
                 score += 5 if crop in COOL_SOIL_FRIENDLY else -4
+        _add_score_component(breakdown, "Soil temperature", score - before)
 
+        before = score
         if "poor" in drainage_value or "water" in drainage_value:
             score += 13 if crop in HIGH_MOISTURE_FRIENDLY else -8
+            if crop in WATERLOGGING_SENSITIVE:
+                risk_flags.append("Drainage should be improved before planting this crop.")
         elif "good" in drainage_value:
             score += 9 if crop in (LOW_MOISTURE_FRIENDLY | MODERATE_MOISTURE_FRIENDLY) else 1
+        _add_score_component(breakdown, "Drainage", score - before)
 
+        before = score
         if "partial" in sunlight_value:
             score += 6 if crop in PARTIAL_SHADE_FRIENDLY else -3
         elif "full" in sunlight_value:
             score += 6 if crop in FULL_SUN_FRIENDLY else 2
+        _add_score_component(breakdown, "Sunlight", score - before)
 
+        before = score
         if "rain" in season_value or "wet" in season_value:
             score += 8 if crop in WET_SEASON_FRIENDLY else -2
         elif "dry" in season_value:
             score += 8 if crop in DRY_SEASON_FRIENDLY else -3
+        _add_score_component(breakdown, "Season", score - before)
 
+        before = score
         if nitrogen == "low":
             score += 7 if crop == "mung bean" else -2
+        elif nitrogen == "high" and crop in {"pechay", "cabbage", "corn"}:
+            score += 2
         if phosphorus == "low":
             score -= 3 if crop in {"tomato", "corn", "sweet potato", "onion", "potato"} else 0
         if potassium == "low":
             score -= 4 if crop in {"tomato", "cassava", "sweet potato", "banana", "coconut", "pineapple", "potato"} else 0
+        elif potassium == "high" and crop in {"banana", "coconut", "sweet potato", "cassava", "potato"}:
+            score += 2
+        _add_score_component(
+            breakdown,
+            "NPK nutrients",
+            score - before,
+            "Used numeric NPK values when provided; otherwise used low, medium, or high levels.",
+        )
 
+        before = score
         if live_weather:
             if rain_probability is not None and rain_probability >= 0.55:
                 score += 10 if crop in WET_SEASON_FRIENDLY else -2
                 score -= 6 if crop == "tomato" else 0
+                if crop == "tomato":
+                    risk_flags.append("Current rain risk can increase tomato leaf and fruit disease.")
             elif rain_probability is not None and rain_probability <= 0.25 and moisture_percent is not None and moisture_percent <= 40:
                 score += 8 if crop in LOW_MOISTURE_FRIENDLY else 0
                 score -= 5 if crop in HIGH_MOISTURE_FRIENDLY else 0
@@ -537,9 +730,39 @@ def build_soil_crop_recommendation(
             if humidity is not None and humidity >= 82:
                 score += 4 if crop in WET_SEASON_FRIENDLY else 0
                 score -= 6 if crop == "tomato" else 0
+        _add_score_component(breakdown, "Current weather", score - before)
+
+        forecast_delta, forecast_flags = _forecast_adjustment(crop, forecast)
+        score += forecast_delta
+        risk_flags.extend(forecast_flags)
+        _add_score_component(breakdown, "7-day forecast", forecast_delta)
+
+        location_delta, location_detail = _location_adjustment(crop, province, latitude)
+        score += location_delta
+        _add_score_component(breakdown, "Location fit", location_delta, location_detail)
+
+        disease_delta, disease_flags = _disease_history_adjustment(crop, disease_history)
+        score += disease_delta
+        risk_flags.extend(disease_flags)
+        _add_score_component(breakdown, "Disease history", disease_delta)
+
+        feedback_delta, feedback_detail = _feedback_adjustment(crop, feedback_stats)
+        score += feedback_delta
+        _add_score_component(breakdown, "Farmer feedback", feedback_delta, feedback_detail)
+
+        if guardrail["penalty"]:
+            _add_score_component(breakdown, "Reading guardrails", -guardrail["penalty"])
 
         final_score = max(20, min(guardrail["cap"], round(score - guardrail["penalty"])))
-        scored.append({**candidate, "suitability": final_score, "suitability_cap": guardrail["cap"]})
+        scored.append(
+            {
+                **candidate,
+                "suitability": final_score,
+                "suitability_cap": guardrail["cap"],
+                "score_breakdown": breakdown,
+                "risk_flags": list(dict.fromkeys(risk_flags)),
+            }
+        )
 
     model_prediction = predict_manual_crop_recommendations(
         soil_type=soil_type,
@@ -549,6 +772,9 @@ def build_soil_crop_recommendation(
         nitrogen_level=nitrogen_level,
         phosphorus_level=phosphorus_level,
         potassium_level=potassium_level,
+        nitrogen_ppm=nitrogen_ppm_value,
+        phosphorus_ppm=phosphorus_ppm_value,
+        potassium_ppm=potassium_ppm_value,
         drainage=drainage,
         sunlight=sunlight,
         season=season,
@@ -568,6 +794,12 @@ def build_soil_crop_recommendation(
         recommendation_basis.insert(0, "Ranked by the trained Manual Scan crop model, with agronomy rules used as guardrails.")
     if guardrail["warnings"]:
         recommendation_basis.insert(0, "Suitability was capped because one or more soil readings are outside normal planting ranges.")
+    if forecast:
+        recommendation_basis.append("7-day rainfall and heat risk were included in the crop score.")
+    if disease_history:
+        recommendation_basis.append("Recent disease detections were checked to reduce risky repeat crops.")
+    if feedback_stats:
+        recommendation_basis.append("Past farmer feedback was included as a local outcome signal.")
 
     return {
         "generated_on": date.today().isoformat(),
@@ -576,6 +808,9 @@ def build_soil_crop_recommendation(
         "ph_level": ph_level,
         "moisture_percent": moisture_percent,
         "soil_temperature_c": soil_temperature_c,
+        "nitrogen_ppm": nitrogen_ppm_value,
+        "phosphorus_ppm": phosphorus_ppm_value,
+        "potassium_ppm": potassium_ppm_value,
         "best_crop": best["crop"],
         "confidence": round(best["suitability"] / 100, 2),
         "soil_summary": soil_summary,
@@ -603,11 +838,17 @@ def build_soil_crop_recommendation(
         "recommendation_basis": recommendation_basis,
         "recommendation_model": {
             "source": model_prediction["source"] if model_prediction else "rules",
-            "version": model_prediction["model_version"] if model_prediction else "rule-based-v1",
+            "version": model_prediction["model_version"] if model_prediction else "rule-based-v2",
             "accuracy": model_prediction.get("accuracy") if model_prediction else None,
             "f1_score": model_prediction.get("f1_score") if model_prediction else None,
             "top_3_accuracy": model_prediction.get("top_3_accuracy") if model_prediction else None,
-            "features": model_prediction.get("model_features") if model_prediction else None,
+            "features": model_prediction.get("model_features") if model_prediction else {
+                "numeric_npk": any(value is not None for value in (nitrogen_ppm_value, phosphorus_ppm_value, potassium_ppm_value)),
+                "forecast": bool(forecast),
+                "location": bool(resolved_location_label),
+                "disease_history": bool(disease_history),
+                "feedback": bool(feedback_stats),
+            },
         },
     }
 
@@ -635,6 +876,14 @@ def _blend_model_recommendations(model_prediction: dict, scored: list[dict]) -> 
         model_score = 60 + (probability * 38)
         suitability_cap = int(rule_item.get("suitability_cap", 98))
         suitability = max(20, min(suitability_cap, round((model_score * 0.68) + (rule_item["suitability"] * 0.32))))
+        score_breakdown = [
+            *rule_item.get("score_breakdown", []),
+            {
+                "label": "Trained model agreement",
+                "value": round(model_score - rule_item["suitability"], 1),
+                "detail": f"Model probability {round(probability * 100)}% blended with agronomy guardrails.",
+            },
+        ]
         ranked.append(
             {
                 **rule_item,
@@ -642,6 +891,7 @@ def _blend_model_recommendations(model_prediction: dict, scored: list[dict]) -> 
                 "suitability": suitability,
                 "model_confidence": round(probability, 2),
                 "rule_suitability": rule_item["suitability"],
+                "score_breakdown": score_breakdown,
             }
         )
         seen.add(crop_key)
@@ -649,7 +899,15 @@ def _blend_model_recommendations(model_prediction: dict, scored: list[dict]) -> 
     for rule_item in sorted(scored, key=lambda item: item["suitability"], reverse=True):
         crop_key = _normalize_crop_name(rule_item["crop"])
         if crop_key not in seen:
-            ranked.append({**rule_item, "model_confidence": 0, "rule_suitability": rule_item["suitability"]})
+            ranked.append(
+                {
+                    **rule_item,
+                    "model_confidence": 0,
+                    "rule_suitability": rule_item["suitability"],
+                    "score_breakdown": list(rule_item.get("score_breakdown", [])),
+                    "risk_flags": list(rule_item.get("risk_flags", [])),
+                }
+            )
             seen.add(crop_key)
         if len(ranked) >= 4:
             break
@@ -751,6 +1009,11 @@ def _soil_actions(
         actions.append("Current rain risk is elevated, so prepare drainage canals and seed protection before planting.")
     if weather and (weather.get("temperature_c") or 0) >= 32:
         actions.append("Afternoon heat is high, so mulch early and schedule watering before 9 AM.")
+    forecast = (weather or {}).get("forecast") if weather else None
+    if forecast and forecast.get("heavy_rain_risk"):
+        actions.append("The 7-day forecast shows heavy rain risk, so delay sensitive crops or prepare raised beds.")
+    if forecast and forecast.get("heat_risk"):
+        actions.append("The 7-day forecast shows heat stress risk, so plan mulch, shade, and early irrigation.")
     return actions or ["Maintain organic matter and repeat soil observation before each planting cycle."]
 
 
@@ -783,6 +1046,9 @@ def _weather_summary(weather: dict | None) -> str | None:
         parts.append(f"{round(float(temperature))}C")
     if humidity is not None:
         parts.append(f"{round(float(humidity))}% humidity")
+    forecast = weather.get("forecast")
+    if forecast and forecast.get("rainfall_7d_mm") is not None:
+        parts.append(f"{forecast.get('rainfall_7d_mm')} mm rain forecast in 7 days")
     return ", ".join(parts) if parts else None
 
 

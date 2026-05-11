@@ -114,19 +114,40 @@ CREATE INDEX IF NOT EXISTS ix_scan_feedback_status ON scan_feedback(verification
 
 CREATE TABLE IF NOT EXISTS predictions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  farm_id INTEGER NOT NULL,
+  user_id INTEGER,
+  farm_id INTEGER,
   crop_id INTEGER,
   prediction_type VARCHAR(80) NOT NULL,
   result JSON NOT NULL,
   confidence FLOAT,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE,
   FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE SET NULL
 );
 
+CREATE INDEX IF NOT EXISTS ix_predictions_user_id ON predictions(user_id);
 CREATE INDEX IF NOT EXISTS ix_predictions_farm_id ON predictions(farm_id);
 CREATE INDEX IF NOT EXISTS ix_predictions_crop_id ON predictions(crop_id);
 CREATE INDEX IF NOT EXISTS ix_predictions_type ON predictions(prediction_type);
+
+CREATE TABLE IF NOT EXISTS crop_recommendation_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  prediction_id INTEGER,
+  user_id INTEGER NOT NULL,
+  crop_name VARCHAR(120) NOT NULL,
+  rating INTEGER,
+  planted BOOLEAN NOT NULL DEFAULT 0,
+  outcome VARCHAR(40),
+  notes TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE SET NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS ix_crop_recommendation_feedback_prediction ON crop_recommendation_feedback(prediction_id);
+CREATE INDEX IF NOT EXISTS ix_crop_recommendation_feedback_user ON crop_recommendation_feedback(user_id);
+CREATE INDEX IF NOT EXISTS ix_crop_recommendation_feedback_crop ON crop_recommendation_feedback(crop_name);
 
 CREATE TABLE IF NOT EXISTS marketplace (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

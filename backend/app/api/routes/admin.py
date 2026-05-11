@@ -46,8 +46,34 @@ def _flagged_review_payload(request: Request, feedback: ScanFeedback, scan: Scan
         "scan_confidence": scan.confidence,
         "scan_crop_label": scan.crop_label,
         "image_url": _scan_image_url(request, scan.image_path),
+        "duplicate_count": 1,
         "created_at": feedback.created_at,
     }
+
+
+def _feedback_signature_key(feedback: ScanFeedback) -> tuple | None:
+    signature = feedback.feature_signature
+    if not isinstance(signature, dict):
+        return None
+    items = []
+    for key, value in sorted(signature.items()):
+        if isinstance(value, float):
+            items.append((key, round(value, 3)))
+        else:
+            items.append((key, value))
+    return tuple(items)
+
+
+def _flagged_review_duplicate_key(payload: dict, feedback: ScanFeedback) -> tuple:
+    return (
+        payload.get("user_id"),
+        _feedback_signature_key(feedback) or payload.get("image_url"),
+        (payload.get("original_crop_label") or "").strip().lower(),
+        (payload.get("original_disease_name") or "").strip().lower(),
+        (payload.get("corrected_crop_label") or "").strip().lower(),
+        (payload.get("corrected_disease_name") or "").strip().lower(),
+        payload.get("verification_status"),
+    )
 
 
 async def _load_flagged_review(db: AsyncSession, feedback_id: int) -> tuple[ScanFeedback, Scan, User]:
@@ -62,6 +88,31 @@ async def _load_flagged_review(db: AsyncSession, feedback_id: int) -> tuple[Scan
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flagged review not found.")
     feedback, scan, user = record
     return feedback, scan, user
+
+
+async def _load_duplicate_flagged_reviews(db: AsyncSession, feedback: ScanFeedback, status_value: str) -> list[tuple[ScanFeedback, Scan]]:
+    signature_key = _feedback_signature_key(feedback)
+    result = await db.execute(
+        select(ScanFeedback, Scan)
+        .join(Scan, Scan.id == ScanFeedback.scan_id)
+        .where(
+            ScanFeedback.user_id == feedback.user_id,
+            ScanFeedback.original_disease_name == feedback.original_disease_name,
+            ScanFeedback.corrected_crop_label == feedback.corrected_crop_label,
+            ScanFeedback.corrected_disease_name == feedback.corrected_disease_name,
+            ScanFeedback.corrected_class_key == feedback.corrected_class_key,
+            ScanFeedback.verification_status == status_value,
+        )
+        .limit(50)
+    )
+    duplicates = []
+    for candidate, scan in result.all():
+        if (candidate.original_crop_label or "") != (feedback.original_crop_label or ""):
+            continue
+        if signature_key is not None and _feedback_signature_key(candidate) != signature_key:
+            continue
+        duplicates.append((candidate, scan))
+    return duplicates
 
 
 @router.get("/audit-logs", response_model=list[AuditLogRead])
@@ -114,10 +165,19 @@ async def flagged_reviews(
         )
         .limit(200)
     )
-    reviews = []
+    reviews_by_key: dict[tuple, dict] = {}
     for feedback, scan, user in result.all():
-        reviews.append(_flagged_review_payload(request, feedback, scan, user))
-    return reviews
+        payload = _flagged_review_payload(request, feedback, scan, user)
+        key = _flagged_review_duplicate_key(payload, feedback)
+        existing = reviews_by_key.get(key)
+        if existing is None:
+            reviews_by_key[key] = payload
+            continue
+        existing["duplicate_count"] += 1
+        if payload["created_at"] > existing["created_at"]:
+            payload["duplicate_count"] = existing["duplicate_count"]
+            reviews_by_key[key] = payload
+    return list(reviews_by_key.values())
 
 
 @router.patch("/flagged-reviews/{feedback_id}/accept", response_model=AdminFlaggedReviewRead)
@@ -128,8 +188,11 @@ async def accept_flagged_review(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     feedback, scan, user = await _load_flagged_review(db, feedback_id)
+    original_status = feedback.verification_status
     try:
-        await accept_scan_feedback(db, feedback, scan)
+        duplicate_records = await _load_duplicate_flagged_reviews(db, feedback, original_status)
+        for duplicate_feedback, duplicate_scan in duplicate_records:
+            await accept_scan_feedback(db, duplicate_feedback, duplicate_scan)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -144,12 +207,15 @@ async def accept_flagged_review(
             "scan_id": scan.id,
             "corrected_crop_label": feedback.corrected_crop_label,
             "corrected_disease_name": feedback.corrected_disease_name,
+            "duplicate_count": len(duplicate_records),
         },
     )
     await db.commit()
     await db.refresh(feedback)
     await db.refresh(scan)
-    return _flagged_review_payload(request, feedback, scan, user)
+    payload = _flagged_review_payload(request, feedback, scan, user)
+    payload["duplicate_count"] = max(1, len(duplicate_records))
+    return payload
 
 
 @router.patch("/flagged-reviews/{feedback_id}/reject", response_model=AdminFlaggedReviewRead)
@@ -160,8 +226,11 @@ async def reject_flagged_review(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     feedback, scan, user = await _load_flagged_review(db, feedback_id)
+    original_status = feedback.verification_status
     try:
-        await reject_scan_feedback(db, feedback)
+        duplicate_records = await _load_duplicate_flagged_reviews(db, feedback, original_status)
+        for duplicate_feedback, _duplicate_scan in duplicate_records:
+            await reject_scan_feedback(db, duplicate_feedback)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -176,12 +245,15 @@ async def reject_flagged_review(
             "scan_id": scan.id,
             "corrected_crop_label": feedback.corrected_crop_label,
             "corrected_disease_name": feedback.corrected_disease_name,
+            "duplicate_count": len(duplicate_records),
         },
     )
     await db.commit()
     await db.refresh(feedback)
     await db.refresh(scan)
-    return _flagged_review_payload(request, feedback, scan, user)
+    payload = _flagged_review_payload(request, feedback, scan, user)
+    payload["duplicate_count"] = max(1, len(duplicate_records))
+    return payload
 
 
 @router.patch("/flagged-reviews/{feedback_id}/undo", response_model=AdminFlaggedReviewRead)
@@ -192,8 +264,11 @@ async def undo_flagged_review_decision(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     feedback, scan, user = await _load_flagged_review(db, feedback_id)
+    original_status = feedback.verification_status
     try:
-        await undo_scan_feedback_decision(db, feedback, scan)
+        duplicate_records = await _load_duplicate_flagged_reviews(db, feedback, original_status)
+        for duplicate_feedback, duplicate_scan in duplicate_records:
+            await undo_scan_feedback_decision(db, duplicate_feedback, duplicate_scan)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -208,12 +283,15 @@ async def undo_flagged_review_decision(
             "scan_id": scan.id,
             "corrected_crop_label": feedback.corrected_crop_label,
             "corrected_disease_name": feedback.corrected_disease_name,
+            "duplicate_count": len(duplicate_records),
         },
     )
     await db.commit()
     await db.refresh(feedback)
     await db.refresh(scan)
-    return _flagged_review_payload(request, feedback, scan, user)
+    payload = _flagged_review_payload(request, feedback, scan, user)
+    payload["duplicate_count"] = max(1, len(duplicate_records))
+    return payload
 
 
 @router.get("/pending-farms", response_model=list[FarmRead])

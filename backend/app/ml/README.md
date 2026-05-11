@@ -80,6 +80,38 @@ app/ml/artifacts/labels.json
 app/ml/artifacts/training_metrics.json
 ```
 
+The metrics file now includes validation accuracy, top-3 accuracy, macro F1, per-class precision/recall/F1, support counts, and a confusion matrix. Watch the lowest-recall classes first; those are the crop diseases that need more local examples.
+
+## 3A.1 Export Admin Feedback For Retraining
+
+Accepted flagged reviews can be exported into a clean `train/` and `val/` folder structure. Rejected reviews can also be saved as hard-negative metadata so they can be reviewed without accidentally training the wrong class.
+
+```powershell
+python app/ml/export_feedback_dataset.py --clean --include-rejected
+```
+
+Output:
+
+```text
+app/ml/datasets/feedback_verified/
+  train/
+    corn_common_rust/
+    mango_phoma_blight/
+    invalid_crop_image/
+  val/
+    ...
+  manifest.json
+  rejected_hard_negatives.jsonl
+```
+
+Use the exported folder directly when you want a feedback-only sanity model:
+
+```powershell
+python app/ml/train_classifier.py --data app/ml/datasets/feedback_verified --epochs 8 --fine-tune-epochs 2
+```
+
+For the production model, merge these verified feedback images into the main prepared dataset or keep the folder as an extra local dataset source before training.
+
 The FastAPI scan route loads this model automatically through `MODEL_PATH` and `MODEL_LABELS_PATH`.
 
 ## 3B. Train Manual Scan Crop Recommender

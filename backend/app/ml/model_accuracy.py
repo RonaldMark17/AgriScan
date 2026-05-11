@@ -79,6 +79,10 @@ def build_report() -> dict[str, Any]:
             "labels_status": file_status(DISEASE_LABELS_PATH),
             "training_accuracy": disease_metrics.get("last_train_accuracy"),
             "validation_accuracy": disease_metrics.get("last_val_accuracy"),
+            "top_3_accuracy": disease_metrics.get("top_3_accuracy"),
+            "macro_f1": disease_metrics.get("macro_f1"),
+            "validation_samples": disease_metrics.get("validation_samples"),
+            "per_class": disease_metrics.get("per_class") if isinstance(disease_metrics.get("per_class"), dict) else {},
             "class_count": len(disease_classes) if isinstance(disease_classes, list) else 0,
             "classes": disease_classes if isinstance(disease_classes, list) else [],
             "yolo_integration": "enabled",
@@ -123,7 +127,21 @@ def print_report(report: dict[str, Any]) -> None:
     print(f"Labels file: {disease['labels_status']}")
     print(f"Training accuracy: {percent(disease['training_accuracy'])}")
     print(f"Validation accuracy: {percent(disease['validation_accuracy'])}")
+    print(f"Top-3 accuracy: {percent(disease['top_3_accuracy'])}")
+    print(f"Macro F1: {percent(disease['macro_f1'])}")
+    print(f"Validation samples: {disease['validation_samples'] or 'not available'}")
     print(f"Classes: {disease['class_count']} ({compact_classes(disease['classes'])})")
+    if disease.get("per_class"):
+        weakest = sorted(
+            disease["per_class"].items(),
+            key=lambda item: (float(item[1].get("recall", 0.0)), float(item[1].get("f1_score", 0.0))),
+        )[:5]
+        print("Lowest-recall classes:")
+        for class_name, metrics in weakest:
+            print(
+                f"  - {class_name}: recall {percent(metrics.get('recall'))}, "
+                f"precision {percent(metrics.get('precision'))}, support {metrics.get('support', 0)}"
+            )
     print(f"YOLO integration: {disease['yolo_integration']} (Ultralytics .pt inference supported)")
     print(f"YOLO model file: {disease['yolo_model_status']} ({disease['yolo_model_file']})")
     print(f"Bounding boxes: {disease['yolo_bounding_boxes']}")

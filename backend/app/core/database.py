@@ -80,8 +80,19 @@ SQLITE_COMPATIBILITY_COLUMNS = {
         "created_at": "created_at DATETIME",
     },
     "predictions": {
+        "user_id": "user_id INTEGER",
         "crop_id": "crop_id INTEGER",
         "confidence": "confidence FLOAT",
+        "created_at": "created_at DATETIME",
+    },
+    "crop_recommendation_feedback": {
+        "prediction_id": "prediction_id INTEGER",
+        "user_id": "user_id INTEGER",
+        "crop_name": "crop_name VARCHAR(120)",
+        "rating": "rating INTEGER",
+        "planted": "planted BOOLEAN NOT NULL DEFAULT 0",
+        "outcome": "outcome VARCHAR(40)",
+        "notes": "notes TEXT",
         "created_at": "created_at DATETIME",
     },
     "marketplace": {

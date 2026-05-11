@@ -17,6 +17,8 @@ import {
   RotateCcw,
   Sprout,
   Sun,
+  ThumbsDown,
+  ThumbsUp,
   Thermometer,
   TrendingUp,
   X,
@@ -37,6 +39,9 @@ const initialForm = {
   nitrogen_level: 'medium',
   phosphorus_level: 'medium',
   potassium_level: 'medium',
+  nitrogen_ppm: '',
+  phosphorus_ppm: '',
+  potassium_ppm: '',
   drainage: 'moderate',
   sunlight: 'full sun',
   season: 'regular season',
@@ -70,6 +75,9 @@ const soilInputLimits = {
   ph_level: { min: 3.5, max: 9.5, label: 'pH must be between 3.5 and 9.5.', key: 'phRangeError' },
   moisture_percent: { min: 5, max: 100, label: 'Moisture must be between 5% and 100%.', key: 'moistureRangeError' },
   soil_temperature_c: { min: 10, max: 45, label: 'Soil temperature must be between 10C and 45C.', key: 'soilTemperatureRangeError' },
+  nitrogen_ppm: { min: 0, max: 300, label: 'Nitrogen ppm must be between 0 and 300.', key: 'nitrogenPpmRangeError' },
+  phosphorus_ppm: { min: 0, max: 300, label: 'Phosphorus ppm must be between 0 and 300.', key: 'phosphorusPpmRangeError' },
+  potassium_ppm: { min: 0, max: 500, label: 'Potassium ppm must be between 0 and 500.', key: 'potassiumPpmRangeError' },
 };
 const offlineCropTemplates = [
   {
@@ -217,16 +225,36 @@ function parseOptionalNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function nutrientStatusFromValue(level, ppm, lowCutoff, highCutoff) {
+  if (ppm !== null) {
+    if (ppm < lowCutoff) return 'low';
+    if (ppm > highCutoff) return 'high';
+    return 'medium';
+  }
+  return (level || 'medium').toLowerCase();
+}
+
+function addScoreComponent(breakdown, label, value, detail = '') {
+  if (Math.abs(value) < 0.01) return;
+  breakdown.push({ label, value: Math.round(value * 10) / 10, detail });
+}
+
 function getSoilInputErrors(inputs, t = null) {
   const errors = [];
   const ph = parseOptionalNumber(inputs?.ph_level);
   const moisture = parseOptionalNumber(inputs?.moisture_percent);
   const soilTemperature = parseOptionalNumber(inputs?.soil_temperature_c);
+  const nitrogenPpm = parseOptionalNumber(inputs?.nitrogen_ppm);
+  const phosphorusPpm = parseOptionalNumber(inputs?.phosphorus_ppm);
+  const potassiumPpm = parseOptionalNumber(inputs?.potassium_ppm);
 
   [
     [ph, soilInputLimits.ph_level],
     [moisture, soilInputLimits.moisture_percent],
     [soilTemperature, soilInputLimits.soil_temperature_c],
+    [nitrogenPpm, soilInputLimits.nitrogen_ppm],
+    [phosphorusPpm, soilInputLimits.phosphorus_ppm],
+    [potassiumPpm, soilInputLimits.potassium_ppm],
   ].forEach(([value, limits]) => {
     if (value !== null && (value < limits.min || value > limits.max)) {
       errors.push(t ? t(limits.key) : limits.label);
@@ -311,36 +339,47 @@ function buildOfflineCropRecommendation(payload, t) {
   const drainage = (payload.drainage || 'moderate').toLowerCase();
   const sunlight = (payload.sunlight || 'full sun').toLowerCase();
   const season = (payload.season || 'regular season').toLowerCase();
-  const nitrogen = (payload.nitrogen_level || 'medium').toLowerCase();
-  const phosphorus = (payload.phosphorus_level || 'medium').toLowerCase();
-  const potassium = (payload.potassium_level || 'medium').toLowerCase();
+  const nitrogen = nutrientStatusFromValue(payload.nitrogen_level, payload.nitrogen_ppm, 40, 85);
+  const phosphorus = nutrientStatusFromValue(payload.phosphorus_level, payload.phosphorus_ppm, 25, 70);
+  const potassium = nutrientStatusFromValue(payload.potassium_level, payload.potassium_ppm, 80, 190);
   const guardrail = offlineSoilGuardrail(payload.ph_level, payload.moisture_percent, payload.soil_temperature_c);
 
   const recommendations = offlineCropTemplates
     .map((candidate) => {
       let score = candidate.base;
+      const breakdown = [{ label: 'Base crop fit', value: candidate.base, detail: candidate.reason }];
+      const riskFlags = [];
 
+      const soilBefore = score;
       if (soil.includes('clay')) score += hasCrop('clay', candidate.crop) ? 12 : -4;
       if (soil.includes('sandy')) score += hasCrop('sandy', candidate.crop) ? 12 : -5;
       if (soil.includes('loam')) score += hasCrop('loam', candidate.crop) ? 10 : 4;
       if (soil.includes('alluvial')) score += hasCrop('alluvial', candidate.crop) ? 12 : 5;
+      addScoreComponent(breakdown, 'Soil texture', score - soilBefore);
 
+      const phBefore = score;
       if (payload.ph_level !== null) {
         if (payload.ph_level < 5.6) score += hasCrop('acid', candidate.crop) ? 8 : -10;
         else if (payload.ph_level <= 7.2) score += hasCrop('neutral', candidate.crop) ? 9 : 4;
       }
+      addScoreComponent(breakdown, 'pH match', score - phBefore);
 
+      const moistureBefore = score;
       if (payload.moisture_percent !== null) {
         if (payload.moisture_percent >= 65) score += hasCrop('highMoisture', candidate.crop) ? 12 : -6;
         else if (payload.moisture_percent <= 35) score += hasCrop('lowMoisture', candidate.crop) ? 10 : -5;
         else score += hasCrop('moderateMoisture', candidate.crop) ? 8 : 3;
       }
+      addScoreComponent(breakdown, 'Moisture fit', score - moistureBefore);
 
+      const temperatureBefore = score;
       if (payload.soil_temperature_c !== null) {
         if (payload.soil_temperature_c >= 30) score += hasCrop('warm', candidate.crop) ? 8 : 0;
         else if (payload.soil_temperature_c < 22) score += hasCrop('cool', candidate.crop) ? 5 : -4;
       }
+      addScoreComponent(breakdown, 'Soil temperature', score - temperatureBefore);
 
+      const fieldBefore = score;
       if (drainage.includes('poor') || drainage.includes('water')) score += hasCrop('highMoisture', candidate.crop) ? 13 : -8;
       else if (drainage.includes('good')) score += hasCrop('lowMoisture', candidate.crop) || hasCrop('moderateMoisture', candidate.crop) ? 9 : 1;
 
@@ -349,15 +388,27 @@ function buildOfflineCropRecommendation(payload, t) {
 
       if (season.includes('rain') || season.includes('wet')) score += hasCrop('wetSeason', candidate.crop) ? 8 : -2;
       else if (season.includes('dry')) score += hasCrop('drySeason', candidate.crop) ? 8 : -3;
+      addScoreComponent(breakdown, 'Field conditions', score - fieldBefore);
 
+      const nutrientBefore = score;
       if (nitrogen === 'low') score += normalizeCropName(candidate.crop) === 'mung bean' ? 7 : -2;
       if (phosphorus === 'low' && ['tomato', 'corn', 'sweet potato', 'onion'].includes(normalizeCropName(candidate.crop))) score -= 3;
       if (potassium === 'low' && ['tomato', 'cassava', 'sweet potato', 'banana', 'coconut', 'pineapple'].includes(normalizeCropName(candidate.crop))) score -= 4;
+      addScoreComponent(breakdown, 'NPK nutrients', score - nutrientBefore);
+
+      if (guardrail.penalty) {
+        addScoreComponent(breakdown, 'Reading guardrails', -guardrail.penalty);
+      }
+      if ((payload.moisture_percent ?? 0) >= 65 && ['tomato', 'onion'].includes(normalizeCropName(candidate.crop))) {
+        riskFlags.push('Current soil moisture may be too wet without raised beds or drainage.');
+      }
 
       return {
         ...candidate,
         suitability: Math.max(20, Math.min(guardrail.cap, Math.round(score - guardrail.penalty))),
         suitability_cap: guardrail.cap,
+        score_breakdown: breakdown,
+        risk_flags: riskFlags,
       };
     })
     .sort((first, second) => second.suitability - first.suitability)
@@ -372,6 +423,9 @@ function buildOfflineCropRecommendation(payload, t) {
     ph_level: payload.ph_level,
     moisture_percent: payload.moisture_percent,
     soil_temperature_c: payload.soil_temperature_c,
+    nitrogen_ppm: payload.nitrogen_ppm,
+    phosphorus_ppm: payload.phosphorus_ppm,
+    potassium_ppm: payload.potassium_ppm,
     best_crop: best.crop,
     confidence: Number((best.suitability / 100).toFixed(2)),
     soil_summary: buildOfflineSoilSummary(payload),
@@ -389,7 +443,7 @@ function buildOfflineCropRecommendation(payload, t) {
     recommendation_basis: [t('offlineRecommendationBasis')],
     recommendation_model: {
       source: 'offline-browser-rules',
-      version: 'offline-rule-based-v1',
+      version: 'offline-rule-based-v2',
       accuracy: null,
       f1_score: null,
       top_3_accuracy: null,
@@ -492,6 +546,10 @@ function buildCropCard(item, result) {
     guide: item.reason,
     watering: item.watering,
     fertilizer: item.fertilizer,
+    scoreBreakdown: item.score_breakdown || [],
+    riskFlags: item.risk_flags || [],
+    modelConfidence: item.model_confidence,
+    ruleSuitability: item.rule_suitability,
   };
 }
 
@@ -537,6 +595,9 @@ function buildFormFromInputs(inputs) {
     nitrogen_level: inputs.nitrogen_level || initialForm.nitrogen_level,
     phosphorus_level: inputs.phosphorus_level || initialForm.phosphorus_level,
     potassium_level: inputs.potassium_level || initialForm.potassium_level,
+    nitrogen_ppm: inputs.nitrogen_ppm ?? '',
+    phosphorus_ppm: inputs.phosphorus_ppm ?? '',
+    potassium_ppm: inputs.potassium_ppm ?? '',
     drainage: inputs.drainage || initialForm.drainage,
     sunlight: inputs.sunlight || initialForm.sunlight,
     season: inputs.season || initialForm.season,
@@ -750,6 +811,12 @@ function FieldHelp({ children }) {
   return <p className="mt-1 text-[11px] leading-4 text-stone-500">{children}</p>;
 }
 
+function formatScoreValue(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '';
+  return number > 0 ? `+${number}` : `${number}`;
+}
+
 function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
   if (!crop) return null;
 
@@ -793,6 +860,34 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
             <p className="text-sm font-bold uppercase tracking-wide text-sky-700">{t('liveWeatherContext')}</p>
             {weatherSummary ? <TranslatedText as="p" className="mt-2 text-sm text-stone-700" text={weatherSummary} /> : <p className="mt-2 text-sm text-stone-700">{t('refreshWeatherContext')}</p>}
           </div>
+
+          {crop.scoreBreakdown?.length > 0 && (
+            <div className="mt-5 rounded-lg border border-stone-200 p-4">
+              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('scoreBreakdown')}</p>
+              <div className="mt-3 space-y-2">
+                {crop.scoreBreakdown.map((item, index) => (
+                  <div key={`${item.label}-${index}`} className="flex items-start justify-between gap-4 rounded-lg bg-stone-50 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-stone-900">{item.label}</p>
+                      {item.detail && <TranslatedText as="p" className="mt-0.5 text-xs leading-5 text-stone-500" text={item.detail} />}
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${Number(item.value) >= 0 ? 'bg-leaf-50 text-leaf-700' : 'bg-amber-50 text-amber-700'}`}>
+                      {formatScoreValue(item.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {crop.riskFlags?.length > 0 && (
+            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-bold uppercase tracking-wide text-amber-800">{t('riskFlags')}</p>
+              <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-900">
+                {crop.riskFlags.map((flag) => <li key={flag}><TranslatedText text={flag} /></li>)}
+              </ul>
+            </div>
+          )}
 
           <div className="mt-5 flex flex-wrap gap-2">
             {crop.tags.map((tag) => (
@@ -878,6 +973,46 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
   );
 }
 
+function RecommendationFeedback({ result, status, onFeedback, t }) {
+  if (!result) return null;
+  const disabled = !result.prediction_id || result.offline;
+
+  return (
+    <section className="surface rounded-lg p-4 sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">{t('recommendationFeedback')}</p>
+          <h2 className="mt-1 text-xl font-bold text-stone-950">{t('didRecommendationHelp')}</h2>
+          <p className="mt-1 text-sm leading-6 text-stone-500">
+            {disabled ? t('feedbackNeedsSavedPrediction') : t('feedbackImprovesRecommendations')}
+          </p>
+          {status && <p className="mt-2 text-sm font-semibold text-leaf-700">{status}</p>}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            className="btn-secondary h-10 px-4 text-sm"
+            disabled={disabled}
+            onClick={() => onFeedback('good')}
+            type="button"
+          >
+            <ThumbsUp className="h-4 w-4" />
+            {t('workedWell')}
+          </button>
+          <button
+            className="btn-secondary h-10 px-4 text-sm"
+            disabled={disabled}
+            onClick={() => onFeedback('poor')}
+            type="button"
+          >
+            <ThumbsDown className="h-4 w-4" />
+            {t('poorFit')}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Scan() {
   const { t } = useI18n();
   const { speak, voiceTutorialsEnabled } = useVoice();
@@ -890,6 +1025,7 @@ export default function Scan() {
   const [sortMode, setSortMode] = useState('Suitability');
   const [selectedCrop, setSelectedCrop] = useState(null);
   const [audioStatus, setAudioStatus] = useState('');
+  const [feedbackStatus, setFeedbackStatus] = useState('');
   const [online, setOnline] = useState(() => navigator.onLine);
   const [locationState, setLocationState] = useState({
     locating: false,
@@ -954,6 +1090,9 @@ export default function Scan() {
       nitrogen_level: form.nitrogen_level,
       phosphorus_level: form.phosphorus_level,
       potassium_level: form.potassium_level,
+      nitrogen_ppm: parseOptionalNumber(form.nitrogen_ppm),
+      phosphorus_ppm: parseOptionalNumber(form.phosphorus_ppm),
+      potassium_ppm: parseOptionalNumber(form.potassium_ppm),
       drainage: form.drainage,
       sunlight: form.sunlight,
       season: form.season,
@@ -1061,6 +1200,7 @@ export default function Scan() {
     setError('');
     setSelectedCrop(null);
     setAudioStatus('');
+    setFeedbackStatus('');
     setActiveCategory('All Crops');
     setSortMode('Suitability');
   }
@@ -1077,6 +1217,7 @@ export default function Scan() {
       setOnline(false);
       const scan = { ...buildOfflineCropRecommendation(payload, t), id: makeHistoryId(), created_at: new Date().toISOString(), inputs: payload };
       setResult(scan);
+      setFeedbackStatus('');
       saveHistory(scan);
       setAudioStatus(t('offlineCropRecommendationReady'));
       return scan;
@@ -1089,6 +1230,7 @@ export default function Scan() {
       const response = await api.post('/predictions/soil-scan', payload);
       const scan = { ...response.data, id: makeHistoryId(), created_at: new Date().toISOString(), inputs: payload };
       setResult(scan);
+      setFeedbackStatus('');
       saveHistory(scan);
       return scan;
     } catch (requestError) {
@@ -1096,6 +1238,7 @@ export default function Scan() {
         setOnline(navigator.onLine);
         const scan = { ...buildOfflineCropRecommendation(payload, t), id: makeHistoryId(), created_at: new Date().toISOString(), inputs: payload };
         setResult(scan);
+        setFeedbackStatus('');
         saveHistory(scan);
         setAudioStatus(t('offlineCropRecommendationReady'));
         return scan;
@@ -1122,6 +1265,29 @@ export default function Scan() {
     setLocationState(buildLocationStateFromScan(scan));
     setSelectedCrop(null);
     setAudioStatus('');
+    setFeedbackStatus('');
+  }
+
+  async function submitRecommendationFeedback(outcome) {
+    if (!result?.prediction_id || result?.offline) {
+      setFeedbackStatus(t('feedbackNeedsSavedPrediction'));
+      return;
+    }
+
+    const payload = {
+      crop_name: result.best_crop,
+      planted: outcome === 'good',
+      outcome,
+      rating: outcome === 'good' ? 5 : 2,
+      notes: outcome === 'good' ? 'Recommendation worked well from Manual Scan.' : 'Recommendation was a poor fit from Manual Scan.',
+    };
+
+    try {
+      await api.post(`/predictions/${result.prediction_id}/feedback`, payload);
+      setFeedbackStatus(t('feedbackSaved'));
+    } catch (feedbackError) {
+      setFeedbackStatus(getApiErrorMessage(feedbackError, t('feedbackSaveFailed')));
+    }
   }
 
   function cycleSortMode() {
@@ -1252,6 +1418,54 @@ export default function Scan() {
             <NutrientControl label={t('potassium')} value={form.potassium_level} onChange={(value) => updateField('potassium_level', value)} t={t} />
             <FieldHelp>{t('potassiumHelp')}</FieldHelp>
 
+            <section className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+              <div>
+                <p className="text-sm font-bold text-stone-900">{t('labNpkValues')}</p>
+                <FieldHelp>{t('labNpkHelp')}</FieldHelp>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-stone-500">N ppm</span>
+                  <input
+                    className="field mt-1 h-11 bg-white"
+                    inputMode="decimal"
+                    min="0"
+                    max="300"
+                    placeholder="e.g. 55"
+                    type="number"
+                    value={form.nitrogen_ppm}
+                    onChange={(event) => updateField('nitrogen_ppm', event.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-stone-500">P ppm</span>
+                  <input
+                    className="field mt-1 h-11 bg-white"
+                    inputMode="decimal"
+                    min="0"
+                    max="300"
+                    placeholder="e.g. 45"
+                    type="number"
+                    value={form.phosphorus_ppm}
+                    onChange={(event) => updateField('phosphorus_ppm', event.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-stone-500">K ppm</span>
+                  <input
+                    className="field mt-1 h-11 bg-white"
+                    inputMode="decimal"
+                    min="0"
+                    max="500"
+                    placeholder="e.g. 120"
+                    type="number"
+                    value={form.potassium_ppm}
+                    onChange={(event) => updateField('potassium_ppm', event.target.value)}
+                  />
+                </label>
+              </div>
+            </section>
+
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-sm font-bold text-stone-700">{t('drainage')}</span>
@@ -1334,6 +1548,12 @@ export default function Scan() {
 
         <div className="space-y-6">
           <ResultPanel result={result} t={t} />
+          <RecommendationFeedback
+            result={result}
+            status={feedbackStatus}
+            onFeedback={submitRecommendationFeedback}
+            t={t}
+          />
 
           <section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

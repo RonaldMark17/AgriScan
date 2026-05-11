@@ -382,6 +382,34 @@ async def create_scan_feedback(
         corrected_disease_name=corrected_disease_name,
         corrected_class_key=corrected_class_key,
     )
+    existing_result = await db.execute(
+        select(ScanFeedback)
+        .where(
+            ScanFeedback.scan_id == scan.id,
+            ScanFeedback.user_id == current_user.id,
+            ScanFeedback.corrected_crop_label == corrected_crop_label,
+            ScanFeedback.corrected_disease_name == corrected_disease_name,
+            ScanFeedback.corrected_class_key == corrected_class_key,
+        )
+        .order_by(ScanFeedback.created_at.desc())
+        .limit(1)
+    )
+    existing_feedback = existing_result.scalar_one_or_none()
+    if existing_feedback is not None:
+        if existing_feedback.verification_status == "verified":
+            applied_detection = _apply_verified_feedback_to_scan(scan, existing_feedback)
+            setattr(existing_feedback, "applied_disease_name", applied_detection.disease_name)
+            setattr(existing_feedback, "applied_confidence", applied_detection.confidence)
+            setattr(existing_feedback, "applied_cause", applied_detection.cause)
+            setattr(existing_feedback, "applied_treatment", applied_detection.treatment)
+            setattr(existing_feedback, "applied_analysis_mode", applied_detection.analysis_mode)
+        else:
+            setattr(existing_feedback, "applied_disease_name", None)
+            setattr(existing_feedback, "applied_confidence", None)
+            setattr(existing_feedback, "applied_cause", None)
+            setattr(existing_feedback, "applied_treatment", None)
+            setattr(existing_feedback, "applied_analysis_mode", None)
+        return existing_feedback
 
     feedback = ScanFeedback(
         scan_id=scan.id,
