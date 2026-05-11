@@ -1,10 +1,12 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
-from app.core.config import get_settings
 from app.core.database import get_db
 from app.models import Notification, User
 from app.schemas.common import MessageResponse
@@ -12,23 +14,16 @@ from app.schemas.domain import NotificationRead
 from app.services.push_notifications import (
     create_notification,
     dispatch_push_to_user,
+    firebase_push_configuration,
     remove_push_subscription,
     upsert_push_subscription,
-    web_push_configuration,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
-settings = get_settings()
 
 
-class BrowserPushKeys(BaseModel):
-    p256dh: str = Field(min_length=1)
-    auth: str = Field(min_length=1)
-
-
-class BrowserPushSubscription(BaseModel):
-    endpoint: str = Field(min_length=1, max_length=700)
-    keys: BrowserPushKeys
+class FirebasePushSubscription(BaseModel):
+    token: str = Field(min_length=1, max_length=700)
 
 
 @router.get("", response_model=list[NotificationRead])
@@ -53,47 +48,72 @@ async def mark_all_read(
     return MessageResponse(message="All notifications marked as read.")
 
 
-@router.get("/push/public-key")
-async def web_push_public_key(_: User = Depends(get_current_user)) -> dict:
-    config = web_push_configuration()
+def _firebase_push_config_payload() -> dict:
+    config = firebase_push_configuration()
     return {
+        "provider": "firebase",
         "enabled": config.enabled,
-        "public_key": settings.vapid_public_key if config.enabled else None,
+        "firebase_config": config.client_config if config.enabled else None,
+        "vapid_key": config.vapid_key if config.enabled else None,
         "missing": list(config.missing),
     }
 
 
+@router.get("/push/firebase-sw-config.js", include_in_schema=False)
+async def firebase_sw_config() -> Response:
+    config = firebase_push_configuration()
+    content = (
+        "self.AGRISCAN_FIREBASE_PUSH_CONFIG = "
+        f"{json.dumps(_firebase_push_config_payload(), ensure_ascii=False)};\n"
+        f"self.AGRISCAN_FIREBASE_PUSH_ENABLED = {json.dumps(config.enabled)};\n"
+    )
+    return Response(
+        content=content,
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/push/config")
+async def firebase_push_config(_: User = Depends(get_current_user)) -> dict:
+    return _firebase_push_config_payload()
+
+
+@router.get("/push/public-key")
+async def legacy_push_public_key(_: User = Depends(get_current_user)) -> dict:
+    return _firebase_push_config_payload()
+
+
 @router.post("/push/subscribe", response_model=MessageResponse)
-async def subscribe_web_push(
-    payload: BrowserPushSubscription,
+async def subscribe_firebase_push(
+    payload: FirebasePushSubscription,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    config = web_push_configuration()
+    config = firebase_push_configuration()
     if not config.enabled:
-        detail = "Web Push is not configured."
+        detail = "Firebase push is not configured."
         if config.missing:
             detail = f"{detail} Missing: {', '.join(config.missing)}."
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
     await upsert_push_subscription(
         db,
         user_id=current_user.id,
-        endpoint=payload.endpoint,
-        keys=payload.keys.model_dump(),
+        token=payload.token,
     )
     await db.commit()
-    return MessageResponse(message="Web Push notifications enabled.")
+    return MessageResponse(message="Firebase push notifications enabled.")
 
 
 @router.post("/push/unsubscribe", response_model=MessageResponse)
-async def unsubscribe_web_push(
-    payload: BrowserPushSubscription,
+async def unsubscribe_firebase_push(
+    payload: FirebasePushSubscription,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    await remove_push_subscription(db, user_id=current_user.id, endpoint=payload.endpoint)
+    await remove_push_subscription(db, user_id=current_user.id, token=payload.token)
     await db.commit()
-    return MessageResponse(message="Web Push notifications disabled.")
+    return MessageResponse(message="Firebase push notifications disabled.")
 
 
 @router.patch("/{notification_id}/read", response_model=MessageResponse)
@@ -139,7 +159,7 @@ async def send_test_notification(
         payload={"notification_id": notification.id, "type": "system"},
     )
     if dispatch.sent:
-        if dispatch.web_push_sent:
-            return MessageResponse(message=f"Test notification saved. Web Push sent to {dispatch.web_push_sent} device(s).")
+        if dispatch.firebase_sent:
+            return MessageResponse(message=f"Test notification saved. Firebase push sent to {dispatch.firebase_sent} device(s).")
         return MessageResponse(message=f"Test notification saved. Realtime signal sent to {dispatch.realtime_sent} open device(s).")
-    return MessageResponse(message="Test notification saved. Enable Web Push to receive alerts when AgriScan is closed.")
+    return MessageResponse(message="Test notification saved. Enable Firebase push to receive alerts when AgriScan is closed.")

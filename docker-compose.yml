@@ -17,6 +17,7 @@ services:
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/uploads
+      - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro
 
   frontend:
     build:

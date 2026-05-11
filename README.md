@@ -131,9 +131,7 @@ Set real secrets and API keys before deployment:
 - `FERNET_KEY`
 - `DATABASE_URL`
 - `SMTP_*`
-- `VAPID_PUBLIC_KEY`
-- `VAPID_PRIVATE_KEY`
-- `VAPID_SUBJECT`
+- `FIREBASE_*`
 - `WEATHER_API_KEY`
 - `GOOGLE_MAPS_API_KEY`
 
@@ -163,33 +161,40 @@ VITE_API_BASE_URL=/api/v1
 VITE_ENABLE_REALTIME_ALERTS=false
 ```
 
-Configure VAPID keys in `backend/.env` to enable closed-browser Web Push delivery:
+Configure Firebase Cloud Messaging in `backend/.env` to enable closed-browser push delivery:
 
 ```env
-VAPID_SUBJECT=mailto:admin@example.com
-VAPID_PUBLIC_KEY=your-vapid-public-key
-VAPID_PRIVATE_KEY=your-vapid-private-key
+FIREBASE_API_KEY=your-web-api-key
+FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+FIREBASE_MESSAGING_SENDER_ID=1234567890
+FIREBASE_APP_ID=1:1234567890:web:abcdef
+FIREBASE_MEASUREMENT_ID=G-OPTIONAL
+FIREBASE_VAPID_KEY=your-firebase-web-push-certificate-public-key
+FIREBASE_SERVICE_ACCOUNT_FILE=/app/firebase-service-account.json
 ```
 
-Generate compatible keys with:
+For Docker deployments, place the downloaded service account file at `backend/firebase-service-account.json` and mount it into the backend container:
 
-```bash
-python backend/scripts/generate_vapid_keys.py
+```yaml
+volumes:
+  - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro
 ```
 
 Realtime WebSocket alerts are optional; leave `VITE_ENABLE_REALTIME_ALERTS=false` unless the host Nginx WebSocket proxy has been applied and verified. The frontend still polls notifications every minute and whenever the tab regains focus.
 
 ## Notification Flow
 
-AgriScan supports Web Push for closed-browser delivery when VAPID keys are configured.
+AgriScan supports Firebase Cloud Messaging for closed-browser delivery when Firebase is configured.
 
 - Backend saves notifications in the database, then sends a realtime WebSocket signal from `backend/app/main.py`.
-- Backend also sends Web Push through stored browser subscriptions in `backend/app/services/push_notifications.py`.
-- Frontend subscribes with `PushManager` from the Security settings screen and stores the subscription through `/api/v1/notifications/push/subscribe`.
+- Backend also sends Firebase push through stored browser FCM tokens in `backend/app/services/push_notifications.py`.
+- Frontend subscribes with Firebase Messaging from the Security settings screen and stores the token through `/api/v1/notifications/push/subscribe`.
 - `frontend/public/sw.js` handles native `push` events and displays notifications through `self.registration.showNotification(...)`.
 - Frontend listens with `connectRealtimeAlertStream` in `frontend/src/utils/realtimeAlerts.js` when realtime alerts are enabled.
 - `frontend/src/components/layout/Topbar.jsx` reloads notifications on realtime signals and every 60 seconds while the app is running.
-- New unread items show an in-app toast while AgriScan is open; Web Push handles notifications when the app is closed or in the background.
+- New unread items show an in-app toast while AgriScan is open; Firebase push handles notifications when the app is closed or in the background.
 
 Seed or refresh the production demo data without wiping the SQLite volume:
 

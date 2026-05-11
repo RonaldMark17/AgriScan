@@ -193,7 +193,7 @@ export default function SecuritySettings() {
       setPushStatus(t('pushEnabled'));
     } catch (error) {
       setPushEnabled(false);
-      if (error?.code === 'WEB_PUSH_NOT_CONFIGURED') {
+      if (error?.code === 'FIREBASE_PUSH_NOT_CONFIGURED') {
         setPushServerReady(false);
         setPushStatus(pushServerConfigStatus(error.missing));
       } else {

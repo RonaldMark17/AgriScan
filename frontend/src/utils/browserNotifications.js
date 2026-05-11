@@ -1,8 +1,11 @@
+import { getApps, initializeApp } from 'firebase/app';
+import { getMessaging, getToken, isSupported as firebaseMessagingIsSupported } from 'firebase/messaging';
 import { api } from '../api/client.js';
 
 const MANUAL_NOTIFICATIONS_KEY = 'agriscan_manual_notifications';
 const SHOWN_NOTIFICATION_IDS_PREFIX = 'agriscan_shown_notification_ids';
 const SERVICE_WORKER_READY_TIMEOUT_MS = 10000;
+const FCM_TOKEN_STORAGE_KEY = 'agriscan_firebase_messaging_token';
 
 function storageAvailable() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -115,36 +118,56 @@ export function webPushNotificationsSupported() {
   return (
     browserNotificationsSupported() &&
     'serviceWorker' in navigator &&
-    'PushManager' in window &&
     window.isSecureContext
   );
 }
 
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = `${base64String}${padding}`.replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
+async function firebaseMessagingSupported() {
+  try {
+    return await firebaseMessagingIsSupported();
+  } catch {
+    return false;
+  }
 }
 
 export async function getWebPushServerConfig() {
-  const { data } = await api.get('/notifications/push/public-key');
+  const { data } = await api.get('/notifications/push/config');
   return {
     enabled: Boolean(data?.enabled),
-    publicKey: data?.public_key || '',
+    firebaseConfig: data?.firebase_config || null,
+    vapidKey: data?.vapid_key || '',
     missing: Array.isArray(data?.missing) ? data.missing.filter(Boolean) : [],
   };
 }
 
-async function getWebPushPublicKey() {
+async function getFirebasePushConfig() {
   const config = await getWebPushServerConfig();
-  if (!config.enabled || !config.publicKey) {
-    const error = new Error('Web Push is not configured.');
-    error.code = 'WEB_PUSH_NOT_CONFIGURED';
+  if (!config.enabled || !config.firebaseConfig || !config.vapidKey) {
+    const error = new Error('Firebase push is not configured.');
+    error.code = 'FIREBASE_PUSH_NOT_CONFIGURED';
     error.missing = config.missing;
     throw error;
   }
-  return config.publicKey;
+  return config;
+}
+
+function getFirebaseApp(firebaseConfig) {
+  const existing = getApps().find((app) => app.name === 'agriscan-firebase-push');
+  return existing || initializeApp(firebaseConfig, 'agriscan-firebase-push');
+}
+
+function getStoredFirebaseToken() {
+  if (!storageAvailable()) return '';
+  return window.localStorage.getItem(FCM_TOKEN_STORAGE_KEY) || '';
+}
+
+function setStoredFirebaseToken(token) {
+  if (!storageAvailable()) return;
+  if (token) {
+    window.localStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
+  } else {
+    window.localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
+  }
 }
 
 function waitForActiveServiceWorkerRegistration() {
@@ -212,7 +235,7 @@ async function getServiceWorkerRegistration({ create = true } = {}) {
 }
 
 export async function getWebPushSubscriptionState() {
-  if (!webPushNotificationsSupported()) {
+  if (!webPushNotificationsSupported() || !(await firebaseMessagingSupported())) {
     return {
       supported: false,
       serverEnabled: false,
@@ -230,9 +253,17 @@ export async function getWebPushSubscriptionState() {
 
   let subscribed = false;
   try {
-    const registration = await getServiceWorkerRegistration({ create: false });
-    const subscription = await registration?.pushManager?.getSubscription();
-    subscribed = Boolean(subscription);
+    if (serverConfig.enabled && window.Notification.permission === 'granted') {
+      const registration = await getServiceWorkerRegistration({ create: false });
+      if (registration?.active && serverConfig.firebaseConfig && serverConfig.vapidKey) {
+        const messaging = getMessaging(getFirebaseApp(serverConfig.firebaseConfig));
+        const token = await getToken(messaging, {
+          vapidKey: serverConfig.vapidKey,
+          serviceWorkerRegistration: registration,
+        });
+        subscribed = Boolean(token && getStoredFirebaseToken() === token);
+      }
+    }
   } catch {
     subscribed = false;
   }
@@ -247,7 +278,7 @@ export async function getWebPushSubscriptionState() {
 }
 
 export async function ensureWebPushNotificationsEnabled() {
-  if (!webPushNotificationsSupported()) return false;
+  if (!webPushNotificationsSupported() || !(await firebaseMessagingSupported())) return false;
 
   let permission = window.Notification.permission;
   if (permission === 'default') {
@@ -255,18 +286,19 @@ export async function ensureWebPushNotificationsEnabled() {
   }
   if (permission !== 'granted') return false;
 
-  const publicKey = await getWebPushPublicKey();
+  const firebaseConfig = await getFirebasePushConfig();
   const registration = await getServiceWorkerRegistration({ create: true });
-  if (!registration?.pushManager) return false;
+  if (!registration?.active) return false;
 
-  const subscription = await (
-    (await registration.pushManager.getSubscription()) ||
-    registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    })
-  );
-  await api.post('/notifications/push/subscribe', subscription.toJSON());
+  const messaging = getMessaging(getFirebaseApp(firebaseConfig.firebaseConfig));
+  const token = await getToken(messaging, {
+    vapidKey: firebaseConfig.vapidKey,
+    serviceWorkerRegistration: registration,
+  });
+  if (!token) return false;
+
+  await api.post('/notifications/push/subscribe', { token });
+  setStoredFirebaseToken(token);
   return true;
 }
 
