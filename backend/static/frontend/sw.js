@@ -1,6 +1,6 @@
 /* global Response */
 
-const CACHE_NAME = 'agriscan-cache-v33';
+const CACHE_NAME = 'agriscan-cache-v34';
 const APP_SHELL = [
   '/',
   '/index.html',
