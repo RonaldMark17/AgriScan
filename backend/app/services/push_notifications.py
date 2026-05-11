@@ -148,7 +148,10 @@ def _firebase_app():
                 return None
             credential = credentials.Certificate(str(service_account_path))
 
-        return firebase_admin.initialize_app(credential, {"projectId": settings.firebase_project_id})
+        options = {"projectId": settings.firebase_project_id}
+        if settings.firebase_storage_bucket:
+            options["storageBucket"] = settings.firebase_storage_bucket
+        return firebase_admin.initialize_app(credential, options)
     except Exception as exc:
         logger.exception("Firebase Admin could not initialize; push delivery will be skipped.", exc_info=exc)
         return None

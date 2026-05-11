@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -6,7 +7,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, select, update
 
 from app.api.api import api_router
@@ -15,6 +15,7 @@ from app.core.database import Base, AsyncSessionLocal, engine, run_schema_compat
 from app.core.middleware import SecurityHeadersMiddleware
 from app.core.security import decode_token
 from app.models import Role, User
+from app.services.firebase_storage import restore_upload_from_firebase
 from app.services.realtime_alerts import realtime_alert_hub
 
 settings = get_settings()
@@ -94,12 +95,29 @@ app.add_middleware(
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 settings.upload_path.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.upload_path, check_dir=False), name="uploads")
 
 
 @app.get("/health", tags=["system"])
 async def health() -> dict:
     return {"status": "ok", "service": "agriscan-api"}
+
+
+@app.get("/uploads/{filename:path}", include_in_schema=False)
+async def serve_upload(filename: str):
+    image_name = Path(filename.replace("\\", "/")).name
+    if not image_name:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    local_path = settings.upload_path / image_name
+    if not local_path.is_file():
+        restored_path = await asyncio.to_thread(restore_upload_from_firebase, image_name)
+        if restored_path is not None:
+            local_path = restored_path
+
+    if not local_path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return FileResponse(local_path)
 
 
 @app.websocket(f"{settings.api_v1_prefix}/notifications/stream")

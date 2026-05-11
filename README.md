@@ -173,6 +173,8 @@ FIREBASE_APP_ID=1:1234567890:web:abcdef
 FIREBASE_MEASUREMENT_ID=G-OPTIONAL
 FIREBASE_VAPID_KEY=your-firebase-web-push-certificate-public-key
 FIREBASE_SERVICE_ACCOUNT_FILE=/app/firebase-service-account.json
+FIREBASE_STORAGE_PREFIX=agriscan
+FIREBASE_MIRROR_UPLOADS=true
 ```
 
 For Docker deployments, place the downloaded service account file at `backend/firebase-service-account.json` and mount it into the backend container:
@@ -181,6 +183,28 @@ For Docker deployments, place the downloaded service account file at `backend/fi
 volumes:
   - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro
 ```
+
+Firebase Storage also protects local SQLite data and scan uploads:
+
+```bash
+cd backend
+source venv/bin/activate
+python scripts/firebase_storage_sync.py backup-all
+```
+
+After a fresh clone or EC2 rebuild, restore uploads first, then restore SQLite while the app service is stopped:
+
+```bash
+sudo systemctl stop agriscan
+cd ~/Agriscan/backend
+source venv/bin/activate
+python scripts/firebase_storage_sync.py restore-uploads
+python scripts/firebase_storage_sync.py restore-db
+sudo systemctl start agriscan
+```
+
+New scan image uploads are mirrored to Firebase Storage automatically when `FIREBASE_MIRROR_UPLOADS=true`. If a local
+`/uploads/<file>` is missing, the backend will try to restore it from Firebase Storage before returning 404.
 
 Realtime WebSocket alerts are optional; leave `VITE_ENABLE_REALTIME_ALERTS=false` unless the host Nginx WebSocket proxy has been applied and verified. The frontend still polls notifications every minute and whenever the tab regains focus.
 

@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     firebase_vapid_key: str | None = None
     firebase_service_account_file: str | None = None
     firebase_service_account_json: str | None = None
+    firebase_storage_prefix: str = "agriscan"
+    firebase_mirror_uploads: bool = True
 
     weather_api_key: str | None = None
     weather_api_base_url: str = "https://api.openweathermap.org/data/2.5"

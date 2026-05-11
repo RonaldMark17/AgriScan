@@ -5,8 +5,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models import Scan, ScanFeedback, User
 from app.schemas.domain import ScanFeedbackCreate
+from app.services.firebase_storage import restore_upload_from_firebase
 from app.services.ml_service import CLASS_METADATA, DEFAULT_LABELS, DISEASE_PROFILES, DiseaseDetection, detector
 
 
@@ -37,6 +39,22 @@ FEATURE_SIGNATURE_KEYS = (
     "center_neutral_ratio",
     "center_tan_ratio",
 )
+settings = get_settings()
+
+
+def _resolve_feedback_image_path(image_path: str) -> Path:
+    path = Path(image_path)
+    candidates = [path]
+    if not path.is_absolute():
+        candidates.append(settings.backend_path / path)
+        candidates.append(settings.upload_path / path.name)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    restored = restore_upload_from_firebase(path.name)
+    return restored or settings.upload_path / path.name
 
 FEATURE_DISTANCE_SCALES = {
     "contrast": 80.0,
@@ -360,7 +378,7 @@ async def create_scan_feedback(
     current_user: User,
     payload: ScanFeedbackCreate,
 ) -> ScanFeedback:
-    image_path = Path(scan.image_path)
+    image_path = _resolve_feedback_image_path(scan.image_path)
     if not image_path.exists():
         raise ValueError("The original scan image is no longer available for verification.")
 
