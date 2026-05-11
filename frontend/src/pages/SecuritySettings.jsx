@@ -30,6 +30,7 @@ export default function SecuritySettings() {
   const [devices, setDevices] = useState([]);
   const [pushStatus, setPushStatus] = useState('');
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushServerReady, setPushServerReady] = useState(false);
   const [pushChecking, setPushChecking] = useState(true);
   const [syncStatus, setSyncStatus] = useState(() => localStorage.getItem('agriscan_last_sync') || t('notSyncedYet'));
   const [settingsStatus, setSettingsStatus] = useState('');
@@ -45,6 +46,11 @@ export default function SecuritySettings() {
   const mfaEnabled = Boolean(user?.mfa_enabled);
   const mfaRequired = roleName === 'admin';
   const isAdmin = roleName === 'admin';
+
+  const pushServerConfigStatus = useCallback((missing) => {
+    const items = Array.isArray(missing) ? missing.filter(Boolean).join(', ') : '';
+    return items ? t('pushServerMissingConfig', { items }) : t('pushServerNotConfigured');
+  }, [t]);
 
   const fetchDevices = useCallback(async () => {
     setHistoryLoading(true);
@@ -76,6 +82,7 @@ export default function SecuritySettings() {
 
     if (!webPushNotificationsSupported()) {
       setPushEnabled(false);
+      setPushServerReady(false);
       setPushStatus(t('pushUnsupported'));
       setPushChecking(false);
       return;
@@ -83,9 +90,10 @@ export default function SecuritySettings() {
 
     try {
       const pushState = await getWebPushSubscriptionState();
+      setPushServerReady(pushState.serverEnabled);
       if (!pushState.serverEnabled) {
         setPushEnabled(false);
-        setPushStatus(t('pushServerNotConfigured'));
+        setPushStatus(pushServerConfigStatus(pushState.serverMissing));
       } else if (pushState.subscribed) {
         setPushEnabled(true);
         setPushStatus(t('pushAlreadyEnabled'));
@@ -101,11 +109,12 @@ export default function SecuritySettings() {
       }
     } catch {
       setPushEnabled(false);
+      setPushServerReady(false);
       setPushStatus(t('pushStatusFailed'));
     } finally {
       setPushChecking(false);
     }
-  }, [t]);
+  }, [pushServerConfigStatus, t]);
 
   useEffect(() => {
     fetchDevices();
@@ -184,7 +193,12 @@ export default function SecuritySettings() {
       setPushStatus(t('pushEnabled'));
     } catch (error) {
       setPushEnabled(false);
-      setPushStatus(getApiErrorMessage(error, t('pushFailed')));
+      if (error?.code === 'WEB_PUSH_NOT_CONFIGURED') {
+        setPushServerReady(false);
+        setPushStatus(pushServerConfigStatus(error.missing));
+      } else {
+        setPushStatus(getApiErrorMessage(error, t('pushFailed')));
+      }
     } finally {
       setPushLoading(false);
     }
@@ -449,7 +463,7 @@ export default function SecuritySettings() {
 
             {!pushEnabled ? (
               <div className="mt-3">
-                <button className="btn-secondary w-full" onClick={enablePush} type="button" disabled={pushLoading || pushChecking}>
+                <button className="btn-secondary w-full" onClick={enablePush} type="button" disabled={pushLoading || pushChecking || !pushServerReady}>
                   <BellRing className="h-4 w-4" />
                   {pushLoading ? t('enabling') : pushChecking ? `${t('checking')}...` : t('enablePush')}
                 </button>

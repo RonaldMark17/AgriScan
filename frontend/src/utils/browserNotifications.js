@@ -127,12 +127,24 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
 }
 
-async function getWebPushPublicKey() {
+export async function getWebPushServerConfig() {
   const { data } = await api.get('/notifications/push/public-key');
-  if (!data?.enabled || !data?.public_key) {
-    throw new Error('Web Push is not configured.');
+  return {
+    enabled: Boolean(data?.enabled),
+    publicKey: data?.public_key || '',
+    missing: Array.isArray(data?.missing) ? data.missing.filter(Boolean) : [],
+  };
+}
+
+async function getWebPushPublicKey() {
+  const config = await getWebPushServerConfig();
+  if (!config.enabled || !config.publicKey) {
+    const error = new Error('Web Push is not configured.');
+    error.code = 'WEB_PUSH_NOT_CONFIGURED';
+    error.missing = config.missing;
+    throw error;
   }
-  return data.public_key;
+  return config.publicKey;
 }
 
 function waitForActiveServiceWorkerRegistration() {
@@ -209,12 +221,11 @@ export async function getWebPushSubscriptionState() {
     };
   }
 
-  let serverEnabled = false;
+  let serverConfig = { enabled: false, missing: [] };
   try {
-    await getWebPushPublicKey();
-    serverEnabled = true;
+    serverConfig = await getWebPushServerConfig();
   } catch {
-    serverEnabled = false;
+    serverConfig = { enabled: false, missing: [] };
   }
 
   let subscribed = false;
@@ -228,7 +239,8 @@ export async function getWebPushSubscriptionState() {
 
   return {
     supported: true,
-    serverEnabled,
+    serverEnabled: serverConfig.enabled,
+    serverMissing: serverConfig.missing,
     subscribed,
     permission: window.Notification.permission,
   };

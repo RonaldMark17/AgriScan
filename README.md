@@ -171,6 +171,12 @@ VAPID_PUBLIC_KEY=your-vapid-public-key
 VAPID_PRIVATE_KEY=your-vapid-private-key
 ```
 
+Generate compatible keys with:
+
+```bash
+python backend/scripts/generate_vapid_keys.py
+```
+
 Realtime WebSocket alerts are optional; leave `VITE_ENABLE_REALTIME_ALERTS=false` unless the host Nginx WebSocket proxy has been applied and verified. The frontend still polls notifications every minute and whenever the tab regains focus.
 
 ## Notification Flow

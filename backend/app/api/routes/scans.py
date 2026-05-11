@@ -34,7 +34,7 @@ def _resolve_scan_image_path(image_path: str) -> Path:
     path = Path(image_path)
     if path.is_absolute() or path.exists():
         return path
-    return Path(settings.upload_dir) / path.name
+    return settings.upload_path / path.name
 
 
 def _scan_crop_label(scan: Scan) -> str | None:
@@ -125,7 +125,7 @@ async def create_scan(
         if image.content_type not in ALLOWED_CONTENT_TYPES:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only JPG, PNG, and WebP images are supported.")
 
-        upload_dir = Path(settings.upload_dir)
+        upload_dir = settings.upload_path
         upload_dir.mkdir(parents=True, exist_ok=True)
         suffix = Path(image.filename or "scan.jpg").suffix.lower()
         if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
@@ -168,7 +168,7 @@ async def create_scan(
         user_id=current_user.id,
         farm_id=farm_id,
         crop_id=crop_id,
-        image_path=str(file_path) if file_path is not None else "manual-entry",
+        image_path=f"uploads/{file_path.name}" if file_path is not None else "manual-entry",
         disease_name=detection.disease_name,
         confidence=detection.confidence,
         cause=detection.cause,

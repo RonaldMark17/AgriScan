@@ -14,7 +14,7 @@ from app.services.push_notifications import (
     dispatch_push_to_user,
     remove_push_subscription,
     upsert_push_subscription,
-    web_push_enabled,
+    web_push_configuration,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -55,9 +55,11 @@ async def mark_all_read(
 
 @router.get("/push/public-key")
 async def web_push_public_key(_: User = Depends(get_current_user)) -> dict:
+    config = web_push_configuration()
     return {
-        "enabled": web_push_enabled(),
-        "public_key": settings.vapid_public_key if web_push_enabled() else None,
+        "enabled": config.enabled,
+        "public_key": settings.vapid_public_key if config.enabled else None,
+        "missing": list(config.missing),
     }
 
 
@@ -67,8 +69,12 @@ async def subscribe_web_push(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    if not web_push_enabled():
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Web Push is not configured.")
+    config = web_push_configuration()
+    if not config.enabled:
+        detail = "Web Push is not configured."
+        if config.missing:
+            detail = f"{detail} Missing: {', '.join(config.missing)}."
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
     await upsert_push_subscription(
         db,
         user_id=current_user.id,

@@ -35,13 +35,27 @@ class PushDispatchResult:
     web_push_failed: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class WebPushConfiguration:
+    enabled: bool
+    missing: tuple[str, ...] = ()
+
+
+def web_push_configuration() -> WebPushConfiguration:
+    missing = []
+    if webpush is None:
+        missing.append("pywebpush")
+    if not settings.vapid_public_key:
+        missing.append("VAPID_PUBLIC_KEY")
+    if not settings.vapid_private_key:
+        missing.append("VAPID_PRIVATE_KEY")
+    if not settings.vapid_subject:
+        missing.append("VAPID_SUBJECT")
+    return WebPushConfiguration(enabled=not missing, missing=tuple(missing))
+
+
 def web_push_enabled() -> bool:
-    return bool(
-        webpush is not None
-        and settings.vapid_public_key
-        and settings.vapid_private_key
-        and settings.vapid_subject
-    )
+    return web_push_configuration().enabled
 
 
 async def upsert_push_subscription(

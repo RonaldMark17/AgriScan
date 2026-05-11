@@ -14,7 +14,7 @@ from app.services.feedback_learning import accept_scan_feedback, reject_scan_fee
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-def _scan_image_url(request: Request, image_path: str | None) -> str | None:
+def _scan_image_url(image_path: str | None) -> str | None:
     if not image_path or image_path in {"manual-entry", "offline-browser-analysis"}:
         return None
 
@@ -22,11 +22,10 @@ def _scan_image_url(request: Request, image_path: str | None) -> str | None:
     if not image_name:
         return None
 
-    base_url = str(request.base_url).rstrip("/")
-    return f"{base_url}/uploads/{image_name}"
+    return f"/uploads/{image_name}"
 
 
-def _flagged_review_payload(request: Request, feedback: ScanFeedback, scan: Scan, user: User) -> dict:
+def _flagged_review_payload(feedback: ScanFeedback, scan: Scan, user: User) -> dict:
     return {
         "id": feedback.id,
         "scan_id": feedback.scan_id,
@@ -45,7 +44,7 @@ def _flagged_review_payload(request: Request, feedback: ScanFeedback, scan: Scan
         "scan_status": scan.status,
         "scan_confidence": scan.confidence,
         "scan_crop_label": scan.crop_label,
-        "image_url": _scan_image_url(request, scan.image_path),
+        "image_url": _scan_image_url(scan.image_path),
         "duplicate_count": 1,
         "created_at": feedback.created_at,
     }
@@ -151,7 +150,6 @@ async def activity_logs(_: User = Depends(require_roles("admin")), db: AsyncSess
 
 @router.get("/flagged-reviews", response_model=list[AdminFlaggedReviewRead])
 async def flagged_reviews(
-    request: Request,
     _: User = Depends(require_roles("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
@@ -167,7 +165,7 @@ async def flagged_reviews(
     )
     reviews_by_key: dict[tuple, dict] = {}
     for feedback, scan, user in result.all():
-        payload = _flagged_review_payload(request, feedback, scan, user)
+        payload = _flagged_review_payload(feedback, scan, user)
         key = _flagged_review_duplicate_key(payload, feedback)
         existing = reviews_by_key.get(key)
         if existing is None:
@@ -213,7 +211,7 @@ async def accept_flagged_review(
     await db.commit()
     await db.refresh(feedback)
     await db.refresh(scan)
-    payload = _flagged_review_payload(request, feedback, scan, user)
+    payload = _flagged_review_payload(feedback, scan, user)
     payload["duplicate_count"] = max(1, len(duplicate_records))
     return payload
 
@@ -251,7 +249,7 @@ async def reject_flagged_review(
     await db.commit()
     await db.refresh(feedback)
     await db.refresh(scan)
-    payload = _flagged_review_payload(request, feedback, scan, user)
+    payload = _flagged_review_payload(feedback, scan, user)
     payload["duplicate_count"] = max(1, len(duplicate_records))
     return payload
 
@@ -289,7 +287,7 @@ async def undo_flagged_review_decision(
     await db.commit()
     await db.refresh(feedback)
     await db.refresh(scan)
-    payload = _flagged_review_payload(request, feedback, scan, user)
+    payload = _flagged_review_payload(feedback, scan, user)
     payload["duplicate_count"] = max(1, len(duplicate_records))
     return payload
 

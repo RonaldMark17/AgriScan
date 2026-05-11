@@ -1,8 +1,11 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -76,6 +79,11 @@ class Settings(BaseSettings):
         if self.environment != "production":
             hosts.extend(["localhost", "127.0.0.1", "*.localhost"])
         return sorted(set(hosts))
+
+    @property
+    def upload_path(self) -> Path:
+        path = Path(self.upload_dir)
+        return path if path.is_absolute() else BACKEND_ROOT / path
 
 
 @lru_cache
