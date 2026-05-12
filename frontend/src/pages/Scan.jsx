@@ -787,17 +787,18 @@ function HistoryList({ history, onSelect, t }) {
 
 function NutrientControl({ label, value, onChange, t }) {
   return (
-    <div>
-      <p className="text-sm font-bold text-stone-700">{label}</p>
-      <div className="mt-2 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
+    <div className="nutrient-control">
+      <p className="nutrient-label">{label}</p>
+      <div className="nutrient-segmented" role="group" aria-label={label}>
         {nutrientLevels.map(([level, text]) => (
           <button
             key={level}
-            className={`h-10 rounded-lg border text-sm font-bold transition ${
-              value === level ? 'border-leaf-600 bg-leaf-600 text-white' : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+            className={`nutrient-option ${
+              value === level ? 'nutrient-option-active' : 'nutrient-option-idle'
             }`}
             onClick={() => onChange(level)}
             type="button"
+            aria-pressed={value === level}
           >
             {t(level) || text}
           </button>
@@ -808,7 +809,21 @@ function NutrientControl({ label, value, onChange, t }) {
 }
 
 function FieldHelp({ children }) {
-  return <p className="text-wrap-anywhere mt-1 text-[11px] leading-4 text-stone-500">{children}</p>;
+  return <p className="text-wrap-anywhere mt-1.5 text-xs leading-5 text-stone-500">{children}</p>;
+}
+
+function ManualFormSection({ title, body, children, className = '' }) {
+  return (
+    <section className={`manual-field-section ${className}`}>
+      {(title || body) && (
+        <div className="manual-section-heading">
+          {title && <h3>{title}</h3>}
+          {body && <p>{body}</p>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
 }
 
 function formatScoreValue(value) {
@@ -1343,18 +1358,24 @@ export default function Scan() {
       </header>
 
       <div className="split-layout">
-        <form onSubmit={submit} className="manual-scan-form surface rounded-lg p-3.5 sm:p-5 xl:sticky sticky-panel xl:self-start">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('soilDetails')}</h2>
-              <p className="mt-1 text-sm text-stone-500">{t('soilDetailsBody')}</p>
+        <form onSubmit={submit} className="manual-scan-form surface overflow-hidden rounded-lg xl:sticky sticky-panel xl:self-start">
+          <div className="manual-scan-form-title">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="manual-scan-form-icon">
+                <FlaskConical className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold leading-tight text-stone-950 sm:text-xl">{t('soilDetails')}</h2>
+                <p className="mt-1 text-sm leading-5 text-stone-500">{t('soilDetailsBody')}</p>
+              </div>
             </div>
             <button className="btn-icon" type="button" onClick={resetForm} title={t('resetForm')}>
               <RotateCcw className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-5">
+          <div className="manual-scan-form-body">
+            <ManualFormSection>
             <label className="block">
               <span className="text-sm font-bold text-stone-700">{t('soilType')}</span>
               <select className="field mt-2 h-12" value={form.soil_type} onChange={(event) => updateField('soil_type', event.target.value)}>
@@ -1410,7 +1431,9 @@ export default function Scan() {
                 <FieldHelp>{t('soilTempHelp')}</FieldHelp>
               </label>
             </div>
+            </ManualFormSection>
 
+            <ManualFormSection title={t('nutrientLevel')}>
             <NutrientControl label={t('nitrogen')} value={form.nitrogen_level} onChange={(value) => updateField('nitrogen_level', value)} t={t} />
             <FieldHelp>{t('nitrogenHelp')}</FieldHelp>
             <NutrientControl label={t('phosphorus')} value={form.phosphorus_level} onChange={(value) => updateField('phosphorus_level', value)} t={t} />
@@ -1418,7 +1441,7 @@ export default function Scan() {
             <NutrientControl label={t('potassium')} value={form.potassium_level} onChange={(value) => updateField('potassium_level', value)} t={t} />
             <FieldHelp>{t('potassiumHelp')}</FieldHelp>
 
-            <section className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+            <section className="manual-lab-panel">
               <div>
                 <p className="text-sm font-bold text-stone-900">{t('labNpkValues')}</p>
                 <FieldHelp>{t('labNpkHelp')}</FieldHelp>
@@ -1465,7 +1488,9 @@ export default function Scan() {
                 </label>
               </div>
             </section>
+            </ManualFormSection>
 
+            <ManualFormSection title={t('fieldNotes')}>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-sm font-bold text-stone-700">{t('drainage')}</span>
@@ -1503,7 +1528,7 @@ export default function Scan() {
               </label>
             </div>
 
-            <section className="rounded-lg border border-sky-100 bg-sky-50 p-4">
+            <section className="manual-location-panel">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm font-bold text-stone-900">{t('currentLocation')}</p>
@@ -1521,29 +1546,32 @@ export default function Scan() {
               </div>
               {locationState.error && <p className="mt-3 text-sm font-medium text-amber-700">{locationState.error}</p>}
             </section>
+            </ManualFormSection>
           </div>
 
-          {inputErrors.length > 0 && (
-            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
-              <p className="font-bold">{t('checkSoilReadings')}</p>
-              <ul className="mt-2 space-y-1">
-                {inputErrors.map((message) => <li key={message}>{message}</li>)}
-              </ul>
-            </div>
-          )}
+          <div className="manual-scan-submit">
+            {inputErrors.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+                <p className="font-bold">{t('checkSoilReadings')}</p>
+                <ul className="mt-2 space-y-1">
+                  {inputErrors.map((message) => <li key={message}>{message}</li>)}
+                </ul>
+              </div>
+            )}
 
-          {error && <div className="mt-5 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
+            {error && <div className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
 
-          {!online && !error && (
-            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
-              {t('cropRecommendationOfflineMode')}
-            </div>
-          )}
+            {!online && !error && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+                {t('cropRecommendationOfflineMode')}
+              </div>
+            )}
 
-          <button className="btn-primary mt-6 h-12 w-full text-base" disabled={!canSubmit || loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sprout className="h-4 w-4" />}
-            {loading ? t('checkingSoil') : t('recommendBestCrop')}
-          </button>
+            <button className="btn-primary h-12 w-full text-base" disabled={!canSubmit || loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sprout className="h-4 w-4" />}
+              {loading ? t('checkingSoil') : t('recommendBestCrop')}
+            </button>
+          </div>
         </form>
 
         <div className="space-y-6">
