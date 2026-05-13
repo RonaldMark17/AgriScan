@@ -164,6 +164,47 @@ DEFAULT_LABELS = [
     "guava_red_rust",
     "guava_scab",
     "guava_styler_and_root",
+    "coconut_healthy",
+    "coconut_leaf_spot_or_blight",
+    "coconut_insect_pest",
+    "coconut_yellowing",
+    "sugarcane_healthy",
+    "sugarcane_mosaic_disease",
+    "sugarcane_red_rot",
+    "sugarcane_rust",
+    "sugarcane_yellow_leaf",
+    "cassava_healthy",
+    "cassava_brown_streak_disease",
+    "cassava_mosaic_disease",
+    "eggplant_healthy",
+    "eggplant_fruit_and_shoot_borer_damage",
+    "eggplant_mite_damage",
+    "eggplant_wilt",
+    "eggplant_phomopsis_blight",
+    "calamansi_healthy",
+    "calamansi_black_spot",
+    "calamansi_citrus_canker",
+    "calamansi_citrus_greening",
+    "calamansi_melanose",
+    "onion_healthy",
+    "onion_leaf_rot",
+    "onion_moler_disease",
+    "onion_purple_blotch",
+    "onion_thrips_damage",
+    "onion_downy_mildew",
+    "cabbage_diamondback_moth_damage",
+    "cabbage_nutrient_deficiency",
+    "bitter_gourd_healthy",
+    "bitter_gourd_powdery_mildew",
+    "bitter_gourd_insect_pest",
+    "cacao_healthy",
+    "cacao_frosty_pod_rot",
+    "cacao_phytophthora",
+    "coffee_healthy",
+    "coffee_leaf_miner_damage",
+    "coffee_phoma_blight",
+    "coffee_spider_mites",
+    "coffee_leaf_rust",
 ]
 
 CROP_DISPLAY_NAMES = {
@@ -872,6 +913,46 @@ DISEASE_PROFILES.update(
             "cause": "A soil-borne fungus is blocking water movement and causing wilt or yellowing.",
             "treatment": "Remove infected plants, improve sanitation, avoid moving contaminated soil, and use resistant or clean planting material.",
         },
+        "yellowing": {
+            "name": "Yellowing symptoms",
+            "cause": "The crop tissue is showing yellowing that may come from disease, pest stress, nutrient imbalance, or root stress.",
+            "treatment": "Check drainage, roots, and pest pressure, remove badly affected tissue, and confirm the cause locally before applying fertilizer or pesticide.",
+        },
+        "yellow_leaf": {
+            "name": "Yellow leaf symptoms",
+            "cause": "Leaf yellowing is reducing healthy green area and may be linked to disease, nutrient stress, or planting material problems.",
+            "treatment": "Use clean planting material, inspect for vectors and root problems, improve field nutrition, and confirm the exact cause before treatment.",
+        },
+        "mite_damage": {
+            "name": "Mite damage",
+            "cause": "Mites are feeding on leaf tissue and causing stippling, bronzing, curling, or drying.",
+            "treatment": "Inspect leaf undersides, prune heavy infestations, conserve beneficial insects, and use mite-targeted controls only when thresholds are met.",
+        },
+        "wilt": {
+            "name": "Wilt symptoms",
+            "cause": "The crop shows wilt-like symptoms that may come from vascular disease, root damage, or severe water stress.",
+            "treatment": "Remove severely affected plants, improve drainage and sanitation, avoid moving contaminated soil, and confirm the pathogen locally.",
+        },
+        "black_spot": {
+            "name": "Black spot",
+            "cause": "A spotting disease is producing dark lesions on leaves or fruit, usually favored by wet conditions.",
+            "treatment": "Remove infected tissue, improve airflow, avoid overhead watering, and follow crop-specific fungicide guidance if symptoms spread.",
+        },
+        "leaf_rot": {
+            "name": "Leaf rot",
+            "cause": "Leaf tissue is rotting or collapsing, often after prolonged moisture, poor airflow, or infection.",
+            "treatment": "Remove rotted leaves, improve spacing and drainage, avoid wet foliage, and confirm locally before applying treatment.",
+        },
+        "moler_disease": {
+            "name": "Moler disease",
+            "cause": "The onion leaf pattern matches moler disease symptoms from the training data, commonly linked to fungal disease pressure.",
+            "treatment": "Improve drainage and airflow, remove infected debris, rotate fields, and follow local onion disease guidance before spraying.",
+        },
+        "nutrient_deficiency": {
+            "name": "Nutrient deficiency symptoms",
+            "cause": "Leaf color and vigor suggest a nutrient imbalance rather than a single pathogen-only pattern.",
+            "treatment": "Check soil pH, drainage, and recent fertilizer history, then correct nutrients based on soil or tissue testing where possible.",
+        },
     }
 )
 
@@ -1120,7 +1201,7 @@ class CropDiseaseDetector:
         return (Path.cwd() / path).resolve()
 
     def _load_model(self) -> None:
-        model_path = self._resolve_model_path(Path(settings.model_path))
+        model_path = self._resolve_model_path(self._resolve_backend_path(settings.model_path))
         current_mtime = model_path.stat().st_mtime if model_path.exists() else None
         if self._model is not None and self._loaded_model_path is not None:
             same_path = self._loaded_model_path.resolve() == model_path.resolve()
@@ -1185,9 +1266,9 @@ class CropDiseaseDetector:
     def _find_latest_trained_model(self) -> Path | None:
         candidates: list[Path] = []
         search_roots = [
-            Path("app/ml/artifacts"),
-            Path("app/ml/runs"),
-            Path("app/ml"),
+            self._resolve_backend_path("app/ml/artifacts"),
+            self._resolve_backend_path("app/ml/runs"),
+            self._resolve_backend_path("app/ml"),
         ]
 
         for root in search_roots:
@@ -1202,7 +1283,7 @@ class CropDiseaseDetector:
         return max(candidates, key=lambda path: path.stat().st_mtime)
 
     def _load_labels(self, model_path: Path) -> list[str]:
-        labels_path = Path(settings.model_labels_path)
+        labels_path = self._resolve_backend_path(settings.model_labels_path)
         if not labels_path.exists():
             labels_path = model_path.with_name("labels.json")
         if not labels_path.exists():
@@ -1387,7 +1468,7 @@ class CropDiseaseDetector:
         return focused
 
     def _preprocess(self, image_path: str) -> np.ndarray:
-        image = self._subject_focus_image(image_path, 224)
+        image = Image.open(image_path).convert("RGB").resize((224, 224))
         array = np.asarray(image, dtype=np.float32)
         return np.expand_dims(array, axis=0)
 
@@ -2027,7 +2108,18 @@ class CropDiseaseDetector:
         alternatives: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
         selected_crop = self._normalize_crop_type(crop_type)
-        top_indices = np.argsort(predictions)[::-1][:8]
+        if selected_crop:
+            top_indices = [
+                int(index)
+                for index in np.argsort(predictions)[::-1]
+                if int(index) < len(labels)
+                and self._is_class_compatible_with_crop(
+                    self._canonical_key_for_label(labels[int(index)]),
+                    selected_crop,
+                )
+            ][:8]
+        else:
+            top_indices = [int(index) for index in np.argsort(predictions)[::-1][:8]]
         for raw_index in top_indices:
             index = int(raw_index)
             if index == selected_index or index >= len(labels):
@@ -3687,13 +3779,14 @@ class CropDiseaseDetector:
         *,
         original_filename: str | None = None,
         allow_online_lookup: bool = True,
+        allow_visual_memory: bool = True,
     ) -> DiseaseDetection:
         original_filename = None
         features = self._extract_leaf_features(image_path)
         normalized_crop = self._normalize_crop_type(crop_type)
         filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
 
-        if normalized_crop is None:
+        if allow_visual_memory and normalized_crop is None:
             strict_visual_memory = self._visual_memory_detection(
                 features,
                 crop_type=None,
@@ -3706,14 +3799,15 @@ class CropDiseaseDetector:
         if not filename_unsupported_crop and self._looks_like_non_crop_foreground(features, normalized_crop):
             return self._invalid_crop_image_detection()
 
-        visual_memory = self._visual_memory_detection(
-            features,
-            crop_type=crop_type,
-            original_filename=original_filename,
-            allow_online_lookup=allow_online_lookup,
-        )
-        if visual_memory is not None:
-            return visual_memory
+        if allow_visual_memory:
+            visual_memory = self._visual_memory_detection(
+                features,
+                crop_type=crop_type,
+                original_filename=original_filename,
+                allow_online_lookup=allow_online_lookup,
+            )
+            if visual_memory is not None:
+                return visual_memory
 
         feature_crop = self._infer_crop_key_from_features(features)
         possible_unsupported_crop = self._possible_unsupported_crop_label(
@@ -3807,16 +3901,6 @@ class CropDiseaseDetector:
             )
 
         normalized_crop = self._normalize_crop_type(crop_type)
-        if normalized_crop is None:
-            strict_visual_memory = self._visual_memory_detection(
-                features,
-                crop_type=None,
-                original_filename=None,
-                allow_online_lookup=allow_online_lookup,
-            )
-            if strict_visual_memory is not None:
-                return finalize(strict_visual_memory)
-
         filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
         if (
             not filename_unsupported_crop
@@ -3828,55 +3912,60 @@ class CropDiseaseDetector:
         if not filename_unsupported_crop and self._looks_like_non_crop_foreground(features, normalized_crop):
             return finalize(self._invalid_crop_image_detection())
 
-        visual_memory = self._visual_memory_detection(
-            features,
-            crop_type=crop_type,
-            original_filename=original_filename,
-            allow_online_lookup=allow_online_lookup,
+        self._load_model()
+        model_covers_selected_crop = self._model is not None and (
+            normalized_crop is None or self._has_trained_labels_for_crop(normalized_crop)
         )
-        if visual_memory is not None:
-            return finalize(visual_memory)
 
         feature_crop = self._infer_crop_key_from_features(features)
-        possible_unsupported_crop = self._possible_unsupported_crop_label(
-            features,
-            original_filename=original_filename,
-            crop_type=crop_type,
-            supported_inferred_crop=feature_crop,
-        )
-        if possible_unsupported_crop:
-            return finalize(
-                self._possible_unsupported_crop_detection(
-                    features,
-                    possible_unsupported_crop,
-                    allow_online_lookup=allow_online_lookup,
-                )
+        if not model_covers_selected_crop:
+            visual_memory = self._visual_memory_detection(
+                features,
+                crop_type=crop_type,
+                original_filename=original_filename,
+                allow_online_lookup=allow_online_lookup,
             )
+            if visual_memory is not None:
+                return finalize(visual_memory)
 
-        contextual = self._contextual_detection(
-            features,
-            crop_type=crop_type,
-            original_filename=original_filename,
-            allow_online_lookup=allow_online_lookup,
-        )
-        if contextual is not None:
-            return finalize(contextual)
-
-        if (
-            feature_crop
-            and self._is_reliable_visual_crop_inference(features, feature_crop)
-            and not self._has_trained_labels_for_crop(feature_crop)
-        ):
-            return finalize(
-                self._fallback_detect(
-                    image_path,
-                    feature_crop,
-                    original_filename=original_filename,
-                    allow_online_lookup=allow_online_lookup,
-                )
+            possible_unsupported_crop = self._possible_unsupported_crop_label(
+                features,
+                original_filename=original_filename,
+                crop_type=crop_type,
+                supported_inferred_crop=feature_crop,
             )
+            if possible_unsupported_crop:
+                return finalize(
+                    self._possible_unsupported_crop_detection(
+                        features,
+                        possible_unsupported_crop,
+                        allow_online_lookup=allow_online_lookup,
+                    )
+                )
 
-        self._load_model()
+            contextual = self._contextual_detection(
+                features,
+                crop_type=crop_type,
+                original_filename=original_filename,
+                allow_online_lookup=allow_online_lookup,
+            )
+            if contextual is not None:
+                return finalize(contextual)
+
+            if (
+                feature_crop
+                and self._is_reliable_visual_crop_inference(features, feature_crop)
+                and not self._has_trained_labels_for_crop(feature_crop)
+            ):
+                return finalize(
+                    self._fallback_detect(
+                        image_path,
+                        feature_crop,
+                        original_filename=original_filename,
+                        allow_online_lookup=allow_online_lookup,
+                    )
+                )
+
         if self._model is None:
             return finalize(
                 self._fallback_detect(
@@ -3893,6 +3982,7 @@ class CropDiseaseDetector:
                     crop_type,
                     original_filename=original_filename,
                     allow_online_lookup=allow_online_lookup,
+                    allow_visual_memory=False,
                 )
             )
         predicted_key = None
@@ -3902,6 +3992,18 @@ class CropDiseaseDetector:
         else:
             predictions = self._model.predict(self._preprocess(image_path), verbose=0)[0]
             index = self._select_index_for_crop(predictions, crop_type)
+            disease_index = self._select_disease_index_for_crop(predictions, crop_type)
+            if (
+                disease_index is not None
+                and normalized_crop
+                and self._has_strong_visual_disease_signal(features, normalized_crop)
+            ):
+                selected_key = self._canonical_key_for_label(self._labels[index] if index < len(self._labels) else "healthy")
+                disease_score = float(predictions[disease_index])
+                selected_score = float(predictions[index])
+                selected_is_healthy = selected_key == "healthy" or selected_key.endswith("_healthy")
+                if selected_is_healthy and disease_score >= 0.15 and selected_score < 0.82:
+                    index = disease_index
             key = self._labels[index] if index < len(self._labels) else "healthy"
             predicted_key = key
             meta = self._metadata_for_key(key)
@@ -3920,12 +4022,17 @@ class CropDiseaseDetector:
                 primary=detection,
             )
 
-        if detection.disease_name == "Healthy crop" and self._has_strong_visual_disease_signal(features, normalized_crop):
+        if (
+            detection.disease_name == "Healthy crop"
+            and self._has_strong_visual_disease_signal(features, normalized_crop)
+            and not (normalized_crop and self._has_trained_labels_for_crop(normalized_crop))
+        ):
             fallback = self._fallback_detect(
                 image_path,
                 crop_type,
                 original_filename=original_filename,
                 allow_online_lookup=allow_online_lookup,
+                allow_visual_memory=False,
             )
             if fallback.disease_name != "Healthy crop":
                 return finalize(fallback)
@@ -3937,11 +4044,15 @@ class CropDiseaseDetector:
                 detection.crop_label = feature_crop_label
 
         if crop_type is not None and detection.confidence < 0.60:
+            if normalized_crop and self._has_trained_labels_for_crop(normalized_crop):
+                detection.analysis_mode = "low-confidence crop-constrained ml"
+                return finalize(detection, model_alternatives=model_alternatives)
             fallback = self._fallback_detect(
                 image_path,
                 crop_type,
                 original_filename=original_filename,
                 allow_online_lookup=allow_online_lookup,
+                allow_visual_memory=False,
             )
             if fallback.confidence >= detection.confidence:
                 return finalize(fallback)
@@ -3952,6 +4063,7 @@ class CropDiseaseDetector:
                 crop_type,
                 original_filename=original_filename,
                 allow_online_lookup=allow_online_lookup,
+                allow_visual_memory=False,
             )
             fallback_has_more_detail = fallback.crop_label and fallback.crop_label != "General crop leaf"
             fallback_found_problem = fallback.disease_name != "Healthy crop"
@@ -3964,6 +4076,7 @@ class CropDiseaseDetector:
                 crop_type,
                 original_filename=original_filename,
                 allow_online_lookup=allow_online_lookup,
+                allow_visual_memory=False,
             )
             if fallback.confidence >= detection.confidence:
                 return finalize(fallback)
@@ -4070,6 +4183,22 @@ class CropDiseaseDetector:
                 best_index = max(compatible_indices, key=lambda index: float(scores[index]))
                 return int(best_index)
         return int(np.argmax(scores))
+
+    def _select_disease_index_for_crop(self, scores: np.ndarray, crop_type: str | None) -> int | None:
+        normalized_crop = self._normalize_crop_type(crop_type)
+        if not normalized_crop:
+            return None
+        compatible_indices = []
+        for index, label in enumerate(self._labels):
+            class_key = self._canonical_key_for_label(label)
+            if not self._is_class_compatible_with_crop(class_key, normalized_crop):
+                continue
+            if class_key == "healthy" or class_key.endswith("_healthy"):
+                continue
+            compatible_indices.append(index)
+        if not compatible_indices:
+            return None
+        return int(max(compatible_indices, key=lambda index: float(scores[index])))
 
     def _select_box_index_for_crop(self, class_ids: np.ndarray, scores: np.ndarray, names: dict, crop_type: str | None) -> int:
         normalized_crop = self._normalize_crop_type(crop_type)
