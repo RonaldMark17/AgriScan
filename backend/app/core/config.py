@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     firebase_service_account_json: str | None = None
     firebase_storage_prefix: str = "agriscan"
     firebase_mirror_uploads: bool = True
+    
+    # AWS Secrets Manager
+    aws_secrets_manager_secret_name: str | None = None
 
     weather_api_key: str | None = None
     weather_api_base_url: str = "https://api.openweathermap.org/data/2.5"
@@ -74,6 +77,26 @@ class Settings(BaseSettings):
     translation_api_base_url: str = "https://api.mymemory.translated.net/get"
     translation_timeout_seconds: float = 6.0
     require_admin_mfa: bool = True
+
+    @model_validator(mode="after")
+    def load_firebase_from_secrets(self) -> "Settings":
+        """Load Firebase credentials from AWS Secrets Manager if configured."""
+        if self.aws_secrets_manager_secret_name:
+            try:
+                from app.core.secrets import get_firebase_credentials_from_secrets
+                creds = get_firebase_credentials_from_secrets(self.aws_secrets_manager_secret_name)
+                
+                if creds:
+                    # Only override if not already set
+                    if not self.firebase_service_account_json:
+                        self.firebase_service_account_json = creds.get("firebase_service_account_json")
+                    if not self.firebase_project_id:
+                        self.firebase_project_id = creds.get("firebase_project_id")
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to load Firebase credentials from Secrets Manager: {e}")
+        
+        return self
 
     @property
     def cors_origins(self) -> List[str]:

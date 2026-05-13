@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r requirements-ml.txt
 COPY app ./app
 COPY scripts ./scripts
 COPY static ./static
+COPY firebase-service-account.json ./
 
 RUN mkdir -p uploads data
 
