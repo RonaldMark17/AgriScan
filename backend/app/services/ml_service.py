@@ -72,6 +72,16 @@ class DiseaseDetection:
     reference_url: str | None = None
     reference_title: str | None = None
     detections: list[dict[str, Any]] | None = None
+    # Enhanced fields for detailed classification
+    severity: str | None = None  # "mild", "moderate", "severe", "critical"
+    confidence_band: str | None = None  # "high", "medium", "low"
+    visual_symptoms: list[str] | None = None  # List of detected symptoms
+    affected_area_percentage: float | None = None  # Estimated % of plant affected
+    disease_stage: str | None = None  # "early", "mid", "late", "advanced"
+    immediate_actions: list[str] | None = None  # Quick action items
+    alternatives: list[dict[str, Any]] | None = None  # Alternative diagnoses
+    reliability_score: float = 1.0  # Model reliability indicator (0-1)
+    image_quality_issues: list[str] | None = None  # Issues with image that affect analysis
 
 
 CLASS_METADATA: dict[str, dict[str, str]] = {
@@ -2145,6 +2155,7 @@ class CropDiseaseDetector:
         crop_type: str | None,
         quality_report: dict[str, Any],
         *,
+        image_path: str | None = None,
         model_alternatives: list[dict[str, Any]] | None = None,
     ) -> DiseaseDetection:
         existing = [
@@ -2162,6 +2173,34 @@ class CropDiseaseDetector:
         alternatives = model_alternatives or self._heuristic_alternatives(features, crop_type, detection)
         metadata_entries.extend(alternatives[:3])
         detection.detections = existing + metadata_entries
+        
+        # Enhance detection with detailed analysis
+        if detection.disease_name != "Invalid crop or leaf image":
+            disease_key = self._canonical_key_for_label(detection.disease_name)
+            
+            # Analyze severity
+            severity, affected_area = self._analyze_severity_from_features(features, disease_key)
+            detection.severity = severity
+            detection.affected_area_percentage = affected_area
+            
+            # Determine disease stage
+            detection.disease_stage = self._analyze_disease_stage(disease_key, features, detection.confidence)
+            
+            # Detect visual symptoms
+            detection.visual_symptoms = self._detect_visual_symptoms(disease_key, features)
+            
+            # Calculate confidence band and reliability
+            confidence_band, reliability = self._calculate_confidence_band(detection.confidence, disease_key, features)
+            detection.confidence_band = confidence_band
+            detection.reliability_score = reliability
+            
+            # Generate immediate actions
+            detection.immediate_actions = self._generate_immediate_actions(disease_key, severity, crop_type)
+            
+            # Detect image quality issues
+            if image_path:
+                detection.image_quality_issues = self._detect_image_quality_issues(image_path, features)
+        
         return detection
 
     def _visual_memory_has_text_hint(self, example: dict[str, Any], original_filename: str | None, crop_type: str | None) -> bool:
@@ -3872,6 +3911,229 @@ class CropDiseaseDetector:
             return detection
         return self._with_online_reference(detection, key, crop_hint, allow_online_lookup=allow_online_lookup)
 
+    def _analyze_severity_from_features(self, features: dict[str, float], disease_key: str) -> tuple[str, float]:
+        """Analyze disease severity from visual features.
+        Returns: (severity_level: str, affected_area_percentage: float)
+        """
+        # Extract relevant visual metrics
+        lesion_ratio = features.get("lesion_ratio", 0.0)
+        dark_lesion_ratio = features.get("dark_lesion_ratio", 0.0)
+        green_leaf_ratio = features.get("green_leaf_ratio", 1.0)
+        yellow_ratio = features.get("yellow_ratio", 0.0)
+        rust_ratio = features.get("rust_ratio", 0.0)
+        edge_lesion_ratio = features.get("edge_lesion_ratio", 0.0)
+        component_count = features.get("component_count", 1)
+        
+        # Calculate affected area
+        total_damage = lesion_ratio + (yellow_ratio * 0.6) + (rust_ratio * 0.7)
+        affected_area = min(100.0, total_damage * 100)
+        
+        # Determine severity based on patterns and extent
+        if affected_area < 5:
+            severity = "mild"
+        elif affected_area < 25:
+            severity = "moderate"
+        elif affected_area < 60:
+            severity = "severe"
+        else:
+            severity = "critical"
+            
+        # Adjust for dark lesions (indicating advanced infection)
+        if dark_lesion_ratio > 0.15:
+            if severity == "moderate":
+                severity = "severe"
+            elif severity == "mild":
+                severity = "moderate"
+                
+        # Adjust for edge involvement (indicating progression)
+        if edge_lesion_ratio > 0.3 and severity in ("mild", "moderate"):
+            severity = "severe" if severity == "moderate" else "moderate"
+            
+        return severity, affected_area
+
+    def _analyze_disease_stage(self, disease_key: str, features: dict[str, float], confidence: float) -> str:
+        """Determine disease stage (early, mid, late, advanced)."""
+        lesion_ratio = features.get("lesion_ratio", 0.0)
+        dark_lesion_ratio = features.get("dark_lesion_ratio", 0.0)
+        yellow_ratio = features.get("yellow_ratio", 0.0)
+        
+        # Stage inference based on lesion characteristics
+        if lesion_ratio < 0.08:
+            return "early"
+        elif lesion_ratio < 0.25:
+            return "mid"
+        elif lesion_ratio < 0.50:
+            return "late"
+        else:
+            return "advanced"
+
+    def _detect_visual_symptoms(self, disease_key: str, features: dict[str, float]) -> list[str]:
+        """Detect specific visual symptoms from features."""
+        symptoms = []
+        canonical_key = self._canonical_key_for_label(disease_key)
+        
+        # Common symptom indicators
+        lesion_ratio = features.get("lesion_ratio", 0.0)
+        dark_lesion_ratio = features.get("dark_lesion_ratio", 0.0)
+        yellow_ratio = features.get("yellow_ratio", 0.0)
+        rust_ratio = features.get("rust_ratio", 0.0)
+        green_leaf_ratio = features.get("green_leaf_ratio", 1.0)
+        edge_lesion_ratio = features.get("edge_lesion_ratio", 0.0)
+        
+        # General symptoms
+        if lesion_ratio > 0.10:
+            if dark_lesion_ratio > 0.05:
+                symptoms.append("Dark necrotic lesions visible")
+            else:
+                symptoms.append("Brown or tan spots detected")
+                
+        if yellow_ratio > 0.15:
+            symptoms.append("Yellowing or chlorosis present")
+            
+        if rust_ratio > 0.10:
+            symptoms.append("Rust-colored pustules visible")
+            
+        if edge_lesion_ratio > 0.20:
+            symptoms.append("Lesions concentrated at leaf edges")
+            
+        if green_leaf_ratio < 0.60:
+            symptoms.append("Significant leaf area affected")
+            
+        # Disease-specific symptoms
+        if "blight" in canonical_key:
+            if dark_lesion_ratio > 0.15:
+                symptoms.append("Late blight pattern detected")
+            else:
+                symptoms.append("Early blight-type lesions")
+                
+        if "blast" in canonical_key:
+            symptoms.append("Blast-like lesion pattern")
+            
+        if "rust" in canonical_key:
+            if rust_ratio > 0.20:
+                symptoms.append("Heavy rust infection")
+            else:
+                symptoms.append("Early rust pustules")
+                
+        if "spot" in canonical_key or "spot_or_blight" in canonical_key:
+            if lesion_ratio > 0.30:
+                symptoms.append("Multiple coalescing spots")
+            else:
+                symptoms.append("Scattered spotting pattern")
+        
+        if "pest" in canonical_key or "insect" in canonical_key or "damage" in canonical_key:
+            symptoms.append("Physical feeding damage detected")
+            symptoms.append("Irregular damage pattern")
+            
+        if "wilt" in canonical_key or "yellowing" in canonical_key:
+            symptoms.append("General decline in plant vigor")
+            
+        return symptoms[:6]  # Limit to top 6 symptoms
+
+    def _calculate_confidence_band(self, confidence: float, disease_key: str, features: dict[str, float]) -> tuple[str, float]:
+        """Calculate confidence band (high/medium/low) and reliability score."""
+        lesion_ratio = features.get("lesion_ratio", 0.0)
+        contrast = features.get("contrast", 50.0)
+        
+        # Base reliability on visual evidence strength
+        visual_evidence_strength = lesion_ratio if lesion_ratio > 0 else 0.3
+        
+        # Adjust based on disease_key clarity
+        if disease_key in {"healthy", "invalid_crop_image", "review_needed"}:
+            reliability = 0.95
+        elif disease_key.endswith("_healthy"):
+            reliability = 0.90
+        elif visual_evidence_strength > 0.25:
+            reliability = min(1.0, confidence * 1.1)  # High visual evidence boosts reliability
+        else:
+            reliability = confidence * 0.85  # Lower visual evidence reduces reliability
+            
+        # Confidence bands
+        if confidence >= 0.75:
+            band = "high"
+        elif confidence >= 0.55:
+            band = "medium"
+        else:
+            band = "low"
+            
+        return band, reliability
+
+    def _generate_immediate_actions(self, disease_key: str, severity: str, crop_type: str | None = None) -> list[str]:
+        """Generate immediate action items based on disease and severity."""
+        actions = []
+        canonical_key = self._canonical_key_for_label(disease_key)
+        
+        # Generic actions for all diseases
+        if severity in ("severe", "critical"):
+            actions.append("⚠️ Isolate affected plants if possible to prevent spread")
+            
+        if severity in ("moderate", "severe", "critical"):
+            actions.append("✂️ Remove heavily affected leaves or plant parts")
+            
+        # Disease-specific immediate actions
+        if "blight" in canonical_key or "blast" in canonical_key:
+            actions.append("🚫 Avoid overhead watering - keep foliage dry")
+            actions.append("💨 Improve airflow and reduce humidity")
+            
+        if "rust" in canonical_key or "powdery_mildew" in canonical_key:
+            actions.append("💨 Ensure good air circulation")
+            
+        if "spot" in canonical_key or "spot_or_blight" in canonical_key:
+            actions.append("🗑️ Remove infected leaves promptly")
+            
+        if "pest" in canonical_key or "insect" in canonical_key or "damage" in canonical_key:
+            actions.append("🔍 Inspect leaf undersides for insects")
+            actions.append("🐝 Preserve beneficial insects if possible")
+            
+        if "wilt" in canonical_key or "root" in canonical_key:
+            actions.append("💧 Check soil drainage and moisture")
+            actions.append("🌱 Ensure proper water availability")
+            
+        # Sanitation
+        if severity in ("moderate", "severe", "critical"):
+            actions.append("🧹 Practice good field sanitation")
+            
+        # Monitoring
+        actions.append("👀 Monitor closely for disease progression")
+        
+        return actions[:5]  # Return top 5 actions
+
+    def _detect_image_quality_issues(self, image_path: str, features: dict[str, float]) -> list[str]:
+        """Detect image quality issues that may affect analysis accuracy."""
+        issues = []
+        
+        try:
+            image = Image.open(image_path)
+            width, height = image.size
+            
+            # Resolution check
+            if width < 320 or height < 320:
+                issues.append("Low resolution - consider retaking with higher quality image")
+            elif width < 640 or height < 640:
+                issues.append("Medium resolution - higher resolution recommended")
+                
+            # Contrast check
+            contrast = features.get("contrast", 50.0)
+            if contrast < 30:
+                issues.append("Low contrast - image appears too dark or washed out")
+            elif contrast > 100:
+                issues.append("Very high contrast - may affect lesion detection")
+                
+        except Exception:
+            pass
+            
+        # Feature-based quality checks
+        green_leaf_ratio = features.get("green_leaf_ratio", 1.0)
+        component_count = features.get("component_count", 1)
+        
+        if component_count > 50:
+            issues.append("Image contains multiple fragments - focus on single leaf")
+            
+        if green_leaf_ratio > 0.95:
+            issues.append("Image shows mostly healthy tissue - hard to diagnose disease")
+            
+        return issues
+
     def detect(
         self,
         image_path: str,
@@ -3897,6 +4159,7 @@ class CropDiseaseDetector:
                 features,
                 crop_type,
                 quality_report,
+                image_path=image_path,
                 model_alternatives=model_alternatives,
             )
 

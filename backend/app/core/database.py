@@ -59,6 +59,15 @@ SQLITE_COMPATIBILITY_COLUMNS = {
         "detections": "detections JSON",
         "status": "status VARCHAR(40) NOT NULL DEFAULT 'detected'",
         "created_at": "created_at DATETIME",
+        # Enhanced classification fields
+        "severity": "severity VARCHAR(40)",  # mild, moderate, severe, critical
+        "confidence_band": "confidence_band VARCHAR(40)",  # high, medium, low
+        "visual_symptoms": "visual_symptoms JSON",  # List of detected symptoms
+        "affected_area_percentage": "affected_area_percentage FLOAT",  # % of plant affected
+        "disease_stage": "disease_stage VARCHAR(40)",  # early, mid, late, advanced
+        "immediate_actions": "immediate_actions JSON",  # Quick action items
+        "reliability_score": "reliability_score FLOAT NOT NULL DEFAULT 1.0",  # Model reliability
+        "image_quality_issues": "image_quality_issues JSON",  # Image quality analysis
     },
     "scan_feedback": {
         "scan_id": "scan_id INTEGER",

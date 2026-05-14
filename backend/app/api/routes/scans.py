@@ -195,6 +195,15 @@ async def create_scan(
         reference_url=detection.reference_url,
         reference_title=detection.reference_title,
         detections=detection.detections,
+        # Enhanced fields
+        severity=detection.severity,
+        confidence_band=detection.confidence_band,
+        visual_symptoms=detection.visual_symptoms,
+        affected_area_percentage=detection.affected_area_percentage,
+        disease_stage=detection.disease_stage,
+        immediate_actions=detection.immediate_actions,
+        reliability_score=detection.reliability_score,
+        image_quality_issues=detection.image_quality_issues,
     )
     db.add(scan)
     await db.flush()

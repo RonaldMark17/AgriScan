@@ -107,6 +107,15 @@ class Scan(Base):
     detections: Mapped[list | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(40), default="detected")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Enhanced classification fields
+    severity: Mapped[str | None] = mapped_column(String(40))  # mild, moderate, severe, critical
+    confidence_band: Mapped[str | None] = mapped_column(String(40))  # high, medium, low
+    visual_symptoms: Mapped[list | None] = mapped_column(JSON)  # List of detected symptoms
+    affected_area_percentage: Mapped[float | None] = mapped_column(Float)  # Estimated % of plant affected
+    disease_stage: Mapped[str | None] = mapped_column(String(40))  # early, mid, late, advanced
+    immediate_actions: Mapped[list | None] = mapped_column(JSON)  # Quick action items
+    reliability_score: Mapped[float] = mapped_column(Float, default=1.0)  # Model reliability indicator
+    image_quality_issues: Mapped[list | None] = mapped_column(JSON)  # Issues with image that affect analysis
 
 
 class ScanFeedback(Base):

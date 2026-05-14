@@ -88,6 +88,15 @@ class ScanRead(BaseModel):
     treatment: str | None
     status: str
     created_at: datetime
+    # Enhanced fields
+    severity: str | None = None
+    confidence_band: str | None = None
+    visual_symptoms: list[str] | None = None
+    affected_area_percentage: float | None = None
+    disease_stage: str | None = None
+    immediate_actions: list[str] | None = None
+    reliability_score: float = 1.0
+    image_quality_issues: list[str] | None = None
 
     model_config = {"from_attributes": True}
 

@@ -2374,6 +2374,94 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
             </article>
           </div>
 
+          {result && (result.severity || result.disease_stage || result.visual_symptoms || result.affected_area_percentage !== undefined) ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {result.severity && (
+                <article className="rounded-lg border border-rose-100 bg-rose-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-rose-700">Severity</p>
+                  <p className="mt-2 text-lg font-bold text-rose-950 capitalize">{result.severity}</p>
+                  {result.affected_area_percentage !== undefined && (
+                    <p className="mt-1 text-sm text-rose-700">Affected: {Math.round(result.affected_area_percentage)}%</p>
+                  )}
+                </article>
+              )}
+              {result.disease_stage && (
+                <article className="rounded-lg border border-purple-100 bg-purple-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-purple-700">Disease Stage</p>
+                  <p className="mt-2 text-lg font-bold text-purple-950 capitalize">{result.disease_stage}</p>
+                  <p className="mt-1 text-sm text-purple-700">
+                    {result.disease_stage === 'early' && 'Early detection - act quickly'}
+                    {result.disease_stage === 'mid' && 'Mid-stage - intervention needed'}
+                    {result.disease_stage === 'late' && 'Late stage - intensive management required'}
+                    {result.disease_stage === 'advanced' && 'Advanced - urgent action recommended'}
+                  </p>
+                </article>
+              )}
+              {result.confidence_band && (
+                <article className={`rounded-lg border p-4 ${
+                  result.confidence_band === 'high'
+                    ? 'border-leaf-100 bg-leaf-50'
+                    : result.confidence_band === 'medium'
+                    ? 'border-amber-100 bg-amber-50'
+                    : 'border-red-100 bg-red-50'
+                }`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${
+                    result.confidence_band === 'high'
+                      ? 'text-leaf-700'
+                      : result.confidence_band === 'medium'
+                      ? 'text-amber-700'
+                      : 'text-red-700'
+                  }`}>Diagnosis Certainty</p>
+                  <p className={`mt-2 text-lg font-bold capitalize ${
+                    result.confidence_band === 'high'
+                      ? 'text-leaf-950'
+                      : result.confidence_band === 'medium'
+                      ? 'text-amber-950'
+                      : 'text-red-950'
+                  }`}>{result.confidence_band}</p>
+                  <p className={`mt-1 text-sm ${
+                    result.confidence_band === 'high'
+                      ? 'text-leaf-700'
+                      : result.confidence_band === 'medium'
+                      ? 'text-amber-700'
+                      : 'text-red-700'
+                  }`}>
+                    {result.confidence_band === 'high' && 'Highly reliable diagnosis'}
+                    {result.confidence_band === 'medium' && 'Moderate confidence - verify locally'}
+                    {result.confidence_band === 'low' && 'Low confidence - seek expert opinion'}
+                  </p>
+                </article>
+              )}
+            </div>
+          ) : null}
+
+          {result && result.visual_symptoms && result.visual_symptoms.length > 0 ? (
+            <article className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Observed Symptoms</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {result.visual_symptoms.map((symptom, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1.5 text-sm font-semibold text-indigo-900">
+                    • {symptom}
+                  </span>
+                ))}
+              </div>
+            </article>
+          ) : null}
+
+          {result && result.immediate_actions && result.immediate_actions.length > 0 ? (
+            <article className="mt-4 rounded-lg border border-green-100 bg-green-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-green-700">Immediate Actions</p>
+              <div className="mt-3 space-y-2">
+                {result.immediate_actions.map((action, idx) => (
+                  <div key={idx} className="flex gap-3">
+                    <span className="text-green-700 font-bold text-lg">{action.split(' ')[0]}</span>
+                    <p className="text-sm text-green-900">{action}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ) : null}
+
           {result && qualityWarnings.length > 0 ? (
             <article className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-amber-800">{t('photoQuality')}</p>
@@ -2383,6 +2471,17 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                     <p className="text-sm font-bold text-amber-950">{warning.title}</p>
                     <p className="mt-1 text-xs leading-5 text-amber-900">{warning.message}</p>
                   </div>
+                ))}
+              </div>
+            </article>
+          ) : null}
+
+          {result && result.image_quality_issues && result.image_quality_issues.length > 0 ? (
+            <article className="mt-4 rounded-lg border border-orange-100 bg-orange-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Image Quality Notes</p>
+              <div className="mt-3 space-y-2">
+                {result.image_quality_issues.map((issue, idx) => (
+                  <p key={idx} className="text-sm text-orange-900">⚠️ {issue}</p>
                 ))}
               </div>
             </article>
