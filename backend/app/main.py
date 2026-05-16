@@ -1,4 +1,5 @@
 import asyncio
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -24,6 +25,7 @@ API_ROOT_PATH = settings.api_v1_prefix.strip("/").split("/", 1)[0]
 FRONTEND_RESERVED_PATHS = {"uploads", "docs", "redoc", "openapi.json"}
 if API_ROOT_PATH:
     FRONTEND_RESERVED_PATHS.add(API_ROOT_PATH)
+HASHED_ASSET_PATTERN = re.compile(r"^(?P<base>.+)-[A-Za-z0-9_-]{6,}$")
 
 
 def get_frontend_dist_root() -> Path:
@@ -31,6 +33,47 @@ def get_frontend_dist_root() -> Path:
     if not dist_root.is_absolute():
         dist_root = BACKEND_ROOT / dist_root
     return dist_root.resolve()
+
+
+def frontend_file_response(dist_root: Path, file_path: Path, *, media_type: str | None = None) -> FileResponse:
+    relative_path = file_path.relative_to(dist_root).as_posix()
+    headers: dict[str, str] = {}
+
+    if relative_path in {"index.html", "manifest.webmanifest", "offline.html", "sw.js"}:
+        headers["Cache-Control"] = "no-cache"
+    elif relative_path.startswith("assets/"):
+        headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif relative_path.startswith(("icons/", "screenshots/")):
+        headers["Cache-Control"] = "public, max-age=86400"
+
+    return FileResponse(file_path, media_type=media_type, headers=headers)
+
+
+def resolve_hashed_asset_fallback(dist_root: Path, clean_path: str) -> Path | None:
+    relative_path = Path(clean_path.replace("\\", "/"))
+    if not relative_path.parts or relative_path.parts[0] != "assets":
+        return None
+
+    match = HASHED_ASSET_PATTERN.match(relative_path.stem)
+    if not match:
+        return None
+
+    asset_dir = (dist_root / relative_path.parent).resolve()
+    try:
+        asset_dir.relative_to(dist_root)
+    except ValueError:
+        return None
+
+    if not asset_dir.is_dir():
+        return None
+
+    base_name = match.group("base")
+    candidates = [candidate for candidate in asset_dir.glob(f"{base_name}-*{relative_path.suffix}") if candidate.is_file()]
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda candidate: (candidate.stat().st_mtime, candidate.name), reverse=True)
+    return candidates[0]
 
 
 async def seed_roles() -> None:
@@ -164,7 +207,7 @@ async def serve_frontend(full_path: str):
     if clean_path == "favicon.ico":
         icon_path = dist_root / "icons" / "icon.svg"
         if icon_path.is_file():
-            return FileResponse(icon_path, media_type="image/svg+xml")
+            return frontend_file_response(dist_root, icon_path, media_type="image/svg+xml")
 
     if clean_path:
         candidate = (dist_root / clean_path).resolve()
@@ -174,12 +217,15 @@ async def serve_frontend(full_path: str):
             raise HTTPException(status_code=404, detail="Not found") from exc
 
         if candidate.is_file():
-            return FileResponse(candidate)
+            return frontend_file_response(dist_root, candidate)
 
         if Path(clean_path).suffix:
+            fallback_candidate = resolve_hashed_asset_fallback(dist_root, clean_path)
+            if fallback_candidate is not None:
+                return frontend_file_response(dist_root, fallback_candidate)
             raise HTTPException(status_code=404, detail="Not found")
 
     index_path = dist_root / "index.html"
     if not index_path.is_file():
         raise HTTPException(status_code=404, detail="Frontend index.html not found")
-    return FileResponse(index_path)
+    return frontend_file_response(dist_root, index_path)

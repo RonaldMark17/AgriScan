@@ -27,7 +27,7 @@ const TRANSPORT_IMAGE_TARGET_BYTES = 900 * 1024;
 const TRANSPORT_IMAGE_MAX_DIMENSION = 1600;
 const CUSTOM_CROP_OPTION = '__other_crop__';
 const INVALID_CROP_IMAGE_MESSAGE =
-  'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
+  'Upload a real close-up crop photo with one leaf, fruit, stem, or plant part as the main subject. Screenshots, posters, game images, and background foliage cannot be diagnosed.';
 class CropTypeMismatchError extends Error {
   constructor(message) {
     super(message);
@@ -1374,6 +1374,42 @@ function hasCropPartSignal(features, crop) {
   return diseasedProduce || greenPodOrLeafCluster || damagedPlantTissue;
 }
 
+function looksLikeSyntheticScreenshot(features, crop) {
+  const cropKey = normalizeCropKey(crop);
+  if (
+    looksLikeHealthyRicePanicle(features) ||
+    looksLikeHealthyBananaBunch(features) ||
+    looksLikeCornEarIssue(features, cropKey || '') ||
+    looksLikeBananaFruitIssue(features, cropKey || '') ||
+    looksLikeRedPurpleBulb(features, cropKey) ||
+    looksLikeMangoLeaf(features)
+  ) {
+    return false;
+  }
+
+  const textOverlaySignal =
+    features.centerBrightWhiteRatio >= 0.018 &&
+    features.centerDeepBlackRatio >= 0.025 &&
+    features.deepBlackRatio >= 0.035;
+  const arcadePalette =
+    features.chromaGreenRatio >= 0.18 &&
+    features.centerChromaGreenRatio >= 0.08 &&
+    features.naturalGreenRatio <= 0.16 &&
+    features.centerNaturalGreenRatio <= 0.14;
+  const repeatedGameObjects =
+    features.centerFruitRatio >= 0.08 &&
+    features.fruitComponentCount >= 2 &&
+    features.maxFruitAreaRatio >= 0.04 &&
+    features.maxFruitAreaRatio < 0.24;
+  const notLeafCloseup =
+    features.maxGreenAspect < 2.2 &&
+    features.maxGreenAreaRatio < 0.22 &&
+    features.centerLesionRatio < 0.08 &&
+    features.greenLeafRatio < 0.55;
+
+  return textOverlaySignal && arcadePalette && repeatedGameObjects && notLeafCloseup && features.contrast >= 62;
+}
+
 function offlineQualityWarnings(features) {
   const warnings = [];
   const addWarning = (code, title, message) => warnings.push({ kind: 'quality_warning', code, severity: 'warning', title, message });
@@ -1456,6 +1492,9 @@ function offlineAlternativeMatches(features, cropType, primaryKey, primaryResult
 
 function shouldRejectNonCropForeground(features, crop) {
   const hasForegroundCrop = hasCropSubjectInForeground(features, crop);
+  if (looksLikeSyntheticScreenshot(features, crop)) {
+    return true;
+  }
   if (hasCropPartSignal(features, crop)) {
     return false;
   }
@@ -1868,6 +1907,10 @@ async function analyzeImageOffline(file, cropType) {
   let centerRedPurpleBulb = 0;
   let centerNeutral = 0;
   let centerTan = 0;
+  let brightWhite = 0;
+  let deepBlack = 0;
+  let centerBrightWhite = 0;
+  let centerDeepBlack = 0;
   let sum = 0;
   let sumSq = 0;
   const lesionMask = new Uint8Array(size * size);
@@ -1898,6 +1941,8 @@ async function analyzeImageOffline(file, cropType) {
     const isChromaGreen = isGreenLeaf && green > 0.42 && red < 0.25 && blue < 0.32 && saturation > 0.36;
     const isNeutralSubject = saturation < 0.18 && maxChannel > 0.25 && maxChannel < 0.95;
     const isTanSubject = red > 0.42 && green > 0.25 && blue > 0.12 && red > green * 1.08 && green > blue * 1.05 && saturation > 0.1;
+    const isBrightWhite = brightness >= 0.78 && saturation < 0.22;
+    const isDeepBlack = brightness <= 0.16;
     const isRedPurpleBulb =
       red > 0.24 &&
       blue > 0.1 &&
@@ -1934,6 +1979,8 @@ async function analyzeImageOffline(file, cropType) {
       fruitMask[index] = 1;
     }
     if (isRedPurpleBulb) redPurpleBulb += 1;
+    if (isBrightWhite) brightWhite += 1;
+    if (isDeepBlack) deepBlack += 1;
     if (isYellow) yellow += 1;
     if (isRust) rust += 1;
     if (isDark) darkLesion += 1;
@@ -1951,6 +1998,8 @@ async function analyzeImageOffline(file, cropType) {
       if (isRedPurpleBulb) centerRedPurpleBulb += 1;
       if (isNeutralSubject) centerNeutral += 1;
       if (isTanSubject) centerTan += 1;
+      if (isBrightWhite) centerBrightWhite += 1;
+      if (isDeepBlack) centerDeepBlack += 1;
     }
     if (isGreenLeaf || isLesion || isRedPurpleBulb) plant += 1;
   }
@@ -2137,6 +2186,8 @@ async function analyzeImageOffline(file, cropType) {
     maxFruitAspect,
     chromaGreenRatio: chromaGreen / (size * size),
     naturalGreenRatio: naturalGreen / (size * size),
+    brightWhiteRatio: brightWhite / (size * size),
+    deepBlackRatio: deepBlack / (size * size),
     centerGreenRatio: centerGreen / centerPixelCount,
     centerChromaGreenRatio: centerChromaGreen / centerPixelCount,
     centerNaturalGreenRatio: centerNaturalGreen / centerPixelCount,
@@ -2145,6 +2196,8 @@ async function analyzeImageOffline(file, cropType) {
     centerRedPurpleBulbRatio: centerRedPurpleBulb / centerPixelCount,
     centerNeutralRatio: centerNeutral / centerPixelCount,
     centerTanRatio: centerTan / centerPixelCount,
+    centerBrightWhiteRatio: centerBrightWhite / centerPixelCount,
+    centerDeepBlackRatio: centerDeepBlack / centerPixelCount,
     contrast: Math.sqrt(Math.max(variance, 0)) * 255,
   };
 
@@ -2261,6 +2314,14 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
   const alternativeMatches = getAlternativeMatches(result);
   const cropVerified = Boolean(result?.crop_label || result?.crop_type || inferCropLabel(result)) && cropLabel !== 'General crop leaf';
   const needsReview = /review/i.test(result?.disease_name || '');
+  const hasSupplementaryCards = Boolean(
+    result &&
+      ((result.visual_symptoms?.length || 0) > 0 ||
+        (result.immediate_actions?.length || 0) > 0 ||
+        qualityWarnings.length > 0 ||
+        (result.image_quality_issues?.length || 0) > 0 ||
+        alternativeMatches.length > 0),
+  );
   const statusClass = needsReview ? 'bg-amber-50 text-amber-700' : 'bg-leaf-50 text-leaf-700';
   const confidenceClass = !result ? 'border-stone-200 bg-white' : needsReview ? 'border-amber-100 bg-amber-50' : 'border-leaf-100 bg-leaf-50';
   const confidenceLabelClass = !result ? 'text-stone-500' : needsReview ? 'text-amber-700' : 'text-leaf-700';
@@ -2334,7 +2395,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
 
   return (
     <section ref={panelRef} className="surface scroll-mt-panel overflow-hidden rounded-lg">
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-0 lg:items-start lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="p-5 sm:p-7">
           <div className="flex flex-wrap items-center gap-3">
             <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold sm:px-4 ${statusClass}`}>
@@ -2435,262 +2496,275 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
             </div>
           ) : null}
 
-          {result && result.visual_symptoms && result.visual_symptoms.length > 0 ? (
-            <article className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Observed Symptoms</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {result.visual_symptoms.map((symptom, idx) => (
-                  <span key={idx} className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1.5 text-sm font-semibold text-indigo-900">
-                    • {symptom}
-                  </span>
-                ))}
-              </div>
-            </article>
-          ) : null}
-
-          {result && result.immediate_actions && result.immediate_actions.length > 0 ? (
-            <article className="mt-4 rounded-lg border border-green-100 bg-green-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-green-700">Immediate Actions</p>
-              <div className="mt-3 space-y-2">
-                {result.immediate_actions.map((action, idx) => (
-                  <div key={idx} className="flex gap-3">
-                    <span className="text-green-700 font-bold text-lg">{action.split(' ')[0]}</span>
-                    <p className="text-sm text-green-900">{action}</p>
+          {hasSupplementaryCards ? (
+            <div className="mt-4 grid gap-4 md:auto-rows-fr md:grid-cols-2">
+              {result && result.visual_symptoms && result.visual_symptoms.length > 0 ? (
+                <article className="flex h-full flex-col rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Observed Symptoms</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {result.visual_symptoms.map((symptom, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1.5 text-sm font-semibold text-indigo-900">
+                        • {symptom}
+                      </span>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </article>
-          ) : null}
-
-          {result && qualityWarnings.length > 0 ? (
-            <article className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-amber-800">{t('photoQuality')}</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {qualityWarnings.slice(0, 4).map((warning) => (
-                  <div key={warning.code || warning.title} className="rounded-lg border border-amber-100 bg-white/70 p-3">
-                    <p className="text-sm font-bold text-amber-950">{warning.title}</p>
-                    <p className="mt-1 text-xs leading-5 text-amber-900">{warning.message}</p>
-                  </div>
-                ))}
-              </div>
-            </article>
-          ) : null}
-
-          {result && result.image_quality_issues && result.image_quality_issues.length > 0 ? (
-            <article className="mt-4 rounded-lg border border-orange-100 bg-orange-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Image Quality Notes</p>
-              <div className="mt-3 space-y-2">
-                {result.image_quality_issues.map((issue, idx) => (
-                  <p key={idx} className="text-sm text-orange-900">⚠️ {issue}</p>
-                ))}
-              </div>
-            </article>
-          ) : null}
-
-          {result && alternativeMatches.length > 0 ? (
-            <article className="mt-4 rounded-lg border border-stone-200 bg-white p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('topPossibleResults')}</p>
-              <div className="mt-3 space-y-2">
-                {alternativeMatches.slice(0, 3).map((match) => (
-                  <div
-                    key={`${match.crop_label}-${match.label}`}
-                    className="flex min-w-0 flex-col gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="break-words text-sm font-bold leading-5 text-stone-950">{translateDiseaseName(match.label, t)}</p>
-                      <p className="mt-1 text-xs font-semibold text-stone-500">{translateCropLabel(match.crop_label, t)}</p>
-                    </div>
-                    <span className="shrink-0 self-start rounded-full bg-white px-2.5 py-1 text-xs font-bold text-leaf-700 ring-1 ring-leaf-100 sm:self-center">
-                      {Math.round(Number(match.confidence) * 100)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </article>
-          ) : null}
-
-          {result && (
-            <div className="mt-6 space-y-4">
-              <article className="rounded-lg border border-stone-200 bg-white p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('likelyCause')}</p>
-                <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={result.cause} />
-              </article>
-              <article className="rounded-lg border border-stone-200 bg-white p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('treatmentSuggestion')}</p>
-                <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={result.treatment} />
-              </article>
-              <article className="rounded-lg border border-sky-100 bg-sky-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('modelBasis')}</p>
-                <p className="mt-2 text-sm leading-6 text-stone-700">
-                  {yoloDetections.length > 0
-                    ? t('yoloModelBasis')
-                    : isLocalVisualAnalysisMode(result.analysis_mode)
-                    ? t('localVisualModelBasis')
-                    : t('modelBasisBody')}
-                </p>
-                {result.reference_url && (
-                  <a className="mt-3 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900" href={result.reference_url} rel="noreferrer" target="_blank">
-                    {result.reference_title || t('openCropDiseaseReference')}
-                  </a>
-                )}
-                {pipelineStages.length > 0 ? (
-                  <div className="mt-4 border-t border-sky-100 pt-4">
-                    <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('analysisStages')}</p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {pipelineStages.map((stage) => {
-                        const isPass = stage.status === 'pass';
-                        const isFail = stage.status === 'fail';
-                        const badgeClass = isPass
-                          ? 'bg-leaf-50 text-leaf-700'
-                          : isFail
-                            ? 'bg-red-50 text-red-700'
-                            : 'bg-amber-50 text-amber-700';
-                        return (
-                          <div key={stage.stage} className="rounded-lg border border-sky-100 bg-white p-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-bold text-stone-900">{stage.label}</p>
-                              <span className={`rounded-full px-2 py-1 text-[11px] font-bold uppercase ${badgeClass}`}>{stage.status}</span>
-                            </div>
-                            <p className="mt-1 text-xs leading-5 text-stone-600">{stage.detail}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-              </article>
-              {canGiveFeedback && (
-                <article className="rounded-lg border border-stone-200 bg-white p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctionLearning')}</p>
-                      <p className="mt-1 text-sm leading-6 text-stone-600">
-                        {t('correctionLearningBody')}
-                      </p>
-                    </div>
-                    <button
-                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition hover:border-leaf-300 hover:bg-leaf-50"
-                      type="button"
-                      onClick={() => setFeedbackOpen((open) => !open)}
-                    >
-                      <Flag className="h-4 w-4" />
-                      {t('flagWrong')}
-                    </button>
-                  </div>
-
-                  {feedbackOpen && (
-                    <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={submitFeedback}>
-                      <label className="block">
-                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctCrop')}</span>
-                        <select
-                          className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
-                          disabled={isNotCropCorrection}
-                          value={feedbackCrop}
-                          onChange={(event) => setFeedbackCrop(event.target.value)}
-                        >
-                          <option value="">{isNotCropCorrection ? t('notApplicable') : t('selectCrop')}</option>
-                          {quickCropOptions.map((crop) => (
-                            <option key={crop} value={crop}>
-                              {crop}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block">
-                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctResult')}</span>
-                        <select
-                          className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
-                          value={feedbackCondition}
-                          onChange={(event) => setFeedbackCondition(event.target.value)}
-                        >
-                          {feedbackConditionOptions.map((condition) => (
-                            <option key={condition} value={condition}>
-                              {translateDiseaseName(condition, t)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block sm:col-span-2">
-                        <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('note')}</span>
-                        <textarea
-                          className="mt-2 min-h-20 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
-                          maxLength={500}
-                          value={feedbackNote}
-                          onChange={(event) => setFeedbackNote(event.target.value)}
-                          placeholder={t('correctionExample')}
-                        />
-                      </label>
-                      <button
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-leaf-700 px-4 text-sm font-bold text-white transition hover:bg-leaf-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:w-fit"
-                        disabled={(!feedbackCrop && !isNotCropCorrection) || !feedbackCondition || feedbackSubmitting}
-                        type="submit"
-                      >
-                        {feedbackSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        {t('submitCorrection')}
-                      </button>
-                    </form>
-                  )}
-                  {feedbackMessage && <p className="mt-3 rounded-lg bg-leaf-50 p-3 text-sm font-semibold text-leaf-700">{feedbackMessage}</p>}
-                  {feedbackError && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700">{feedbackError}</p>}
                 </article>
-              )}
+              ) : null}
+
+              {result && result.immediate_actions && result.immediate_actions.length > 0 ? (
+                <article className="flex h-full flex-col rounded-lg border border-green-100 bg-green-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-green-700">Immediate Actions</p>
+                  <div className="mt-3 space-y-2">
+                    {result.immediate_actions.map((action, idx) => (
+                      <div key={idx} className="flex gap-3">
+                        <span className="text-green-700 font-bold text-lg">{action.split(' ')[0]}</span>
+                        <p className="text-sm text-green-900">{action}</p>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
+
+              {result && qualityWarnings.length > 0 ? (
+                <article className="flex h-full flex-col rounded-lg border border-amber-100 bg-amber-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-amber-800">{t('photoQuality')}</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {qualityWarnings.slice(0, 4).map((warning) => (
+                      <div key={warning.code || warning.title} className="rounded-lg border border-amber-100 bg-white/70 p-3">
+                        <p className="text-sm font-bold text-amber-950">{warning.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-amber-900">{warning.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
+
+              {result && result.image_quality_issues && result.image_quality_issues.length > 0 ? (
+                <article className="flex h-full flex-col rounded-lg border border-orange-100 bg-orange-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Image Quality Notes</p>
+                  <div className="mt-3 space-y-2">
+                    {result.image_quality_issues.map((issue, idx) => (
+                      <p key={idx} className="text-sm text-orange-900">⚠️ {issue}</p>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
+
+              {result && alternativeMatches.length > 0 ? (
+                <article className="flex h-full flex-col rounded-lg border border-stone-200 bg-white p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('topPossibleResults')}</p>
+                  <div className="mt-3 space-y-2">
+                    {alternativeMatches.slice(0, 3).map((match) => (
+                      <div
+                        key={`${match.crop_label}-${match.label}`}
+                        className="flex min-w-0 flex-col gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-bold leading-5 text-stone-950">{translateDiseaseName(match.label, t)}</p>
+                          <p className="mt-1 text-xs font-semibold text-stone-500">{translateCropLabel(match.crop_label, t)}</p>
+                        </div>
+                        <span className="shrink-0 self-start rounded-full bg-white px-2.5 py-1 text-xs font-bold text-leaf-700 ring-1 ring-leaf-100 sm:self-center">
+                          {Math.round(Number(match.confidence) * 100)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
             </div>
-          )}
+          ) : null}
+
         </div>
 
-        <div className="surface rounded-lg p-4 sm:p-5 lg:border-0 lg:bg-transparent lg:p-0">
-          <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('previewAndAnalysis')}</p>
-          <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
-            {displayPreviewUrl ? (
-              <div className="relative w-full overflow-hidden bg-stone-950" style={{ paddingBottom: '66.666%' }}>
-                <img src={displayPreviewUrl} alt={t('uploadCropImage')} className="absolute inset-0 h-full w-full object-cover" />
-                {yoloDetections.map((detection, index) => {
-                  const box = detection.box;
-                  return (
-                    <div
-                      key={`${detection.raw_label || detection.label}-${index}`}
-                      className={`absolute border-2 transition-colors ${detection.selected ? 'border-leaf-400' : 'border-amber-300'} bg-stone-950/5`}
-                      style={{
-                        left: `${Number(box.x) * 100}%`,
-                        top: `${Number(box.y) * 100}%`,
-                        width: `${Number(box.width) * 100}%`,
-                        height: `${Number(box.height) * 100}%`,
-                      }}
-                    >
-                      <span className={`absolute left-0 top-0 whitespace-nowrap truncate rounded px-2 py-1 text-[10px] font-bold text-stone-950 ${detection.selected ? 'bg-leaf-300' : 'bg-amber-300'}`}>
-                        {translateDiseaseName(detection.label, t)} {Math.round(Number(detection.confidence) * 100)}%
+        <div className="border-t border-stone-200 bg-stone-50/70 p-4 sm:p-5 lg:self-start lg:border-l lg:border-t-0 lg:bg-stone-50/40">
+          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{t('previewAndAnalysis')}</p>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+              {displayPreviewUrl ? (
+                <div className="relative w-full overflow-hidden bg-stone-950" style={{ paddingBottom: '66.666%' }}>
+                  <img src={displayPreviewUrl} alt={t('uploadCropImage')} className="absolute inset-0 h-full w-full object-cover" />
+                  {yoloDetections.map((detection, index) => {
+                    const box = detection.box;
+                    return (
+                      <div
+                        key={`${detection.raw_label || detection.label}-${index}`}
+                        className={`absolute border-2 transition-colors ${detection.selected ? 'border-leaf-400' : 'border-amber-300'} bg-stone-950/5`}
+                        style={{
+                          left: `${Number(box.x) * 100}%`,
+                          top: `${Number(box.y) * 100}%`,
+                          width: `${Number(box.width) * 100}%`,
+                          height: `${Number(box.height) * 100}%`,
+                        }}
+                      >
+                        <span className={`absolute left-0 top-0 whitespace-nowrap truncate rounded px-2 py-1 text-[10px] font-bold text-stone-950 ${detection.selected ? 'bg-leaf-300' : 'bg-amber-300'}`}>
+                          {translateDiseaseName(detection.label, t)} {Math.round(Number(detection.confidence) * 100)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="relative w-full overflow-hidden bg-leaf-50" style={{ paddingBottom: '66.666%' }}>
+                  <img src={diseaseDetectorImage} alt={t('uploadCropImage')} className="absolute inset-0 h-full w-full object-cover opacity-20" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/40 p-4 text-stone-600">
+                    <div className="max-w-52 text-center">
+                      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-stone-200 bg-white/95 text-leaf-700 shadow-sm sm:h-14 sm:w-14">
+                        <ImagePlus className="h-6 w-6 sm:h-7 sm:w-7" />
                       </span>
+                      <p className="mt-2 text-xs font-semibold leading-5 sm:mt-3 sm:text-sm sm:leading-6">{t('diseaseAnalysisPrompt')}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            {result?.image_name && <p className="mt-3 break-all text-xs font-semibold text-stone-600 sm:text-sm sm:text-stone-700">{result.image_name}</p>}
+            {yoloDetections.length > 0 && (
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-1 sm:gap-3 lg:grid-cols-2">
+                {yoloDetections.slice(0, 4).map((detection, index) => (
+                  <div key={`${detection.raw_label || detection.label}-summary-${index}`} className="rounded-lg border border-stone-200 bg-white p-3">
+                    <p className="truncate text-xs font-bold text-stone-900 sm:text-sm">{translateDiseaseName(detection.label, t)}</p>
+                    <p className="mt-1 text-xs font-semibold text-stone-500">{Math.round(Number(detection.confidence) * 100)}% {t('confidence')}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {result && (
+        <div className="border-t border-stone-200 bg-stone-50/30 px-5 py-5 sm:px-7 sm:py-6">
+          <div className="grid gap-4 md:auto-rows-fr md:grid-cols-2">
+            <article className="flex h-full min-h-[12.5rem] flex-col rounded-lg border border-stone-200 bg-white p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('likelyCause')}</p>
+              <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={result.cause} />
+            </article>
+
+            <article className="flex h-full min-h-[12.5rem] flex-col rounded-lg border border-sky-100 bg-sky-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('modelBasis')}</p>
+              <p className="mt-2 text-sm leading-6 text-stone-700">
+                {yoloDetections.length > 0
+                  ? t('yoloModelBasis')
+                  : isLocalVisualAnalysisMode(result.analysis_mode)
+                  ? t('localVisualModelBasis')
+                  : t('modelBasisBody')}
+              </p>
+              {result.reference_url && (
+                <a className="mt-3 inline-flex text-sm font-bold text-sky-700 hover:text-sky-900" href={result.reference_url} rel="noreferrer" target="_blank">
+                  {result.reference_title || t('openCropDiseaseReference')}
+                </a>
+              )}
+            </article>
+
+            <article className="flex h-full min-h-[12.5rem] flex-col rounded-lg border border-stone-200 bg-white p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('treatmentSuggestion')}</p>
+              <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={result.treatment} />
+            </article>
+
+            {canGiveFeedback ? (
+              <article className="flex h-full min-h-[12.5rem] flex-col rounded-lg border border-stone-200 bg-white p-4">
+                <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctionLearning')}</p>
+                    <p className="mt-1 text-sm leading-6 text-stone-600">
+                      {t('correctionLearningBody')}
+                    </p>
+                  </div>
+                  <button
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition hover:border-leaf-300 hover:bg-leaf-50"
+                    type="button"
+                    onClick={() => setFeedbackOpen((open) => !open)}
+                  >
+                    <Flag className="h-4 w-4" />
+                    {t('flagWrong')}
+                  </button>
+                </div>
+
+                {feedbackOpen && (
+                  <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={submitFeedback}>
+                    <label className="block">
+                      <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctCrop')}</span>
+                      <select
+                        className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
+                        disabled={isNotCropCorrection}
+                        value={feedbackCrop}
+                        onChange={(event) => setFeedbackCrop(event.target.value)}
+                      >
+                        <option value="">{isNotCropCorrection ? t('notApplicable') : t('selectCrop')}</option>
+                        {quickCropOptions.map((crop) => (
+                          <option key={crop} value={crop}>
+                            {crop}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctResult')}</span>
+                      <select
+                        className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
+                        value={feedbackCondition}
+                        onChange={(event) => setFeedbackCondition(event.target.value)}
+                      >
+                        {feedbackConditionOptions.map((condition) => (
+                          <option key={condition} value={condition}>
+                            {translateDiseaseName(condition, t)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('note')}</span>
+                      <textarea
+                        className="mt-2 min-h-20 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:border-leaf-500 focus:outline-none focus:ring-2 focus:ring-leaf-100"
+                        maxLength={500}
+                        value={feedbackNote}
+                        onChange={(event) => setFeedbackNote(event.target.value)}
+                        placeholder={t('correctionExample')}
+                      />
+                    </label>
+                    <button
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-leaf-700 px-4 text-sm font-bold text-white transition hover:bg-leaf-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:w-fit"
+                      disabled={(!feedbackCrop && !isNotCropCorrection) || !feedbackCondition || feedbackSubmitting}
+                      type="submit"
+                    >
+                      {feedbackSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {t('submitCorrection')}
+                    </button>
+                  </form>
+                )}
+                {feedbackMessage && <p className="mt-3 rounded-lg bg-leaf-50 p-3 text-sm font-semibold text-leaf-700">{feedbackMessage}</p>}
+                {feedbackError && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700">{feedbackError}</p>}
+              </article>
+            ) : null}
+          </div>
+
+          {pipelineStages.length > 0 ? (
+            <article className="mt-4 rounded-lg border border-sky-100 bg-sky-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('analysisStages')}</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {pipelineStages.map((stage) => {
+                  const isPass = stage.status === 'pass';
+                  const isFail = stage.status === 'fail';
+                  const badgeClass = isPass
+                    ? 'bg-leaf-50 text-leaf-700'
+                    : isFail
+                      ? 'bg-red-50 text-red-700'
+                      : 'bg-amber-50 text-amber-700';
+                  return (
+                    <div key={stage.stage} className="rounded-lg border border-sky-100 bg-white p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-bold text-stone-900">{stage.label}</p>
+                        <span className={`rounded-full px-2 py-1 text-[11px] font-bold uppercase ${badgeClass}`}>{stage.status}</span>
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-stone-600">{stage.detail}</p>
                     </div>
                   );
                 })}
               </div>
-            ) : (
-              <div className="relative w-full overflow-hidden bg-leaf-50" style={{ paddingBottom: '66.666%' }}>
-                <img src={diseaseDetectorImage} alt={t('uploadCropImage')} className="absolute inset-0 h-full w-full object-cover opacity-20" />
-                <div className="absolute inset-0 flex items-center justify-center bg-white/40 p-4 text-stone-600">
-                  <div className="max-w-52 text-center">
-                    <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-stone-200 bg-white/95 text-leaf-700 shadow-sm sm:h-14 sm:w-14">
-                      <ImagePlus className="h-6 w-6 sm:h-7 sm:w-7" />
-                    </span>
-                    <p className="mt-2 text-xs font-semibold leading-5 sm:mt-3 sm:text-sm sm:leading-6">{t('diseaseAnalysisPrompt')}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          {result?.image_name && <p className="mt-3 break-all text-xs font-semibold text-stone-600 sm:text-sm sm:text-stone-700">{result.image_name}</p>}
-          {yoloDetections.length > 0 && (
-            <div className="mt-3 grid gap-2 grid-cols-2 sm:mt-4 sm:grid-cols-1 sm:gap-3 lg:grid-cols-2">
-              {yoloDetections.slice(0, 4).map((detection, index) => (
-                <div key={`${detection.raw_label || detection.label}-summary-${index}`} className="rounded-lg border border-stone-200 bg-white p-3">
-                  <p className="truncate text-xs font-bold text-stone-900 sm:text-sm">{translateDiseaseName(detection.label, t)}</p>
-                  <p className="mt-1 text-xs font-semibold text-stone-500">{Math.round(Number(detection.confidence) * 100)}% {t('confidence')}</p>
-                </div>
-              ))}
-            </div>
-          )}
+            </article>
+          ) : null}
         </div>
-      </div>
+      )}
     </section>
   );
 }
@@ -2701,7 +2775,7 @@ function HistoryList({ history, onSelect, t }) {
   const displayedHistory = showAll ? visibleHistory : visibleHistory.slice(0, 6);
 
   return (
-    <section>
+    <section className="w-full">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-stone-950">{t('recentDiseaseScans')}</h2>
@@ -3108,136 +3182,138 @@ export default function PlantDiseaseDetector() {
         </div>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-5 lg:gap-8 xl:gap-10">
-        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 lg:col-span-2 lg:sticky lg:top-6 lg:self-start lg:h-fit">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('uploadCropImage')}</h2>
-              <p className="mt-1 text-xs sm:text-sm text-stone-500">{t('uploadClearCropImage')}</p>
+      <div className="grid gap-6 lg:grid-cols-5 lg:items-start lg:gap-8 xl:gap-10">
+        <div className="lg:col-span-2">
+          <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('uploadCropImage')}</h2>
+                <p className="mt-1 text-xs sm:text-sm text-stone-500">{t('uploadClearCropImage')}</p>
+              </div>
+              <button className="btn-icon shrink-0" type="button" onClick={resetForm} title={t('resetForm')}>
+                <RotateCcw className="h-4 w-4" />
+              </button>
             </div>
-            <button className="btn-icon shrink-0" type="button" onClick={resetForm} title={t('resetForm')}>
-              <RotateCcw className="h-4 w-4" />
-            </button>
-          </div>
 
-          <div className="mt-4 space-y-5 sm:mt-6">
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-stone-700 sm:text-sm">{t('cropType')}</span>
-              <select
-                className="field mt-2 h-11 sm:h-12"
-                value={selectedCrop}
-                onChange={(event) => {
-                  setSelectedCrop(event.target.value);
-                  if (event.target.value !== CUSTOM_CROP_OPTION) setCustomCrop('');
-                }}
-              >
-                <option value="">{t('autoDetectCrop')}</option>
-                {quickCropOptions.map((crop) => (
-                  <option key={crop} value={crop}>{crop}</option>
-                ))}
-                <option value={CUSTOM_CROP_OPTION}>{t('otherNotListed')}</option>
-              </select>
-              {selectedCrop === CUSTOM_CROP_OPTION && (
+            <div className="mt-4 space-y-5 sm:mt-6">
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-stone-700 sm:text-sm">{t('cropType')}</span>
+                <select
+                  className="field mt-2 h-11 sm:h-12"
+                  value={selectedCrop}
+                  onChange={(event) => {
+                    setSelectedCrop(event.target.value);
+                    if (event.target.value !== CUSTOM_CROP_OPTION) setCustomCrop('');
+                  }}
+                >
+                  <option value="">{t('autoDetectCrop')}</option>
+                  {quickCropOptions.map((crop) => (
+                    <option key={crop} value={crop}>{crop}</option>
+                  ))}
+                  <option value={CUSTOM_CROP_OPTION}>{t('otherNotListed')}</option>
+                </select>
+                {selectedCrop === CUSTOM_CROP_OPTION && (
+                  <input
+                    className="field mt-3 h-11 sm:h-12"
+                    maxLength={80}
+                    placeholder={t('cropName')}
+                    value={customCrop}
+                    onChange={(event) => setCustomCrop(event.target.value)}
+                  />
+                )}
+              </label>
+
+              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 sm:p-4">
                 <input
-                  className="field mt-3 h-11 sm:h-12"
-                  maxLength={80}
-                  placeholder={t('cropName')}
-                  value={customCrop}
-                  onChange={(event) => setCustomCrop(event.target.value)}
+                  accept="image/*"
+                  className="hidden"
+                  key={`gallery-${fileInputKey}`}
+                  ref={galleryInputRef}
+                  type="file"
+                  onChange={handleFileInputChange}
                 />
-              )}
-            </label>
+                <input
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  key={`camera-${fileInputKey}`}
+                  ref={cameraInputRef}
+                  type="file"
+                  onChange={handleFileInputChange}
+                />
+                <button
+                  className="group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-stone-300 bg-white text-center transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                  type="button"
+                  onClick={() => setShowImageSourcePicker(true)}
+                >
+                  {previewUrl ? (
+                    <img src={previewUrl} alt={t('uploadCropImage')} className="h-40 w-full object-cover sm:h-48" />
+                  ) : (
+                    <div className="px-4 py-6 sm:px-5 sm:py-8">
+                      <Upload className="mx-auto h-9 w-9 text-leaf-600 sm:h-10 sm:w-10" />
+                      <p className="mt-3 text-sm font-bold text-stone-900 sm:mt-4 sm:text-base">{t('takeOrUploadPhoto')}</p>
+                      <p className="mt-1 text-xs leading-5 text-stone-500 sm:mt-2 sm:text-sm sm:leading-6">
+                        {t('takeClearCropPhoto')}
+                      </p>
+                    </div>
+                  )}
+                </button>
 
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 sm:p-4">
-              <input
-                accept="image/*"
-                className="hidden"
-                key={`gallery-${fileInputKey}`}
-                ref={galleryInputRef}
-                type="file"
-                onChange={handleFileInputChange}
-              />
-              <input
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                key={`camera-${fileInputKey}`}
-                ref={cameraInputRef}
-                type="file"
-                onChange={handleFileInputChange}
-              />
-              <button
-                className="group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-stone-300 bg-white text-center transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
-                type="button"
-                onClick={() => setShowImageSourcePicker(true)}
-              >
-                {previewUrl ? (
-                  <img src={previewUrl} alt={t('uploadCropImage')} className="h-40 w-full object-cover sm:h-48" />
-                ) : (
-                  <div className="px-4 py-6 sm:px-5 sm:py-8">
-                    <Upload className="mx-auto h-9 w-9 text-leaf-600 sm:h-10 sm:w-10" />
-                    <p className="mt-3 text-sm font-bold text-stone-900 sm:mt-4 sm:text-base">{t('takeOrUploadPhoto')}</p>
-                    <p className="mt-1 text-xs leading-5 text-stone-500 sm:mt-2 sm:text-sm sm:leading-6">
-                      {t('takeClearCropPhoto')}
-                    </p>
+                {showImageSourcePicker && (
+                  <div className="mt-3 grid gap-2 grid-cols-2 sm:mt-4 sm:gap-3" role="dialog" aria-label={t('chooseImageSource')}>
+                    <button
+                      className="flex min-h-16 sm:min-h-20 items-center gap-2 sm:gap-3 rounded-lg border border-stone-200 bg-white p-2 sm:p-4 text-left text-xs sm:text-sm transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                      type="button"
+                      onClick={() => chooseImageSource('gallery')}
+                    >
+                      <span className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg bg-leaf-50 text-leaf-700">
+                        <ImagePlus className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-bold text-stone-950">{t('uploadFromGallery')}</span>
+                        <span className="mt-0.5 block font-medium text-stone-500 sm:mt-1">{t('chooseExistingPhoto')}</span>
+                      </span>
+                    </button>
+                    <button
+                      className="flex min-h-16 sm:min-h-20 items-center gap-2 sm:gap-3 rounded-lg border border-stone-200 bg-white p-2 sm:p-4 text-left text-xs sm:text-sm transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                      type="button"
+                      onClick={() => chooseImageSource('camera')}
+                    >
+                      <span className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-700">
+                        <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-bold text-stone-950">{t('useCamera')}</span>
+                        <span className="mt-0.5 block font-medium text-stone-500 sm:mt-1">{t('takeNewPhoto')}</span>
+                      </span>
+                    </button>
                   </div>
                 )}
-              </button>
 
-              {showImageSourcePicker && (
-                <div className="mt-3 grid gap-2 grid-cols-2 sm:mt-4 sm:gap-3" role="dialog" aria-label={t('chooseImageSource')}>
-                  <button
-                    className="flex min-h-16 sm:min-h-20 items-center gap-2 sm:gap-3 rounded-lg border border-stone-200 bg-white p-2 sm:p-4 text-left text-xs sm:text-sm transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
-                    type="button"
-                    onClick={() => chooseImageSource('gallery')}
-                  >
-                    <span className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg bg-leaf-50 text-leaf-700">
-                      <ImagePlus className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block font-bold text-stone-950">{t('uploadFromGallery')}</span>
-                      <span className="mt-0.5 block font-medium text-stone-500 sm:mt-1">{t('chooseExistingPhoto')}</span>
-                    </span>
-                  </button>
-                  <button
-                    className="flex min-h-16 sm:min-h-20 items-center gap-2 sm:gap-3 rounded-lg border border-stone-200 bg-white p-2 sm:p-4 text-left text-xs sm:text-sm transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
-                    type="button"
-                    onClick={() => chooseImageSource('camera')}
-                  >
-                    <span className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-700">
-                      <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block font-bold text-stone-950">{t('useCamera')}</span>
-                      <span className="mt-0.5 block font-medium text-stone-500 sm:mt-1">{t('takeNewPhoto')}</span>
-                    </span>
-                  </button>
-                </div>
-              )}
-
-              {imageFile && (
-                <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3 sm:mt-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-bold text-stone-900 sm:text-sm">{imageFile.name}</p>
-                    <p className="mt-1 text-xs text-stone-500">{formatFileSize(imageFile.size)}</p>
+                {imageFile && (
+                  <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3 sm:mt-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-stone-900 sm:text-sm">{imageFile.name}</p>
+                      <p className="mt-1 text-xs text-stone-500">{formatFileSize(imageFile.size)}</p>
+                    </div>
+                    <button className="btn-icon h-8 w-8 shrink-0 sm:h-9 sm:w-9" type="button" onClick={clearImage} aria-label={t('removePhoto')}>
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                  <button className="btn-icon h-8 w-8 shrink-0 sm:h-9 sm:w-9" type="button" onClick={clearImage} aria-label={t('removePhoto')}>
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
 
-          {error && <div className="mt-4 rounded-lg bg-red-50 p-3 text-xs font-medium text-red-700 sm:mt-5 sm:text-sm">{error}</div>}
+            {error && <div className="mt-4 rounded-lg bg-red-50 p-3 text-xs font-medium text-red-700 sm:mt-5 sm:text-sm">{error}</div>}
 
-          <button className="btn-primary mt-4 h-11 w-full text-sm font-bold sm:mt-6 sm:h-12 sm:text-base" disabled={!canSubmit || loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {loading ? t('analyzingCropImage') : t('analyzeCropImage')}
-          </button>
-        </form>
+            <button className="btn-primary mt-4 h-11 w-full text-sm font-bold sm:mt-6 sm:h-12 sm:text-base" disabled={!canSubmit || loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              {loading ? t('analyzingCropImage') : t('analyzeCropImage')}
+            </button>
+          </form>
+        </div>
 
-        <div className="space-y-6 lg:col-span-3">
+        <div className="lg:col-span-3">
           <ResultPanel
             panelRef={resultPanelRef}
             result={result}
@@ -3245,7 +3321,8 @@ export default function PlantDiseaseDetector() {
             t={t}
             onFeedbackApplied={handleFeedbackApplied}
           />
-
+        </div>
+        <div className="lg:col-span-5">
           <HistoryList history={history} onSelect={handleHistorySelect} t={t} />
         </div>
       </div>

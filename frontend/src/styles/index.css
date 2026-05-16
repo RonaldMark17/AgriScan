@@ -216,7 +216,6 @@ button {
 
 .surface {
   @apply border border-stone-200/90 bg-white;
-  max-width: 100%;
   box-shadow: var(--minimal-shadow);
 }
 
@@ -828,7 +827,8 @@ button {
     border-right: 0 !important;
   }
 
-  .notification-menu {
+  .notification-menu,
+  .profile-menu {
     left: 0.75rem !important;
     right: 0.75rem !important;
     width: auto !important;
@@ -1008,7 +1008,7 @@ button {
     transition-property: border-color, box-shadow, background-color;
   }
 
-  :where(.notification-menu, .auth-card) {
+  :where(.notification-menu, .profile-menu, .auth-card) {
     animation: menu-rise var(--motion-base) var(--motion-ease) both;
   }
 

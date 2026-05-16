@@ -33,13 +33,7 @@ def _clean(value: str | None) -> str | None:
 
 
 def _service_account_path() -> Path | None:
-    configured_path = _clean(settings.firebase_service_account_file)
-    if not configured_path:
-        return None
-    path = Path(configured_path)
-    if not path.is_absolute():
-        path = settings.backend_path / path
-    return path
+    return settings.firebase_service_account_path
 
 
 def _firebase_admin_app():

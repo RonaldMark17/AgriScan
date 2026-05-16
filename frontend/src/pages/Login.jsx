@@ -87,10 +87,14 @@ export default function Login() {
   }
 
   return (
-    <main className="auth-page grid place-items-center">
-      <div className="auth-card grid min-h-[calc(100svh-2.5rem)] w-full max-w-5xl overflow-hidden lg:min-h-[640px] lg:grid-cols-[minmax(0,1fr)_410px]">
+    <main className="grid h-[100dvh] overflow-hidden bg-[#f7f8f6] px-3 py-3 text-stone-950 sm:px-4 sm:py-4 place-items-center">
+      <div className="auth-card grid h-full max-h-full w-full max-w-5xl overflow-hidden lg:grid-cols-[minmax(0,1fr)_410px]">
         <section className="relative hidden overflow-hidden bg-leaf-950 lg:block">
-          <img src={loginHeroImage} alt="Farmer using AgriScan in a rice field" className="absolute inset-0 h-full w-full object-cover" />
+          <img
+            src={loginHeroImage}
+            alt="Farmer using AgriScan in a rice field"
+            className="absolute inset-0 h-full w-full object-cover object-[18%_center]"
+          />
           <div className="absolute inset-0 bg-stone-950/45" />
 
           <div className="relative flex h-full flex-col justify-between p-8 xl:p-10">
@@ -116,7 +120,7 @@ export default function Login() {
           </div>
         </section>
 
-        <section className="flex min-h-0 items-center justify-center overflow-y-auto bg-white px-5 py-6 sm:px-8 lg:px-10">
+        <section className="flex min-h-0 items-center justify-center overflow-hidden bg-white px-4 pb-4 pt-4 sm:px-6 sm:pb-5 sm:pt-5 lg:px-8 lg:pt-6">
           <div className="w-full max-w-[420px]">
             <div className="flex items-center justify-between gap-4">
               <Link to="/" className="flex min-w-0 items-center gap-3">
@@ -131,13 +135,13 @@ export default function Login() {
               <LanguageToggle />
             </div>
 
-            <form className="mt-8" onSubmit={handleSubmit}>
+            <form className="mt-6" onSubmit={handleSubmit}>
               <h2 className="text-2xl font-bold tracking-normal text-stone-950">{t('login')}</h2>
               <p className="mt-2 text-sm leading-6 text-stone-500">{t('loginSubtitle')}</p>
 
               {error && <div className="danger-message mt-4">{error}</div>}
 
-              <label className="mt-6 block text-sm font-semibold text-stone-700">{t('email')}</label>
+              <label className="mt-5 block text-sm font-semibold text-stone-700">{t('email')}</label>
               <div className="mt-2 flex h-14 items-center rounded-lg border border-stone-300 bg-white px-4 transition focus-within:border-leaf-600 focus-within:ring-2 focus-within:ring-leaf-100">
                 <Mail className="h-5 w-5 shrink-0 text-stone-400" />
                 <input
@@ -150,7 +154,7 @@ export default function Login() {
                 />
               </div>
 
-              <label className="mt-5 block text-sm font-semibold text-stone-700">{t('password')}</label>
+              <label className="mt-4 block text-sm font-semibold text-stone-700">{t('password')}</label>
               <div className="mt-2 flex h-14 items-center rounded-lg border border-stone-300 bg-white px-4 transition focus-within:border-leaf-600 focus-within:ring-2 focus-within:ring-leaf-100">
                 <LockKeyhole className="h-5 w-5 shrink-0 text-stone-400" />
                 <input
@@ -177,7 +181,7 @@ export default function Login() {
                 </Link>
               </div>
 
-              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-stone-200 bg-white p-3 transition hover:bg-stone-50">
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-stone-200 bg-white p-3 transition hover:bg-stone-50">
                 <input
                   className="mt-1 h-4 w-4 shrink-0 accent-leaf-700"
                   type="checkbox"
@@ -190,17 +194,17 @@ export default function Login() {
                 </span>
               </label>
 
-              <button className="btn-primary mt-6 h-12 w-full text-base" disabled={loading}>
+              <button className="btn-primary mt-5 h-12 w-full text-base" disabled={loading}>
                 {loading ? t('signingIn') : t('accessDashboard')}
                 <ArrowRight className="h-4 w-4" />
               </button>
 
-              <div className="mt-5 flex items-center justify-center gap-2 text-sm text-stone-500">
+              <div className="mt-4 flex items-center justify-center gap-2 text-sm text-stone-500">
                 <ShieldCheck className="h-4 w-4 text-leaf-600" />
                 {t('mfaAdminRequired')}
               </div>
 
-              <p className="mt-5 text-center text-sm text-stone-500">
+              <p className="mt-4 text-center text-sm text-stone-500">
                 {t('newToAgriScan')}{' '}
                 <Link className="font-semibold text-leaf-700 hover:text-leaf-900" to="/register">
                   {t('createAccount')}

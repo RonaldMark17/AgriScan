@@ -47,10 +47,9 @@ export default function SecuritySettings() {
   const mfaRequired = roleName === 'admin';
   const isAdmin = roleName === 'admin';
 
-  const pushServerConfigStatus = useCallback((missing) => {
-    const items = Array.isArray(missing) ? missing.filter(Boolean).join(', ') : '';
-    return items ? t('pushServerMissingConfig', { items }) : t('pushServerNotConfigured');
-  }, [t]);
+  const pushServerConfigStatus = useCallback(() => {
+    return isAdmin ? t('pushServerNeedsAdminSetup') : t('pushServerNeedsSetup');
+  }, [isAdmin, t]);
 
   const fetchDevices = useCallback(async () => {
     setHistoryLoading(true);
@@ -93,7 +92,7 @@ export default function SecuritySettings() {
       setPushServerReady(pushState.serverEnabled);
       if (!pushState.serverEnabled) {
         setPushEnabled(false);
-        setPushStatus(pushServerConfigStatus(pushState.serverMissing));
+        setPushStatus(pushServerConfigStatus());
       } else if (pushState.subscribed) {
         setPushEnabled(true);
         setPushStatus(t('pushAlreadyEnabled'));
@@ -195,7 +194,7 @@ export default function SecuritySettings() {
       setPushEnabled(false);
       if (error?.code === 'FIREBASE_PUSH_NOT_CONFIGURED') {
         setPushServerReady(false);
-        setPushStatus(pushServerConfigStatus(error.missing));
+        setPushStatus(pushServerConfigStatus());
       } else {
         setPushStatus(getApiErrorMessage(error, t('pushFailed')));
       }

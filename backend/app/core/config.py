@@ -126,6 +126,23 @@ class Settings(BaseSettings):
     def backend_path(self) -> Path:
         return BACKEND_ROOT
 
+    @property
+    def firebase_service_account_path(self) -> Path | None:
+        configured = (self.firebase_service_account_file or "").strip().strip('"').strip("'")
+        configured_path = None
+        if configured:
+            candidate = Path(configured)
+            configured_path = candidate if candidate.is_absolute() else self.backend_path / candidate
+            if configured_path.is_file():
+                return configured_path
+
+        for fallback_name in ("firebase-service-account.json", "firebase_service_account.json"):
+            fallback_path = self.backend_path / fallback_name
+            if fallback_path.is_file():
+                return fallback_path
+
+        return configured_path
+
 
 @lru_cache
 def get_settings() -> Settings:

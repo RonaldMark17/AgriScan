@@ -13,6 +13,13 @@ export function registerServiceWorker() {
         return;
       }
 
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+
       const registration = await navigator.serviceWorker.register('/sw.js');
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing;

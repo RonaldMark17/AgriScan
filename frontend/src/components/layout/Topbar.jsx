@@ -398,7 +398,7 @@ export default function Topbar() {
             </button>
 
             {profileOpen ? (
-              <div className="surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:left-auto sm:w-[min(90vw,280px)] lg:absolute lg:right-0 lg:top-[calc(100%+10px)]">
+              <div className="profile-menu surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-[min(92vw,320px)]">
                 <div className="rounded-lg bg-stone-50 px-3 py-3">
                   <p className="text-sm font-bold text-stone-950">{user?.full_name || 'AgriScan User'}</p>
                   <p className="mt-1 text-xs text-stone-500">{user?.email || ''}</p>
@@ -435,8 +435,8 @@ export default function Topbar() {
         </div>
       </header>
       {confirmLogoutOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4">
-          <div className="surface w-full max-w-md rounded-lg bg-white p-6">
+        <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-y-auto bg-stone-950/45 p-4 sm:items-center">
+          <div className="surface w-full max-w-md flex-none rounded-lg bg-white p-6">
             <h2 className="text-xl font-bold text-stone-950">{t('logoutConfirmTitle')}</h2>
             <p className="mt-3 text-sm leading-6 text-stone-600">{t('logoutConfirmBody')}</p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
