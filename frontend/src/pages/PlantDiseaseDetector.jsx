@@ -28,7 +28,6 @@ const TRANSPORT_IMAGE_MAX_DIMENSION = 1600;
 const CUSTOM_CROP_OPTION = '__other_crop__';
 const INVALID_CROP_IMAGE_MESSAGE =
   'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
-
 class CropTypeMismatchError extends Error {
   constructor(message) {
     super(message);
@@ -416,7 +415,6 @@ const offlineDiseaseGuide = {
     treatment: 'Retake a close, well-lit photo of one affected leaf or fruit, select the crop type, and confirm with a local agriculture officer before treatment.',
   },
 };
-
 const correctionConditionsByCrop = {
   rice: [
     'Healthy crop',
@@ -2335,25 +2333,23 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
   }
 
   return (
-    <section ref={panelRef} className="scroll-mt-panel">
-      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_320px]">
-        
-        {/* Left Column: Text & Stats */}
-        <div className="flex min-w-0 flex-col">
+    <section ref={panelRef} className="surface scroll-mt-panel overflow-hidden rounded-lg">
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="p-5 sm:p-7">
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold sm:px-4 ${!result ? 'bg-leaf-50 text-leaf-700' : statusClass}`}>
+            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold sm:px-4 ${statusClass}`}>
               <FlaskConical className="h-4 w-4" />
-              {!result ? t('diseaseAnalysis', 'Disease Analysis') : needsReview ? t('reviewNeeded') : t('analysisReady')}
+              {needsReview ? t('reviewNeeded') : t('analysisReady')}
             </span>
-            {cropLabel !== '--' && result && (
-              <span className="rounded-full bg-stone-100 px-3 py-1.5 text-sm font-bold text-stone-700 sm:px-4">
+            {cropLabel !== '--' && (
+              <span className="rounded-full bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700 sm:px-4">
                 {translatedCropLabel}
               </span>
             )}
           </div>
 
           <h2 className="mt-5 break-words text-2xl font-bold text-stone-950 sm:text-3xl">
-            {result?.disease_name ? translateDiseaseName(result.disease_name, t) : t('readyForDiseaseAnalysis', 'Ready for analysis')}
+            {result?.disease_name ? translateDiseaseName(result.disease_name, t) : t('readyForDiseaseAnalysis')}
           </h2>
           {!result ? (
             <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
@@ -2362,7 +2358,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           ) : null}
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <article className="rounded-lg border border-stone-200 bg-white p-4">
+            <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('detectedCrop')}</p>
               <p className="mt-2 text-lg font-bold text-stone-950">{translatedCropLabel}</p>
               <p className="mt-1 text-sm text-stone-500">
@@ -2371,7 +2367,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
             </article>
             <article className={`rounded-lg border p-4 ${confidenceClass}`}>
               <p className={`text-xs font-bold uppercase tracking-wide ${confidenceLabelClass}`}>{needsReview ? t('scanCertainty') : t('confidence')}</p>
-              <p className={`mt-2 text-3xl font-bold ${confidenceTextClass}`}>{result ? confidence + '%' : '--%'}</p>
+              <p className={`mt-2 text-3xl font-bold ${confidenceTextClass}`}>{confidence || '--'}%</p>
               <div className="mt-3 h-2 rounded-full bg-stone-100">
                 <div className={`h-2 rounded-full ${confidenceBarClass}`} style={{ width: result ? `${confidence}%` : '0%' }} />
               </div>
@@ -2642,10 +2638,9 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           )}
         </div>
 
-        {/* Right Column: Preview Image */}
-        <div className="flex flex-col">
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-stone-500">{t('cropOrLeafPhoto', 'Crop or leaf photo')}</p>
-          <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+        <div className="surface rounded-lg p-4 sm:p-5 lg:border-0 lg:bg-transparent lg:p-0">
+          <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('previewAndAnalysis')}</p>
+          <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
             {displayPreviewUrl ? (
               <div className="relative w-full overflow-hidden bg-stone-950" style={{ paddingBottom: '66.666%' }}>
                 <img src={displayPreviewUrl} alt={t('uploadCropImage')} className="absolute inset-0 h-full w-full object-cover" />
@@ -2695,7 +2690,6 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
             </div>
           )}
         </div>
-
       </div>
     </section>
   );
@@ -3115,9 +3109,7 @@ export default function PlantDiseaseDetector() {
       </header>
 
       <div className="grid gap-6 lg:grid-cols-5 lg:gap-8 xl:gap-10">
-        
-        {/* Fixed to be standard static positioning layout without sticky class */}
-        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 lg:col-span-2 lg:self-start lg:h-fit">
+        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 lg:col-span-2 lg:sticky lg:top-6 lg:self-start lg:h-fit">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('uploadCropImage')}</h2>
