@@ -155,6 +155,9 @@ def print_report(report: dict[str, Any]) -> None:
         print(f"Model: {crop['algorithm']}")
     print(f"Accuracy: {percent(crop['accuracy'])}")
     print(f"Macro F1: {percent(crop['f1_score'])}")
+    # Note: The detailed Precision/Recall/F1 components (TP/FP/FN) are not stored in metadata,
+    # so we only display the aggregated F1 / accuracy metrics available in the saved files.
+
     print(f"Top-3 accuracy: {percent(crop['top_3_accuracy'])}")
     print(f"Samples: {crop['train_samples'] or 'not available'} train, {crop['test_samples'] or 'not available'} test")
     print(f"Classes: {crop['class_count']} ({compact_classes(crop['classes'])})")
@@ -167,6 +170,19 @@ def print_report(report: dict[str, Any]) -> None:
         print(f"Dataset URL: {crop['dataset_source_url']}")
     if crop.get("dataset_note"):
         print(f"Note: {crop['dataset_note']}")
+
+    print()
+    print("Dataset References (Sources used during training)")
+    print("------------------------------------------------")
+    if crop.get("training_source") and crop.get("dataset_source_url"):
+        print(f"- {crop['training_source']} -> {crop['dataset_source_url']}")
+    elif crop.get("training_source"):
+        print(f"- {crop['training_source']}")
+    elif crop.get("dataset_source_url"):
+        print(f"- {crop['dataset_source_url']}")
+    else:
+        print("- not available")
+
 
 
 def main() -> None:
