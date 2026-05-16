@@ -638,13 +638,13 @@ function ResultPanel({ result, t }) {
   const warnings = result?.soil_warnings || [];
 
   return (
-    <section className="surface overflow-hidden rounded-lg">
+    <section className="surface overflow-hidden rounded-lg w-full">
       <div className="flex flex-col gap-5 border-b border-stone-100 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-4">
+        <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
             {result ? <CheckCircle2 className="h-6 w-6" /> : <Sprout className="h-6 w-6" />}
           </div>
-          <div>
+          <div className="flex-1 w-full">
             <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('bestCropForSoil')}</p>
             <h2 className="mt-1 text-2xl font-bold text-stone-950 sm:text-3xl">
               {result?.best_crop || t('readyToRecommend')}
@@ -654,7 +654,7 @@ function ResultPanel({ result, t }) {
             </p>
           </div>
         </div>
-        <div className="shrink-0 rounded-lg border border-leaf-100 bg-leaf-50 px-5 py-3 text-center">
+        <div className="shrink-0 rounded-lg border border-leaf-100 bg-leaf-50 px-5 py-3 text-center sm:w-auto w-full">
           <p className="text-3xl font-bold text-leaf-800">{confidence || '--'}%</p>
           <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">{t('suitability')}</p>
         </div>
@@ -671,16 +671,16 @@ function ResultPanel({ result, t }) {
 
       <div className="p-5">
         <h3 className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('topMatches')}</h3>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
           {topRecommendations.length > 0 ? (
             topRecommendations.slice(0, 3).map((item) => (
               <article key={item.crop} className="rounded-lg border border-stone-200 bg-white p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-bold text-stone-950">{item.crop}</p>
-                    <TranslatedText as="p" className="mt-1 text-sm leading-6 text-stone-600" text={item.planting_window} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-lg font-bold text-stone-950 truncate">{item.crop}</p>
+                    <TranslatedText as="p" className="mt-1 text-sm leading-6 text-stone-600 line-clamp-2" text={item.planting_window} />
                   </div>
-                  <span className="rounded-full bg-leaf-50 px-3 py-1 text-xs font-bold text-leaf-700">
+                  <span className="rounded-full bg-leaf-50 px-3 py-1 text-xs font-bold text-leaf-700 shrink-0">
                     {item.suitability}%
                   </span>
                 </div>
@@ -701,12 +701,12 @@ function SoilActions({ result, t }) {
   const actions = result?.soil_actions || [t('runSoilScanActions')];
 
   return (
-    <section className="rounded-lg border border-leaf-100 bg-leaf-50 p-5">
-      <div className="flex items-start gap-4">
+    <section className="rounded-lg border border-leaf-100 bg-leaf-50 p-4 sm:p-5 w-full mt-6">
+      <div className="flex flex-col sm:flex-row items-start gap-4">
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-white text-leaf-700">
           <CalendarClock className="h-6 w-6" />
         </div>
-        <div>
+        <div className="flex-1 w-full">
           <h2 className="text-xl font-bold text-leaf-950">{t('nextSoilActions')}</h2>
           <ul className="mt-3 space-y-2 text-sm leading-6 text-leaf-900">
             {actions.map((action) => (
@@ -727,7 +727,7 @@ function HistoryList({ history, onSelect, t }) {
   const displayedHistory = showAll ? history : history.slice(0, 6);
 
   return (
-    <section>
+    <section className="mt-8 w-full">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-stone-950">{t('recentSoilScans')}</h2>
@@ -736,7 +736,7 @@ function HistoryList({ history, onSelect, t }) {
         <div className="flex flex-wrap items-center gap-2">
           {history.length >= 6 && (
             <button
-              className="btn-secondary h-10 px-4 text-sm"
+              className="btn-secondary h-10 px-4 text-sm w-full sm:w-auto flex-1 sm:flex-none justify-center"
               onClick={() => setShowAll((current) => !current)}
               type="button"
             >
@@ -744,27 +744,27 @@ function HistoryList({ history, onSelect, t }) {
               {showAll ? t('showLess') : t('showAll')}
             </button>
           )}
-          <span className="w-fit rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-700">
+          <span className="w-fit rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-700 text-center">
             {history.length} {t('total')}
           </span>
         </div>
       </div>
 
-      <div className="history-grid">
+      <div className="history-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
         {displayedHistory.map((scan) => (
           <button
             key={scan.id}
-            className="surface min-h-[132px] rounded-lg p-4 text-left transition hover:border-leaf-200 hover:bg-leaf-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300"
+            className="surface min-h-[132px] rounded-lg p-4 text-left transition hover:border-leaf-200 hover:bg-leaf-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 w-full"
             onClick={() => onSelect(scan)}
             type="button"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-400">{scan.soil_type}</p>
-                <h3 className="mt-2 break-words text-lg font-bold text-stone-950">{scan.best_crop}</h3>
-                <p className="mt-1 text-sm text-stone-500">{new Date(scan.created_at).toLocaleString()}</p>
+            <div className="flex items-start justify-between gap-3 w-full">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold uppercase tracking-wide text-stone-400 truncate">{scan.soil_type}</p>
+                <h3 className="mt-2 break-words text-lg font-bold text-stone-950 line-clamp-1">{scan.best_crop}</h3>
+                <p className="mt-1 text-sm text-stone-500 truncate">{new Date(scan.created_at).toLocaleString()}</p>
                 {(scan.location?.label || scan.province) && (
-                  <p className="mt-1 text-xs font-semibold text-stone-500">{scan.location?.label || scan.province}</p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500 truncate">{scan.location?.label || scan.province}</p>
                 )}
               </div>
               <span className="shrink-0 rounded-full bg-leaf-50 px-3 py-1 text-xs font-bold text-leaf-700">
@@ -775,7 +775,7 @@ function HistoryList({ history, onSelect, t }) {
         ))}
 
         {history.length === 0 && (
-          <div className="surface rounded-lg border-dashed p-6 text-center md:col-span-2">
+          <div className="surface rounded-lg border-dashed p-6 text-center sm:col-span-2 lg:col-span-3 w-full">
             <ClipboardList className="mx-auto h-8 w-8 text-stone-400" />
             <p className="mt-3 text-sm font-semibold text-stone-500">{t('noSoilScans')}</p>
           </div>
@@ -787,14 +787,14 @@ function HistoryList({ history, onSelect, t }) {
 
 function NutrientControl({ label, value, onChange, t }) {
   return (
-    <div className="nutrient-control">
-      <p className="nutrient-label">{label}</p>
-      <div className="nutrient-segmented" role="group" aria-label={label}>
+    <div className="nutrient-control mb-4 w-full">
+      <p className="nutrient-label text-sm font-bold text-stone-700 mb-2">{label}</p>
+      <div className="nutrient-segmented flex flex-col sm:flex-row w-full rounded-lg border border-stone-200 overflow-hidden" role="group" aria-label={label}>
         {nutrientLevels.map(([level, text]) => (
           <button
             key={level}
-            className={`nutrient-option ${
-              value === level ? 'nutrient-option-active' : 'nutrient-option-idle'
+            className={`nutrient-option flex-1 px-3 py-2.5 text-sm font-semibold text-center transition-colors border-b sm:border-b-0 sm:border-r last:border-0 border-stone-200 ${
+              value === level ? 'nutrient-option-active bg-leaf-50 text-leaf-800' : 'nutrient-option-idle bg-white text-stone-600 hover:bg-stone-50'
             }`}
             onClick={() => onChange(level)}
             type="button"
@@ -814,14 +814,16 @@ function FieldHelp({ children }) {
 
 function ManualFormSection({ title, body, children, className = '' }) {
   return (
-    <section className={`manual-field-section ${className}`}>
+    <section className={`manual-field-section space-y-4 mb-6 w-full ${className}`}>
       {(title || body) && (
-        <div className="manual-section-heading">
-          {title && <h3>{title}</h3>}
-          {body && <p>{body}</p>}
+        <div className="manual-section-heading mb-4">
+          {title && <h3 className="text-base sm:text-lg font-bold text-stone-900">{title}</h3>}
+          {body && <p className="mt-1 text-sm text-stone-500">{body}</p>}
         </div>
       )}
-      {children}
+      <div className="space-y-4">
+        {children}
+      </div>
     </section>
   );
 }
@@ -836,31 +838,31 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
   if (!crop) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4 sm:p-6" onClick={onClose}>
       <div
-        className="surface max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-lg bg-white"
+        className="surface max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl flex flex-col"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="crop-guide-title"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-5 sm:p-6">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">{t('cropGuide')}</p>
-            <h2 id="crop-guide-title" className="mt-1 text-2xl font-bold text-stone-950">{crop.name}</h2>
-            <p className="mt-2 text-sm text-stone-500">{translatedCategory(crop.variety, t)} | <TranslatedText text={crop.window} /></p>
+        <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-4 sm:p-6 shrink-0">
+          <div className="min-w-0">
+            <p className="text-xs sm:text-sm font-bold uppercase tracking-wide text-leaf-700">{t('cropGuide')}</p>
+            <h2 id="crop-guide-title" className="mt-1 text-xl sm:text-2xl font-bold text-stone-950 truncate">{crop.name}</h2>
+            <p className="mt-1 text-xs sm:text-sm text-stone-500 truncate">{translatedCategory(crop.variety, t)} | <TranslatedText text={crop.window} /></p>
           </div>
-          <button className="btn-icon shrink-0" type="button" onClick={onClose} aria-label={t('closeCropGuide')}>
+          <button className="btn-icon shrink-0 p-2 hover:bg-stone-100 rounded-full" type="button" onClick={onClose} aria-label={t('closeCropGuide')}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="max-h-[calc(85vh-110px)] overflow-y-auto p-5 sm:p-6">
+        <div className="overflow-y-auto p-4 sm:p-6 flex-1 w-full">
           <div className="rounded-lg bg-leaf-50/70 p-4">
             <TranslatedText as="p" className="text-sm leading-7 text-stone-700" text={crop.guide} />
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="mt-5 grid gap-4 grid-cols-1 md:grid-cols-2">
             <div className="rounded-lg border border-stone-200 p-4">
               <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('watering')}</p>
               <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={crop.watering} />
@@ -882,7 +884,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
               <div className="mt-3 space-y-2">
                 {crop.scoreBreakdown.map((item, index) => (
                   <div key={`${item.label}-${index}`} className="flex items-start justify-between gap-4 rounded-lg bg-stone-50 px-3 py-2">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-stone-900">{item.label}</p>
                       {item.detail && <TranslatedText as="p" className="mt-0.5 text-xs leading-5 text-stone-500" text={item.detail} />}
                     </div>
@@ -898,7 +900,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
           {crop.riskFlags?.length > 0 && (
             <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm font-bold uppercase tracking-wide text-amber-800">{t('riskFlags')}</p>
-              <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-900">
+              <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-900 list-disc pl-4">
                 {crop.riskFlags.map((flag) => <li key={flag}><TranslatedText text={flag} /></li>)}
               </ul>
             </div>
@@ -906,21 +908,21 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
           <div className="mt-5 flex flex-wrap gap-2">
             {crop.tags.map((tag) => (
-              <span key={tag} className="rounded-full border border-leaf-100 bg-leaf-50 px-3 py-1 text-sm font-semibold text-leaf-800">
+              <span key={tag} className="rounded-full border border-leaf-100 bg-leaf-50 px-3 py-1 text-xs sm:text-sm font-semibold text-leaf-800">
                 {translatedTag(tag, t)}
               </span>
             ))}
           </div>
+        </div>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button className="btn-secondary" type="button" onClick={onPlayAudio}>
-              <Play className="h-4 w-4" />
-              {t('playAudioGuide')}
-            </button>
-            <button className="btn-primary" type="button" onClick={onClose}>
-              {t('closeCropGuide')}
-            </button>
-          </div>
+        <div className="mt-auto border-t border-stone-100 p-4 sm:p-6 flex flex-col gap-3 sm:flex-row sm:justify-end shrink-0 bg-stone-50">
+          <button className="btn-secondary w-full sm:w-auto justify-center" type="button" onClick={onPlayAudio}>
+            <Play className="h-4 w-4 mr-2" />
+            {t('playAudioGuide')}
+          </button>
+          <button className="btn-primary w-full sm:w-auto justify-center" type="button" onClick={onClose}>
+            {t('closeCropGuide')}
+          </button>
         </div>
       </div>
     </div>
@@ -929,33 +931,33 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
 function CropCard({ crop, onGuide, weatherSummary, t }) {
   return (
-    <article className="surface flex h-full flex-col overflow-hidden rounded-lg">
-      <div className="flex flex-1 flex-col p-4 sm:p-5">
-        <div className="flex flex-col gap-4 min-[440px]:flex-row min-[440px]:items-start min-[440px]:justify-between">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-600">
-              <Leaf className="h-6 w-6" />
+    <article className="surface flex h-full flex-col overflow-hidden rounded-lg border border-stone-200 w-full">
+      <div className="flex flex-1 flex-col p-4 sm:p-5 w-full">
+        <div className="flex flex-col gap-4 min-[440px]:flex-row min-[440px]:items-start min-[440px]:justify-between w-full">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4 flex-1">
+            <div className="grid h-10 w-10 sm:h-12 sm:w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-600">
+              <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
-            <div className="min-w-0">
-              <h2 className="break-words text-xl font-bold leading-tight text-stone-950">{crop.name}</h2>
-              <p className="mt-0.5 text-sm text-stone-500">{translatedCategory(crop.variety, t)}</p>
+            <div className="min-w-0 flex-1">
+              <h2 className="break-words text-lg sm:text-xl font-bold leading-tight text-stone-950 truncate">{crop.name}</h2>
+              <p className="mt-0.5 text-xs sm:text-sm text-stone-500 truncate">{translatedCategory(crop.variety, t)}</p>
             </div>
           </div>
-          <div className="text-left min-[440px]:text-right">
-            <p className="text-3xl font-bold leading-none text-leaf-600">{crop.score}%</p>
-            <p className="mt-1 text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
+          <div className="text-left min-[440px]:text-right shrink-0">
+            <p className="text-2xl sm:text-3xl font-bold leading-none text-leaf-600">{crop.score}%</p>
+            <p className="mt-1 text-[10px] sm:text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
           </div>
         </div>
 
-        <div className="mt-6 h-2 rounded-full bg-leaf-50">
+        <div className="mt-5 sm:mt-6 h-2 rounded-full bg-leaf-50 w-full">
           <div className="h-2 rounded-full bg-leaf-500" style={{ width: `${crop.score}%` }} />
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-4 sm:mt-5 flex flex-wrap gap-2 w-full">
           {crop.tags.map((tag, index) => (
             <span
               key={tag}
-              className={`rounded-full px-3 py-1 text-sm font-semibold ${
+              className={`rounded-full px-2.5 sm:px-3 py-1 text-xs sm:text-sm font-semibold ${
                 index === 0 ? 'bg-leaf-50 text-leaf-800' : 'border border-stone-200 bg-white text-stone-600'
               }`}
             >
@@ -964,23 +966,23 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
           ))}
         </div>
 
-        <div className="my-5 border-t border-dashed border-stone-200" />
-        <div className="grid gap-2 text-sm font-semibold text-stone-600 min-[460px]:grid-cols-[120px_minmax(0,1fr)]">
-          <span className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4" /> {t('plantingWindow')}</span>
+        <div className="my-4 sm:my-5 border-t border-dashed border-stone-200 w-full" />
+        <div className="grid gap-2 text-xs sm:text-sm font-semibold text-stone-600 grid-cols-1 min-[460px]:grid-cols-[120px_minmax(0,1fr)] w-full">
+          <span className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4 shrink-0" /> {t('plantingWindow')}</span>
           <TranslatedText as="span" className="min-w-0 break-words min-[460px]:text-right" text={crop.window} />
         </div>
 
-        <div className="mt-5 rounded-lg bg-leaf-50/60 p-4">
-          <TranslatedText as="p" className="text-sm leading-6 text-stone-700" text={crop.guide} />
+        <div className="mt-4 sm:mt-5 rounded-lg bg-leaf-50/60 p-3 sm:p-4 w-full">
+          <TranslatedText as="p" className="text-xs sm:text-sm leading-6 text-stone-700 line-clamp-3 sm:line-clamp-none" text={crop.guide} />
         </div>
       </div>
 
-      <footer className="flex flex-col gap-3 border-t border-stone-100 px-4 py-4 text-sm min-[460px]:flex-row min-[460px]:items-center min-[460px]:justify-between sm:px-5">
-        <span className="inline-flex min-w-0 items-center gap-2 text-stone-500">
+      <footer className="flex flex-col gap-3 border-t border-stone-100 px-4 py-3 sm:py-4 text-xs sm:text-sm min-[460px]:flex-row min-[460px]:items-center min-[460px]:justify-between sm:px-5 w-full bg-stone-50/50">
+        <span className="inline-flex min-w-0 items-center gap-2 text-stone-500 flex-1">
           <Droplets className="h-4 w-4 shrink-0" />
-          {weatherSummary ? <TranslatedText text={weatherSummary} /> : t('waitingLiveWeather')}
+          <span className="truncate">{weatherSummary ? <TranslatedText text={weatherSummary} /> : t('waitingLiveWeather')}</span>
         </span>
-        <button className="inline-flex shrink-0 items-center gap-2 font-bold text-leaf-700" onClick={() => onGuide(crop)} type="button">
+        <button className="inline-flex shrink-0 items-center gap-2 font-bold text-leaf-700 hover:text-leaf-800 justify-center w-full min-[460px]:w-auto" onClick={() => onGuide(crop)} type="button">
           {t('viewGuide')} <ArrowRight className="h-4 w-4" />
         </button>
       </footer>
@@ -993,33 +995,33 @@ function RecommendationFeedback({ result, status, onFeedback, t }) {
   const disabled = !result.prediction_id || result.offline;
 
   return (
-    <section className="surface rounded-lg p-4 sm:p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">{t('recommendationFeedback')}</p>
-          <h2 className="mt-1 text-xl font-bold text-stone-950">{t('didRecommendationHelp')}</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-500">
+    <section className="surface rounded-lg p-4 sm:p-5 w-full mt-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs sm:text-sm font-bold uppercase tracking-wide text-leaf-700">{t('recommendationFeedback')}</p>
+          <h2 className="mt-1 text-lg sm:text-xl font-bold text-stone-950">{t('didRecommendationHelp')}</h2>
+          <p className="mt-1 text-xs sm:text-sm leading-6 text-stone-500">
             {disabled ? t('feedbackNeedsSavedPrediction') : t('feedbackImprovesRecommendations')}
           </p>
           {status && <p className="mt-2 text-sm font-semibold text-leaf-700">{status}</p>}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row w-full lg:w-auto shrink-0">
           <button
-            className="btn-secondary h-10 px-4 text-sm"
+            className="btn-secondary h-10 px-4 text-sm w-full sm:w-auto justify-center"
             disabled={disabled}
             onClick={() => onFeedback('good')}
             type="button"
           >
-            <ThumbsUp className="h-4 w-4" />
+            <ThumbsUp className="h-4 w-4 mr-2" />
             {t('workedWell')}
           </button>
           <button
-            className="btn-secondary h-10 px-4 text-sm"
+            className="btn-secondary h-10 px-4 text-sm w-full sm:w-auto justify-center"
             disabled={disabled}
             onClick={() => onFeedback('poor')}
             type="button"
           >
-            <ThumbsDown className="h-4 w-4" />
+            <ThumbsDown className="h-4 w-4 mr-2" />
             {t('poorFit')}
           </button>
         </div>
@@ -1332,7 +1334,7 @@ export default function Scan() {
     : t('basedOnLatestSoilScan');
 
   return (
-    <div className="page-stack">
+    <div className="page-stack flex flex-col gap-6 sm:gap-8 w-full">
       <CropGuideModal
         crop={selectedCrop}
         weatherSummary={result?.weather_summary}
@@ -1341,54 +1343,54 @@ export default function Scan() {
         t={t}
       />
 
-      <header className="manual-scan-header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div className="min-w-0">
+      <header className="manual-scan-header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 w-full">
+        <div className="min-w-0 flex-1">
           <p className="eyebrow">{t('manualSoilScan')}</p>
-          <h1 className="mt-1 break-words text-[1.35rem] font-bold leading-tight tracking-normal text-stone-950 sm:text-3xl">
+          <h1 className="mt-1 break-words text-2xl font-bold leading-tight tracking-normal text-stone-950 sm:text-3xl">
             {t('manualScanRecommendationsTitle')}
           </h1>
-          <p className="mt-2 max-w-2xl text-[13px] leading-5 text-stone-600 sm:text-sm sm:leading-6">
+          <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-600 sm:text-base sm:leading-6">
             {t('manualScanRecommendationsBody')}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto shrink-0 mt-2 sm:mt-0">
           <span className="status-pill border border-stone-200 bg-white text-stone-700">{form.soil_type}</span>
           <span className="status-pill bg-leaf-50 text-leaf-800">{result?.best_crop || t('ready')}</span>
         </div>
       </header>
 
-      <div className="split-layout">
-        <form onSubmit={submit} className="manual-scan-form surface overflow-hidden rounded-lg xl:sticky sticky-panel xl:self-start">
-          <div className="manual-scan-form-title">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="manual-scan-form-icon">
+      <div className="split-layout flex flex-col xl:flex-row gap-6 lg:gap-8 w-full items-start">
+        <form onSubmit={submit} className="manual-scan-form surface flex flex-col overflow-hidden rounded-lg xl:sticky sticky-panel xl:top-6 xl:self-start w-full xl:w-[420px] shrink-0 border border-stone-200">
+          <div className="manual-scan-form-title flex items-start justify-between p-4 sm:p-5 border-b border-stone-100 bg-stone-50/50">
+            <div className="flex min-w-0 items-start gap-3 flex-1">
+              <span className="manual-scan-form-icon grid place-items-center h-10 w-10 shrink-0 bg-white border border-stone-200 rounded-lg text-stone-600">
                 <FlaskConical className="h-5 w-5" />
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1 pt-0.5">
                 <h2 className="text-lg font-bold leading-tight text-stone-950 sm:text-xl">{t('soilDetails')}</h2>
-                <p className="mt-1 text-sm leading-5 text-stone-500">{t('soilDetailsBody')}</p>
+                <p className="mt-1 text-xs sm:text-sm leading-5 text-stone-500">{t('soilDetailsBody')}</p>
               </div>
             </div>
-            <button className="btn-icon" type="button" onClick={resetForm} title={t('resetForm')}>
+            <button className="btn-icon shrink-0 p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-md transition-colors" type="button" onClick={resetForm} title={t('resetForm')}>
               <RotateCcw className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="manual-scan-form-body">
+          <div className="manual-scan-form-body p-4 sm:p-5 space-y-6">
             <ManualFormSection>
-            <label className="block">
+            <label className="block w-full">
               <span className="text-sm font-bold text-stone-700">{t('soilType')}</span>
-              <select className="field mt-2 h-12" value={form.soil_type} onChange={(event) => updateField('soil_type', event.target.value)}>
+              <select className="field mt-2 h-12 w-full bg-white border border-stone-300 rounded-lg px-3" value={form.soil_type} onChange={(event) => updateField('soil_type', event.target.value)}>
                 {soilOptions.map((soil) => <option key={soil}>{soil}</option>)}
               </select>
               <FieldHelp>{t('soilTypeHelp')}</FieldHelp>
             </label>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="block">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 w-full">
+              <label className="block w-full">
                 <span className="text-sm font-bold text-stone-700">{t('phLevel')}</span>
                 <input
-                  className="field mt-2 h-12"
+                  className="field mt-2 h-12 w-full bg-white border border-stone-300 rounded-lg px-3"
                   inputMode="decimal"
                   max={soilInputLimits.ph_level.max}
                   min={soilInputLimits.ph_level.min}
@@ -1400,10 +1402,10 @@ export default function Scan() {
                 />
                 <FieldHelp>{t('phHelp')}</FieldHelp>
               </label>
-              <label className="block">
+              <label className="block w-full">
                 <span className="text-sm font-bold text-stone-700">{t('moisturePercent')}</span>
                 <input
-                  className="field mt-2 h-12"
+                  className="field mt-2 h-12 w-full bg-white border border-stone-300 rounded-lg px-3"
                   inputMode="decimal"
                   max="100"
                   min={soilInputLimits.moisture_percent.min}
@@ -1415,10 +1417,10 @@ export default function Scan() {
                 />
                 <FieldHelp>{t('moistureHelp')}</FieldHelp>
               </label>
-              <label className="block">
+              <label className="block w-full">
                 <span className="text-sm font-bold text-stone-700">{t('soilTempShort')}</span>
                 <input
-                  className="field mt-2 h-12"
+                  className="field mt-2 h-12 w-full bg-white border border-stone-300 rounded-lg px-3"
                   inputMode="decimal"
                   max={soilInputLimits.soil_temperature_c.max}
                   min={soilInputLimits.soil_temperature_c.min}
@@ -1441,16 +1443,16 @@ export default function Scan() {
             <NutrientControl label={t('potassium')} value={form.potassium_level} onChange={(value) => updateField('potassium_level', value)} t={t} />
             <FieldHelp>{t('potassiumHelp')}</FieldHelp>
 
-            <section className="manual-lab-panel">
+            <section className="manual-lab-panel mt-6 pt-5 border-t border-stone-100 w-full">
               <div>
                 <p className="text-sm font-bold text-stone-900">{t('labNpkValues')}</p>
                 <FieldHelp>{t('labNpkHelp')}</FieldHelp>
               </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <label className="block">
+              <div className="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-3 w-full">
+                <label className="block w-full">
                   <span className="text-xs font-bold uppercase tracking-wide text-stone-500">N ppm</span>
                   <input
-                    className="field mt-1 h-11 bg-white"
+                    className="field mt-1 h-11 w-full bg-white border border-stone-300 rounded-lg px-3"
                     inputMode="decimal"
                     min="0"
                     max="300"
@@ -1460,10 +1462,10 @@ export default function Scan() {
                     onChange={(event) => updateField('nitrogen_ppm', event.target.value)}
                   />
                 </label>
-                <label className="block">
+                <label className="block w-full">
                   <span className="text-xs font-bold uppercase tracking-wide text-stone-500">P ppm</span>
                   <input
-                    className="field mt-1 h-11 bg-white"
+                    className="field mt-1 h-11 w-full bg-white border border-stone-300 rounded-lg px-3"
                     inputMode="decimal"
                     min="0"
                     max="300"
@@ -1473,10 +1475,10 @@ export default function Scan() {
                     onChange={(event) => updateField('phosphorus_ppm', event.target.value)}
                   />
                 </label>
-                <label className="block">
+                <label className="block w-full">
                   <span className="text-xs font-bold uppercase tracking-wide text-stone-500">K ppm</span>
                   <input
-                    className="field mt-1 h-11 bg-white"
+                    className="field mt-1 h-11 w-full bg-white border border-stone-300 rounded-lg px-3"
                     inputMode="decimal"
                     min="0"
                     max="500"
@@ -1491,35 +1493,35 @@ export default function Scan() {
             </ManualFormSection>
 
             <ManualFormSection title={t('fieldNotes')}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 w-full">
+              <label className="block w-full">
                 <span className="text-sm font-bold text-stone-700">{t('drainage')}</span>
-                <select className="field mt-2 h-12" value={form.drainage} onChange={(event) => updateField('drainage', event.target.value)}>
+                <select className="field mt-2 h-12 w-full bg-white border border-stone-300 rounded-lg px-3" value={form.drainage} onChange={(event) => updateField('drainage', event.target.value)}>
                   {drainageOptions.map(([value, label]) => <option key={value} value={value}>{t(value) || label}</option>)}
                 </select>
                 <FieldHelp>{t('drainageHelp')}</FieldHelp>
               </label>
-              <label className="block">
+              <label className="block w-full">
                 <span className="text-sm font-bold text-stone-700">{t('sunlight')}</span>
-                <select className="field mt-2 h-12" value={form.sunlight} onChange={(event) => updateField('sunlight', event.target.value)}>
+                <select className="field mt-2 h-12 w-full bg-white border border-stone-300 rounded-lg px-3" value={form.sunlight} onChange={(event) => updateField('sunlight', event.target.value)}>
                   {sunlightOptions.map(([value, label]) => <option key={value} value={value}>{value === 'full sun' ? t('fullSun') : value === 'partial shade' ? t('partialShade') : label}</option>)}
                 </select>
                 <FieldHelp>{t('sunlightHelp')}</FieldHelp>
               </label>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 w-full">
+              <label className="block w-full">
                 <span className="text-sm font-bold text-stone-700">{t('season')}</span>
-                <select className="field mt-2 h-12" value={form.season} onChange={(event) => updateField('season', event.target.value)}>
+                <select className="field mt-2 h-12 w-full bg-white border border-stone-300 rounded-lg px-3" value={form.season} onChange={(event) => updateField('season', event.target.value)}>
                   {seasonOptions.map(([value, label]) => <option key={value} value={value}>{value === 'regular season' ? t('regular') : value === 'wet season' ? t('wetSeason') : value === 'dry season' ? t('drySeason') : label}</option>)}
                 </select>
                 <FieldHelp>{t('seasonHelp')}</FieldHelp>
               </label>
-              <label className="block">
+              <label className="block w-full">
                 <span className="text-sm font-bold text-stone-700">{t('province')}</span>
                 <input
-                  className="field mt-2 h-12"
+                  className="field mt-2 h-12 w-full bg-white border border-stone-300 rounded-lg px-3"
                   placeholder="e.g. Nueva Ecija"
                   value={form.province}
                   onChange={(event) => updateField('province', event.target.value)}
@@ -1528,19 +1530,19 @@ export default function Scan() {
               </label>
             </div>
 
-            <section className="manual-location-panel">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
+            <section className="manual-location-panel mt-6 pt-5 border-t border-stone-100 w-full">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between w-full">
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-stone-900">{t('currentLocation')}</p>
-                  <p className="mt-1 text-sm text-stone-600">
+                  <p className="mt-1 text-sm text-stone-600 truncate">
                     {locationState.label || result?.location?.label || t('currentGpsNotCaptured')}
                   </p>
-                  <p className="mt-1 text-xs text-stone-500">
+                  <p className="mt-1 text-xs text-stone-500 truncate">
                     {formatLocationMeta(locationState.coords || result?.location, t)}
                   </p>
                 </div>
-                <button className="btn-secondary h-10 px-4 text-sm" type="button" onClick={() => requestCurrentLocation()} disabled={locationState.locating}>
-                  {locationState.locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
+                <button className="btn-secondary h-10 px-4 text-sm w-full sm:w-auto shrink-0 justify-center" type="button" onClick={() => requestCurrentLocation()} disabled={locationState.locating}>
+                  {locationState.locating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Crosshair className="h-4 w-4 mr-2" />}
                   {locationState.locating ? t('locating') : t('useCurrentGps')}
                 </button>
               </div>
@@ -1549,32 +1551,32 @@ export default function Scan() {
             </ManualFormSection>
           </div>
 
-          <div className="manual-scan-submit">
+          <div className="manual-scan-submit mt-auto p-4 sm:p-5 bg-stone-50/50 border-t border-stone-100 space-y-4 w-full">
             {inputErrors.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800 w-full">
                 <p className="font-bold">{t('checkSoilReadings')}</p>
-                <ul className="mt-2 space-y-1">
+                <ul className="mt-2 space-y-1 list-disc pl-4">
                   {inputErrors.map((message) => <li key={message}>{message}</li>)}
                 </ul>
               </div>
             )}
 
-            {error && <div className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
+            {error && <div className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700 w-full">{error}</div>}
 
             {!online && !error && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900 w-full">
                 {t('cropRecommendationOfflineMode')}
               </div>
             )}
 
-            <button className="btn-primary h-12 w-full text-base" disabled={!canSubmit || loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sprout className="h-4 w-4" />}
+            <button className="btn-primary h-12 w-full text-base justify-center font-bold" disabled={!canSubmit || loading}>
+              {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Sprout className="h-5 w-5 mr-2" />}
               {loading ? t('checkingSoil') : t('recommendBestCrop')}
             </button>
           </div>
         </form>
 
-        <div className="space-y-6">
+        <div className="space-y-6 lg:space-y-8 flex-1 min-w-0 w-full">
           <ResultPanel result={result} t={t} />
           <RecommendationFeedback
             result={result}
@@ -1583,61 +1585,61 @@ export default function Scan() {
             t={t}
           />
 
-          <section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-wide text-sky-700">{t('locationAndWeather')}</p>
+          <section className="rounded-lg border border-sky-100 bg-sky-50 p-4 sm:p-5 w-full">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between w-full">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-bold uppercase tracking-wide text-sky-700">{t('locationAndWeather')}</p>
                 <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-stone-900">
-                  <MapPin className="h-4 w-4 text-sky-600" />
-                  <span>{locationLabel}</span>
+                  <MapPin className="h-4 w-4 text-sky-600 shrink-0" />
+                  <span className="truncate">{locationLabel}</span>
                 </div>
                 {result?.weather_summary ? (
-                  <TranslatedText as="p" className="mt-1 text-sm text-stone-600" text={result.weather_summary} />
+                  <TranslatedText as="p" className="mt-1 text-xs sm:text-sm text-stone-600 line-clamp-2" text={result.weather_summary} />
                 ) : (
-                  <p className="mt-1 text-sm text-stone-600">{t('currentLiveWeatherAfterSoil')}</p>
+                  <p className="mt-1 text-xs sm:text-sm text-stone-600">{t('currentLiveWeatherAfterSoil')}</p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-3">
-                <button className="btn-secondary h-10 w-full px-4 text-sm sm:w-auto" onClick={() => runRecommendation(buildPayload())} type="button" disabled={!canSubmit || loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 w-full lg:w-auto shrink-0">
+                <button className="btn-secondary h-10 w-full sm:w-auto px-4 text-sm justify-center" onClick={() => runRecommendation(buildPayload())} type="button" disabled={!canSubmit || loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Crosshair className="h-4 w-4 mr-2" />}
                   {loading ? t('refreshing') : t('refreshRecommendation')}
                 </button>
-                <button className="btn-secondary h-10 w-full px-4 text-sm sm:w-auto" onClick={cycleSortMode} type="button">
-                  <Filter className="h-4 w-4" />
+                <button className="btn-secondary h-10 w-full sm:w-auto px-4 text-sm justify-center" onClick={cycleSortMode} type="button">
+                  <Filter className="h-4 w-4 mr-2" />
                   {t('sort')}: {translatedSortMode(sortMode, t)}
                 </button>
               </div>
             </div>
           </section>
 
-          <section>
+          <section className="w-full">
             <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">{t('integratedRecommendations')}</p>
-                <h2 className="mt-1 text-2xl font-bold text-stone-950">{t('cropMatchesFromThisScan')}</h2>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-bold uppercase tracking-wide text-leaf-700">{t('integratedRecommendations')}</p>
+                <h2 className="mt-1 text-xl sm:text-2xl font-bold text-stone-950">{t('cropMatchesFromThisScan')}</h2>
                 <TranslatedText
                   as="p"
                   className="mt-2 text-sm leading-6 text-stone-600"
                   text={`${recommendationIntro}. ${result?.weather_summary ? `${result.weather_summary}.` : ''} ${t('usingLocation', { location: locationLabel })}`}
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-700">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full xl:w-auto shrink-0">
+                <span className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-700 text-center w-full sm:w-auto truncate">
                   {result?.best_crop ? t('bestMatch', { crop: result.best_crop }) : t('runSoilScanPersonalize')}
                 </span>
-                <button className="btn-secondary h-10 px-4 text-sm" onClick={() => playAudioGuide()} type="button">
-                  <Play className="h-4 w-4" />
+                <button className="btn-secondary h-10 px-4 text-sm w-full sm:w-auto justify-center" onClick={() => playAudioGuide()} type="button">
+                  <Play className="h-4 w-4 mr-2" />
                   {t('playAudioGuide')}
                 </button>
               </div>
             </div>
 
-            <div className="pill-strip mb-6">
+            <div className="pill-strip mb-6 flex overflow-x-auto gap-2 pb-2 w-full no-scrollbar snap-x">
               {categories.map((item) => (
                 <button
                   key={item}
-                  className={`shrink-0 rounded-full px-6 py-3 text-sm font-semibold ${
-                    activeCategory === item ? 'bg-leaf-600 text-white shadow-[0_8px_16px_rgba(22,163,74,0.18)]' : 'border border-stone-200 bg-white text-stone-600'
+                  className={`shrink-0 rounded-full px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold snap-start transition-all ${
+                    activeCategory === item ? 'bg-leaf-600 text-white shadow-[0_8px_16px_rgba(22,163,74,0.18)]' : 'border border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
                   }`}
                   onClick={() => setActiveCategory(item)}
                   type="button"
@@ -1648,38 +1650,38 @@ export default function Scan() {
             </div>
 
             {audioStatus && (
-              <div className="mb-4 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800">
+              <div className="mb-4 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800 w-full">
                 {audioStatus}
               </div>
             )}
 
             {result ? (
-              <div className="card-grid">
+              <div className="card-grid grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 w-full">
                 {visibleCrops.map((crop) => (
                   <CropCard key={crop.id} crop={crop} onGuide={setSelectedCrop} weatherSummary={result?.weather_summary} t={t} />
                 ))}
                 {visibleCrops.length === 0 && (
-                  <div className="surface rounded-lg p-8 text-center xl:col-span-2">
+                  <div className="surface rounded-lg p-8 text-center md:col-span-2 w-full">
                     <Leaf className="mx-auto h-10 w-10 text-stone-400" />
                     <p className="mt-3 font-bold text-stone-950">{t('noRecommendationsCategory')}</p>
-                    <button className="btn-secondary mt-4" type="button" onClick={() => setActiveCategory('All Crops')}>{t('showAllCrops')}</button>
+                    <button className="btn-secondary mt-4 mx-auto" type="button" onClick={() => setActiveCategory('All Crops')}>{t('showAllCrops')}</button>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="surface rounded-lg border border-dashed border-leaf-200 bg-white p-8 text-center sm:p-10">
-                <span className="mx-auto grid h-14 w-14 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
-                  <Sprout className="h-7 w-7" />
+              <div className="surface rounded-lg border border-dashed border-leaf-200 bg-white p-6 sm:p-10 text-center w-full">
+                <span className="mx-auto grid h-12 w-12 sm:h-14 sm:w-14 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
+                  <Sprout className="h-6 w-6 sm:h-7 sm:w-7" />
                 </span>
-                <p className="mt-4 text-lg font-bold text-stone-950">{t('recommendationsWillAppear')}</p>
-                <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-stone-500">{t('completeManualSoilScan')}</p>
+                <p className="mt-4 text-base sm:text-lg font-bold text-stone-950">{t('recommendationsWillAppear')}</p>
+                <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-stone-500 px-4">{t('completeManualSoilScan')}</p>
               </div>
             )}
           </section>
 
           <SoilActions result={result} t={t} />
 
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+          <section className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-5 w-full mt-6">
             {[
               [FlaskConical, t('soilType'), form.soil_type],
               [Gauge, 'pH', form.ph_level || '--'],
@@ -1687,10 +1689,12 @@ export default function Scan() {
               [Thermometer, t('soilTempShort'), form.soil_temperature_c ? `${form.soil_temperature_c}C` : '--'],
               [Sun, t('sunlight'), form.sunlight],
             ].map(([Icon, label, value]) => (
-              <article key={label} className="surface rounded-lg p-5">
-                <Icon className="h-5 w-5 text-leaf-600" />
-                <p className="mt-4 text-sm font-bold uppercase tracking-wide text-stone-500">{label}</p>
-                <p className="mt-1 text-xl font-bold capitalize text-stone-950">{value}</p>
+              <article key={label} className="surface rounded-lg p-4 sm:p-5 flex flex-col justify-between w-full h-full">
+                <Icon className="h-5 w-5 text-leaf-600 shrink-0" />
+                <div className="mt-3 sm:mt-4">
+                  <p className="text-xs sm:text-sm font-bold uppercase tracking-wide text-stone-500 truncate">{label}</p>
+                  <p className="mt-1 text-lg sm:text-xl font-bold capitalize text-stone-950 truncate">{value}</p>
+                </div>
               </article>
             ))}
           </section>

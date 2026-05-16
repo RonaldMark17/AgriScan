@@ -265,19 +265,19 @@ export default function SecuritySettings() {
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack w-full max-w-full overflow-hidden">
       <PageHeader
         eyebrow="Preferences"
         title={t('appSettings')}
         body={t('appSettingsBody')}
         actions={
-          <span className="status-pill border border-stone-200 bg-white text-stone-700">
+          <span className="status-pill border border-stone-200 bg-white text-stone-700 w-full sm:w-auto text-center truncate">
             {t('role')}: {roleName}
           </span>
         }
       />
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
         <StatusCard
           icon={ShieldCheck}
           label={t('security')}
@@ -302,16 +302,16 @@ export default function SecuritySettings() {
       </div>
 
       {settingsStatus ? (
-        <div className="success-message flex items-start gap-2">
+        <div className="success-message flex items-start gap-2 w-full bg-leaf-50 border border-leaf-100 text-leaf-800 p-3 rounded-lg">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{settingsStatus}</span>
+          <span className="text-sm font-medium">{settingsStatus}</span>
         </div>
       ) : null}
 
-      <div className="content-sidebar-layout">
-        <div className="space-y-5">
+      <div className="content-sidebar-layout flex flex-col lg:flex-row gap-6 w-full items-start">
+        <div className="space-y-5 flex-1 min-w-0 w-full">
           <SettingsSection icon={ShieldCheck} title={t('systemLanguage')} body={t('languageChoiceBody')}>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
               <LanguageButton
                 active={language === 'en'}
                 title={t('english')}
@@ -328,7 +328,7 @@ export default function SecuritySettings() {
           </SettingsSection>
 
           <SettingsSection icon={Mic} title={t('accessibility')}>
-            <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white">
+            <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white w-full">
               <SettingToggle
                 title={t('voiceAssistant')}
                 body={t('voiceAssistantBody')}
@@ -344,44 +344,44 @@ export default function SecuritySettings() {
             </div>
           </SettingsSection>
 
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-5 grid-cols-1 lg:grid-cols-2 w-full">
             <SettingsSection icon={ClipboardList} title={t('manualEntryDefaults')}>
-              <div className="rounded-lg border border-leaf-100 bg-leaf-50 p-4">
-                <div className="flex min-w-0 items-start gap-3">
+              <div className="rounded-lg border border-leaf-100 bg-leaf-50 p-4 w-full">
+                <div className="flex min-w-0 items-start gap-3 w-full">
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-leaf-700 ring-1 ring-leaf-100">
                     <ClipboardList className="h-4 w-4" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-bold text-stone-950">{t('soilRecommendationForm')}</p>
+                      <p className="font-bold text-stone-950 truncate">{t('soilRecommendationForm')}</p>
                       <StatusPill tone="leaf">{t('active')}</StatusPill>
                     </div>
-                    <p className="mt-1 text-sm leading-6 text-stone-600">{t('soilFormBody')}</p>
+                    <p className="mt-1 text-xs sm:text-sm leading-5 sm:leading-6 text-stone-600 line-clamp-2 sm:line-clamp-none">{t('soilFormBody')}</p>
                   </div>
                 </div>
               </div>
-              <Link className="btn-primary mt-4 w-full" to="/scan">
+              <Link className="btn-primary mt-4 w-full justify-center text-center inline-flex" to="/scan">
                 {t('openManualScan')}
               </Link>
             </SettingsSection>
 
             <SettingsSection icon={Cloud} title={t('dataCloud')}>
-              <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white">
+              <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white w-full">
                 <SettingToggle
                   title={t('autoSync')}
                   body={t('autoSyncBody')}
                   active={toggles.autoSync}
                   onToggle={toggleAutoSync}
                 />
-                <div className="flex flex-col gap-3 px-4 py-4 text-sm min-[460px]:flex-row min-[460px]:items-center min-[460px]:justify-between">
-                  <span className="leading-6 text-stone-500">{t('lastBackup', { time: syncStatus })}</span>
+                <div className="flex flex-col gap-3 px-4 py-4 text-sm sm:flex-row sm:items-center sm:justify-between w-full">
+                  <span className="leading-6 text-stone-500 truncate text-xs sm:text-sm">{t('lastBackup', { time: syncStatus })}</span>
                   <button
-                    className="focus-ring inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-sm font-bold text-leaf-700 transition hover:bg-leaf-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="focus-ring inline-flex w-full sm:w-auto min-h-9 items-center justify-center rounded-lg px-3 py-2 sm:py-0 text-sm font-bold text-leaf-700 transition hover:bg-leaf-50 disabled:cursor-not-allowed disabled:opacity-60 bg-leaf-50 sm:bg-transparent"
                     onClick={syncNow}
                     type="button"
                     disabled={!toggles.autoSync}
                   >
-                    <RefreshCw className="mr-2 h-4 w-4" />
+                    <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
                     {t('syncNow')}
                   </button>
                 </div>
@@ -407,22 +407,22 @@ export default function SecuritySettings() {
           ) : null}
         </div>
 
-        <aside className="space-y-5">
+        <aside className="space-y-5 w-full lg:w-[340px] xl:w-[380px] shrink-0">
           <SettingsSection icon={KeyRound} title={t('mfaTitle')} body={t('mfaBody')}>
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm">
-              <div className="flex flex-col gap-1">
-                <p className="min-w-0 break-words font-semibold text-stone-950">{user?.full_name || user?.email || 'AgriScan User'}</p>
-                <p className="text-stone-500">
+            <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm w-full">
+              <div className="flex flex-col gap-1 w-full">
+                <p className="min-w-0 break-words font-semibold text-stone-950 truncate">{user?.full_name || user?.email || 'AgriScan User'}</p>
+                <p className="text-stone-500 truncate">
                   {t('role')}: <span className="font-semibold text-stone-700">{roleName}</span>
                 </p>
               </div>
             </div>
 
-            <div className={`mt-3 rounded-lg border p-4 text-sm ${mfaEnabled ? 'border-leaf-100 bg-leaf-50' : 'border-amber-100 bg-amber-50'}`}>
-              <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between">
-                <div className="min-w-0">
+            <div className={`mt-4 rounded-lg border p-4 text-sm w-full ${mfaEnabled ? 'border-leaf-100 bg-leaf-50' : 'border-amber-100 bg-amber-50'}`}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between w-full">
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold text-stone-900">{t('authenticatorStatus')}</p>
-                  <p className="mt-1 text-stone-600">
+                  <p className="mt-1 text-stone-600 text-xs sm:text-sm">
                     {mfaEnabled
                       ? t('mfaAlreadySetupBody')
                       : mfaRequired
@@ -437,23 +437,23 @@ export default function SecuritySettings() {
             </div>
 
             {mfaEnabled ? (
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800">
-                <CheckCircle2 className="h-4 w-4" />
-                {t('multiFactorAlreadySetup')}
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-leaf-100 bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800 w-full">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span className="truncate">{t('multiFactorAlreadySetup')}</span>
               </div>
             ) : (
-              <Link className="btn-primary mt-4 w-full" to="/mfa/setup">
-                <KeyRound className="h-4 w-4" />
+              <Link className="btn-primary mt-4 w-full justify-center inline-flex" to="/mfa/setup">
+                <KeyRound className="h-4 w-4 mr-2 shrink-0" />
                 {t('setupAuthenticator')}
               </Link>
             )}
           </SettingsSection>
 
           <SettingsSection icon={BellRing} title={t('pushNotificationStatus')}>
-            <div className={`rounded-lg border p-4 text-sm ${pushEnabled ? 'border-leaf-100 bg-leaf-50' : 'border-stone-200 bg-stone-50'}`}>
-              <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between">
-                <div className="min-w-0">
-                  <p className="mt-1 text-stone-600">{pushChecking ? t('checkingPushStatus') : pushStatus}</p>
+            <div className={`rounded-lg border p-4 text-sm w-full ${pushEnabled ? 'border-leaf-100 bg-leaf-50' : 'border-stone-200 bg-stone-50'}`}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between w-full">
+                <div className="min-w-0 flex-1">
+                  <p className="mt-1 text-stone-600 text-xs sm:text-sm">{pushChecking ? t('checkingPushStatus') : pushStatus}</p>
                 </div>
                 <StatusPill tone={pushEnabled ? 'leaf' : 'stone'}>
                   {pushStatusLabel}
@@ -462,10 +462,10 @@ export default function SecuritySettings() {
             </div>
 
             {!pushEnabled ? (
-              <div className="mt-3">
-                <button className="btn-secondary w-full" onClick={enablePush} type="button" disabled={pushLoading || pushChecking || !pushServerReady}>
-                  <BellRing className="h-4 w-4" />
-                  {pushLoading ? t('enabling') : pushChecking ? `${t('checking')}...` : t('enablePush')}
+              <div className="mt-4 w-full">
+                <button className="btn-secondary w-full justify-center" onClick={enablePush} type="button" disabled={pushLoading || pushChecking || !pushServerReady}>
+                  <BellRing className="h-4 w-4 mr-2 shrink-0" />
+                  <span className="truncate">{pushLoading ? t('enabling') : pushChecking ? `${t('checking')}...` : t('enablePush')}</span>
                 </button>
               </div>
             ) : null}
@@ -475,49 +475,48 @@ export default function SecuritySettings() {
             icon={Smartphone}
             title={t('deviceLoginHistory')}
             actions={
-              <button className="btn-icon" type="button" onClick={fetchDevices} disabled={historyLoading} aria-label={t('refreshHistory')}>
+              <button className="btn-icon p-2 hover:bg-stone-100 rounded-lg transition-colors" type="button" onClick={fetchDevices} disabled={historyLoading} aria-label={t('refreshHistory')}>
                 <RefreshCw className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`} />
               </button>
             }
           >
-            <div className="space-y-3">
+            <div className="space-y-3 w-full">
               {recentDevices.map((device) => (
-                <div key={device.id} className="rounded-lg border border-stone-200 bg-white p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="min-w-0 break-words font-semibold text-stone-900">{getDeviceDisplayName(device)}</p>
-                    <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-bold ${device.success ? 'bg-leaf-50 text-leaf-700' : 'bg-red-50 text-red-700'}`}>
+                <div key={device.id} className="rounded-lg border border-stone-200 bg-white p-3 w-full">
+                  <div className="flex items-start justify-between gap-3 w-full">
+                    <p className="min-w-0 flex-1 break-words font-semibold text-stone-900 text-sm line-clamp-1">{getDeviceDisplayName(device)}</p>
+                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] sm:text-xs font-bold uppercase tracking-wider ${device.success ? 'bg-leaf-50 text-leaf-700' : 'bg-red-50 text-red-700'}`}>
                       {device.success ? t('success') : t('failed')}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-stone-500">{device.ip_address} - {new Date(device.created_at).toLocaleString()}</p>
+                  <p className="mt-1.5 text-xs text-stone-500 truncate">{device.ip_address} &bull; {new Date(device.created_at).toLocaleString()}</p>
                 </div>
               ))}
-              {recentDevices.length === 0 ? <p className="state-message">{t('noDeviceHistory')}</p> : null}
+              {recentDevices.length === 0 ? <p className="state-message text-center p-4">{t('noDeviceHistory')}</p> : null}
             </div>
           </SettingsSection>
         </aside>
       </div>
-
     </div>
   );
 }
 
 function SettingsSection({ icon: Icon, title, body, actions, children }) {
   return (
-    <section className="surface rounded-lg p-4 sm:p-5">
-      <div className="flex min-w-0 items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
+    <section className="surface rounded-lg p-4 sm:p-5 w-full">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 w-full">
+        <div className="flex min-w-0 items-start gap-3 flex-1">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
             <Icon className="h-5 w-5" />
           </div>
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-stone-950">{title}</h2>
-            {body ? <p className="mt-1 text-sm leading-6 text-stone-600">{body}</p> : null}
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold text-stone-950 truncate">{title}</h2>
+            {body ? <p className="mt-1 text-xs sm:text-sm leading-5 sm:leading-6 text-stone-600">{body}</p> : null}
           </div>
         </div>
-        {actions ? <div className="shrink-0">{actions}</div> : null}
+        {actions ? <div className="shrink-0 self-start sm:self-auto">{actions}</div> : null}
       </div>
-      {children ? <div className="mt-5">{children}</div> : null}
+      {children ? <div className="mt-5 w-full">{children}</div> : null}
     </section>
   );
 }
@@ -537,94 +536,94 @@ function ActivityLogPanel({
   visibleActivityLogs,
 }) {
   return (
-    <section className="surface rounded-lg p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
+    <section className="surface rounded-lg p-4 sm:p-5 w-full overflow-hidden">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between w-full">
+        <div className="flex min-w-0 items-start gap-3 flex-1">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
             <Clock3 className="h-5 w-5" />
           </div>
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-stone-950">{t('userActivityLog')}</h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">{t('userActivityEmptyBody')}</p>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold text-stone-950 truncate">{t('userActivityLog')}</h2>
+            <p className="mt-1 text-xs sm:text-sm leading-5 sm:leading-6 text-stone-600 truncate">{t('userActivityEmptyBody')}</p>
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <span className="status-pill border border-stone-200 bg-white text-stone-700">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 w-full sm:w-auto">
+          <span className="status-pill border border-stone-200 bg-white text-stone-700 flex-1 sm:flex-none text-center justify-center">
             {activityLogs.length} {t('total')}
           </span>
-          <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={fetchActivityLogs} disabled={activityLoading} type="button">
-            <RefreshCw className={`h-4 w-4 ${activityLoading ? 'animate-spin' : ''}`} />
+          <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs flex-1 sm:flex-none justify-center" onClick={fetchActivityLogs} disabled={activityLoading} type="button">
+            <RefreshCw className={`h-4 w-4 mr-2 shrink-0 ${activityLoading ? 'animate-spin' : ''}`} />
             {t('refresh')}
           </button>
         </div>
       </div>
 
       {activityLogs.length === 0 ? (
-        <div className="mt-4">
+        <div className="mt-5">
           <EmptyState title={t('noUserActivity')} body={t('userActivityEmptyBody')} />
         </div>
       ) : (
         <>
-          <div className="table-shell mt-4">
-            <table className="activity-table w-full table-fixed text-left text-sm">
-              <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase text-stone-500">
+          <div className="table-shell mt-5 w-full overflow-x-auto rounded-lg border border-stone-200">
+            <table className="activity-table w-full text-left text-sm min-w-[800px] table-fixed">
+              <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase tracking-wider text-stone-500">
                 <tr>
-                  <th className="w-[24%] px-4 py-3">{t('user')}</th>
-                  <th className="w-[24%] px-4 py-3">{t('activity')}</th>
-                  <th className="w-[18%] px-4 py-3">{t('resource')}</th>
-                  <th className="w-[14%] px-4 py-3">{t('ipAddress')}</th>
-                  <th className="w-[20%] px-4 py-3">{t('time')}</th>
+                  <th className="w-[24%] px-4 py-3 font-semibold">{t('user')}</th>
+                  <th className="w-[24%] px-4 py-3 font-semibold">{t('activity')}</th>
+                  <th className="w-[18%] px-4 py-3 font-semibold">{t('resource')}</th>
+                  <th className="w-[14%] px-4 py-3 font-semibold">{t('ipAddress')}</th>
+                  <th className="w-[20%] px-4 py-3 font-semibold">{t('time')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-stone-100 bg-white">
                 {visibleActivityLogs.map((log) => (
                   <tr key={log.id} className="transition hover:bg-stone-50/70">
                     <td className="px-4 py-3 align-top">
                       <p className="break-words font-semibold text-stone-900">{log.user_name || t('systemActivity')}</p>
-                      <p className="break-all text-xs text-stone-500">{log.user_email || '-'}</p>
+                      <p className="break-all text-xs text-stone-500 mt-0.5">{log.user_email || '-'}</p>
                       {log.user_role ? (
-                        <span className="mt-2 inline-flex rounded-full bg-stone-100 px-2 py-1 text-[11px] font-bold text-stone-600">
+                        <span className="mt-2 inline-flex rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase text-stone-600">
                           {log.user_role}
                         </span>
                       ) : null}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <p className="break-words font-semibold text-stone-900">{formatActivityAction(log.action)}</p>
-                      <p className="mt-1 break-all text-xs text-stone-500">{log.action}</p>
+                      <p className="mt-1 break-all text-xs text-stone-500 font-mono bg-stone-50 px-1.5 py-0.5 rounded w-fit">{log.action}</p>
                     </td>
                     <td className="break-words px-4 py-3 align-top text-stone-600">{formatActivityResource(log)}</td>
-                    <td className="break-words px-4 py-3 align-top text-stone-600">{log.ip_address || '-'}</td>
-                    <td className="break-words px-4 py-3 align-top text-stone-600">{new Date(log.created_at).toLocaleString()}</td>
+                    <td className="break-words px-4 py-3 align-top text-stone-600 font-mono text-xs">{log.ip_address || '-'}</td>
+                    <td className="break-words px-4 py-3 align-top text-stone-600 text-xs">{new Date(log.created_at).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-semibold text-stone-600">
+          <div className="mt-4 flex flex-col gap-4 rounded-lg border border-stone-200 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between w-full">
+            <p className="text-xs sm:text-sm font-semibold text-stone-600 text-center sm:text-left">
               {t('paginationSummary', { start: activityShowingStart, end: activityShowingEnd, total: activityLogs.length })}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
               <button
-                className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                className="btn-secondary min-h-9 px-3 py-1.5 text-xs flex-1 sm:flex-none justify-center"
                 type="button"
                 onClick={() => setActivityPage((current) => Math.max(1, current - 1))}
                 disabled={activityPage <= 1}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-4 w-4 mr-1 sm:mr-2" />
                 {t('previous')}
               </button>
-              <span className="status-pill border border-stone-200 bg-white text-stone-700">
+              <span className="status-pill border border-stone-200 bg-white text-stone-700 text-[10px] sm:text-xs">
                 {t('pageOf', { page: activityPage, total: activityPageCount })}
               </span>
               <button
-                className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                className="btn-secondary min-h-9 px-3 py-1.5 text-xs flex-1 sm:flex-none justify-center"
                 type="button"
                 onClick={() => setActivityPage((current) => Math.min(activityPageCount, current + 1))}
                 disabled={activityPage >= activityPageCount}
               >
                 {t('next')}
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4 ml-1 sm:ml-2" />
               </button>
             </div>
           </div>
@@ -643,15 +642,15 @@ function StatusCard({ icon: Icon, label, value, body, tone = 'stone' }) {
         : 'bg-stone-50 text-stone-700 ring-stone-200';
 
   return (
-    <div className="surface rounded-lg p-4">
-      <div className="flex items-start gap-3">
+    <div className="surface rounded-lg p-4 w-full flex flex-col h-full">
+      <div className="flex items-start gap-3 w-full">
         <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ring-1 ${toneClass}`}>
           <Icon className="h-5 w-5" />
         </div>
-        <div className="min-w-0">
-          <p className="panel-heading">{label}</p>
-          <p className="mt-1 text-lg font-bold text-stone-950">{value}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">{body}</p>
+        <div className="min-w-0 flex-1">
+          <p className="panel-heading truncate text-xs sm:text-sm">{label}</p>
+          <p className="mt-1 text-base sm:text-lg font-bold text-stone-950 truncate">{value}</p>
+          <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-stone-500">{body}</p>
         </div>
       </div>
     </div>
@@ -667,7 +666,7 @@ function StatusPill({ children, tone = 'stone' }) {
         : 'border-stone-200 bg-white text-stone-700';
 
   return (
-    <span className={`inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold leading-none ${toneClass}`}>
+    <span className={`inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-none ${toneClass}`}>
       {children}
     </span>
   );
@@ -676,19 +675,19 @@ function StatusPill({ children, tone = 'stone' }) {
 function LanguageButton({ active, title, body, onClick }) {
   return (
     <button
-      className={`focus-ring min-h-24 rounded-lg p-4 text-left transition ${
-        active ? 'border border-leaf-200 bg-leaf-50 ring-1 ring-leaf-200' : 'border border-stone-200 bg-white hover:bg-stone-50'
+      className={`focus-ring w-full min-h-20 sm:min-h-24 rounded-lg p-3 sm:p-4 text-left transition ${
+        active ? 'border border-leaf-200 bg-leaf-50 ring-1 ring-leaf-200 shadow-sm' : 'border border-stone-200 bg-white hover:bg-stone-50'
       }`}
       onClick={onClick}
       type="button"
       aria-pressed={active}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`font-bold ${active ? 'text-leaf-900' : 'text-stone-950'}`}>{title}</p>
-          <p className={`mt-1 text-xs font-semibold uppercase ${active ? 'text-leaf-700' : 'text-stone-400'}`}>{body}</p>
+      <div className="flex items-start justify-between gap-3 w-full">
+        <div className="min-w-0 flex-1">
+          <p className={`font-bold text-sm sm:text-base truncate ${active ? 'text-leaf-900' : 'text-stone-950'}`}>{title}</p>
+          <p className={`mt-1 text-[10px] sm:text-xs font-semibold uppercase tracking-wider truncate ${active ? 'text-leaf-700' : 'text-stone-400'}`}>{body}</p>
         </div>
-        {active ? <CheckCircle2 className="h-5 w-5 shrink-0 text-leaf-700" /> : null}
+        {active ? <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-leaf-700 mt-0.5" /> : null}
       </div>
     </button>
   );
@@ -696,19 +695,19 @@ function LanguageButton({ active, title, body, onClick }) {
 
 function SettingToggle({ title, body, active = false, onToggle }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-4 py-4">
-      <div className="min-w-0">
-        <p className="font-semibold text-stone-900">{title}</p>
-        <p className="mt-1 text-sm leading-6 text-stone-500">{body}</p>
+    <div className="flex items-start justify-between gap-4 px-4 py-4 w-full">
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-stone-900 text-sm sm:text-base truncate">{title}</p>
+        <p className="mt-1 text-xs sm:text-sm leading-5 sm:leading-6 text-stone-500 line-clamp-2">{body}</p>
       </div>
       <button
-        className={`focus-ring relative h-7 w-12 shrink-0 rounded-full transition ${active ? 'bg-leaf-600' : 'bg-stone-300'}`}
+        className={`focus-ring relative h-6 w-11 sm:h-7 sm:w-12 shrink-0 rounded-full transition-colors mt-0.5 ${active ? 'bg-leaf-600' : 'bg-stone-300'}`}
         aria-pressed={active}
         aria-label={title}
         onClick={onToggle}
         type="button"
       >
-        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${active ? 'left-6' : 'left-1'}`} />
+        <span className={`absolute top-1 h-4 w-4 sm:h-5 sm:w-5 rounded-full bg-white transition-all ${active ? 'left-[22px] sm:left-6' : 'left-1'}`} />
       </button>
     </div>
   );
