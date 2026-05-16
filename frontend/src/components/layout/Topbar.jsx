@@ -31,6 +31,7 @@ function notificationTarget(notification) {
     case 'disease_scan':
       return '/disease-detector';
     case 'farm_pending':
+    case 'flagged_crop':
       return '/admin/users';
     case 'farm_approved':
     case 'farm_rejected':
@@ -268,9 +269,9 @@ export default function Topbar() {
             <span className="truncate text-lg font-bold text-leaf-600 sm:text-2xl">AgriScan</span>
           </Link>
 
-          <div className="hidden min-w-0 px-7 lg:block xl:px-9">
-            <p className="truncate text-lg font-bold text-stone-950">{t(pageTitleKey(location.pathname))}</p>
-            <p className="truncate text-xs font-semibold text-stone-500">{user?.full_name || user?.email || 'AgriScan User'}</p>
+          <div className="hidden min-w-0 flex-col justify-center px-3 sm:px-5 lg:flex lg:min-w-0 lg:px-7 xl:px-9">
+            <p className="hidden truncate text-lg font-bold text-stone-950 lg:block">{t(pageTitleKey(location.pathname))}</p>
+            <p className="truncate text-sm font-semibold text-stone-600 sm:text-xs md:text-stone-500">{user?.full_name || user?.email || 'AgriScan User'}</p>
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-1.5 border-0 px-3 sm:gap-2 sm:px-5 lg:min-w-0 lg:px-7 xl:px-9">
@@ -397,7 +398,7 @@ export default function Topbar() {
             </button>
 
             {profileOpen ? (
-              <div className="surface absolute right-0 top-[calc(100%+10px)] z-40 w-[min(90vw,280px)] rounded-lg p-2">
+              <div className="surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:left-auto sm:w-[min(90vw,280px)] lg:absolute lg:right-0 lg:top-[calc(100%+10px)]">
                 <div className="rounded-lg bg-stone-50 px-3 py-3">
                   <p className="text-sm font-bold text-stone-950">{user?.full_name || 'AgriScan User'}</p>
                   <p className="mt-1 text-xs text-stone-500">{user?.email || ''}</p>

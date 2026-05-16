@@ -51,11 +51,12 @@
 - [ ] Verify OpenCV-headless version compatibility
 
 ### 2. FastAPI Route Integration
-- [ ] Add `ml_service_integration.register_all_routes(app)` to `backend/app/api/api.py`
-- [ ] Test endpoints:
-  - `POST /ml/detect-crops`
-  - `POST /ml/classify-crop`
-  - `POST /ml/assess-quality`
+- [x] Added versioned ML routes in `backend/app/api/routes/ml.py`
+- [x] Included the ML router in `backend/app/api/api.py`
+- [x] Endpoints are now available behind the existing API prefix:
+  - `POST /api/v1/ml/detect-crops`
+  - `POST /api/v1/ml/classify-crop`
+  - `POST /api/v1/ml/assess-quality`
 
 ### 3. Database Schema Updates (if needed)
 - [ ] Create `crop_detections` table for persistence

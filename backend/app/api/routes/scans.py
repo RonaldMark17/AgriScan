@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models import Farm, Scan, User
+from app.models import Farm, Role, Scan, ScanFeedback, User
 from app.schemas.domain import ScanFeedbackCreate, ScanFeedbackRead, ScanRead
 from app.services.audit import write_audit_log
 from app.services.feedback_learning import apply_verified_feedback, create_scan_feedback
@@ -96,6 +96,72 @@ def _scan_alert_details(scan: Scan, crop_label: str | None, crop_type: str | Non
         "url": "/disease-detector",
     }
     return title, body, payload
+
+
+async def _create_admin_flagged_crop_notifications(
+    db: AsyncSession,
+    *,
+    feedback: ScanFeedback,
+    scan: Scan,
+    farmer: User,
+) -> list[dict]:
+    """Create notifications for all admins when a crop scan is flagged."""
+    result = await db.execute(
+        select(User)
+        .join(Role, Role.id == User.role_id)
+        .where(Role.name == "admin", User.is_active.is_(True))
+    )
+    admins = list(result.scalars().all())
+    if not admins:
+        return []
+
+    crop_label = feedback.corrected_crop_label or feedback.original_crop_label or "Crop"
+    disease_name = feedback.corrected_disease_name or feedback.original_disease_name or "Issue"
+    title = "Flagged crop scan for review"
+    body = f"{farmer.full_name} flagged a {crop_label} scan ({disease_name}). Review it in the admin panel."
+
+    pushes: list[dict] = []
+    notification_payload = {
+        "scan_id": scan.id,
+        "feedback_id": feedback.id,
+        "farmer_user_id": farmer.id,
+        "farmer_name": farmer.full_name,
+        "crop_label": crop_label,
+        "disease_name": disease_name,
+        "url": "/admin/users",
+    }
+    for admin in admins:
+        notification = await create_notification(
+            db,
+            user_id=admin.id,
+            title=title,
+            body=body,
+            notification_type="flagged_crop",
+            payload=notification_payload,
+        )
+        pushes.append(
+            {
+                "user_id": admin.id,
+                "title": title,
+                "body": body,
+                "url": "/admin/users",
+                "payload": {
+                    **notification_payload,
+                    "notification_id": notification.id,
+                    "type": "flagged_crop",
+                    "tag": f"flagged-crop-{feedback.id}",
+                },
+            }
+        )
+    return pushes
+
+
+async def _dispatch_flagged_crop_notification_safely(db: AsyncSession, **push: dict) -> None:
+    """Safely dispatch flagged crop notifications to admins."""
+    try:
+        await dispatch_push_to_user(db, **push)
+    except Exception as exc:
+        logger.exception("Flagged crop notification dispatch failed after the feedback was saved.", exc_info=exc)
 
 
 @router.get("", response_model=list[ScanRead])
@@ -298,8 +364,18 @@ async def flag_scan_result(
             "corrected_disease_name": feedback.corrected_disease_name,
         },
     )
+    admin_pushes = await _create_admin_flagged_crop_notifications(
+        db,
+        feedback=feedback,
+        scan=scan,
+        farmer=current_user,
+    )
     await db.commit()
     await db.refresh(feedback)
     for key, value in applied_values.items():
         setattr(feedback, key, value)
+
+    for push in admin_pushes:
+        await _dispatch_flagged_crop_notification_safely(db, **push)
+    
     return feedback

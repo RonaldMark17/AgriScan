@@ -16,9 +16,13 @@ import json
 
 import numpy as np
 from PIL import Image
-import tensorflow as tf
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
+
+try:
+    import tensorflow as tf
+except ModuleNotFoundError:
+    tf = None
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +84,36 @@ class CropClassifier:
             "typical_colors": ["green", "gold"],
             "diseases": ["stripe_rust", "leaf_rust", "powdery_mildew", "tan_spot"],
         },
+        "banana": {
+            "varieties": ["Lakatan", "Latundan", "Saba", "Cavendish"],
+            "growth_stages": ["seedling", "vegetative", "flowering", "bunch_development", "mature"],
+            "typical_colors": ["green", "yellow", "brown"],
+            "diseases": ["black_sigatoka", "yellow_sigatoka", "panama_disease", "fruit_rot"],
+        },
+        "mango": {
+            "varieties": ["Carabao", "Pico", "Katchamita"],
+            "growth_stages": ["flush", "flowering", "fruiting", "mature"],
+            "typical_colors": ["green", "yellow", "brown"],
+            "diseases": ["anthracnose", "bacterial_canker", "powdery_mildew"],
+        },
+        "onion": {
+            "varieties": ["Red Creole", "Yellow Granex", "White Onion"],
+            "growth_stages": ["seedling", "vegetative", "bulbing", "mature"],
+            "typical_colors": ["green", "purple", "brown"],
+            "diseases": ["purple_blotch", "downy_mildew", "basal_rot"],
+        },
+        "eggplant": {
+            "varieties": ["Long Purple", "Round", "Native"],
+            "growth_stages": ["seedling", "flowering", "fruiting", "mature"],
+            "typical_colors": ["green", "purple"],
+            "diseases": ["fruit_and_shoot_borer_damage", "mite_damage", "wilt"],
+        },
+        "cabbage": {
+            "varieties": ["Green", "Red", "Savoy"],
+            "growth_stages": ["seedling", "leaf_growth", "head_formation", "mature"],
+            "typical_colors": ["green", "purple"],
+            "diseases": ["black_rot", "clubroot", "diamondback_moth_damage"],
+        },
     }
     
     def __init__(
@@ -100,6 +134,9 @@ class CropClassifier:
     
     def _load_model(self, model_path: str | Path) -> None:
         """Load pre-trained CNN model."""
+        if tf is None:
+            logger.warning("TensorFlow is not installed. Crop classifier will use visual heuristics only.")
+            return
         try:
             self.cnn_model = tf.keras.models.load_model(str(model_path))
             logger.info(f"CNN model loaded from {model_path}")
@@ -130,7 +167,7 @@ class CropClassifier:
         
         # Fallback heuristic-based prediction
         if not predictions:
-            heuristic_pred = self._predict_heuristic(image, top_k)
+            heuristic_pred = self._predict_heuristic(image, top_k, crop_type_hint=crop_type_hint)
             predictions.append(("heuristic", heuristic_pred))
         
         # Combine predictions
@@ -212,7 +249,8 @@ class CropClassifier:
     def _predict_heuristic(
         self,
         image: np.ndarray,
-        top_k: int = 5
+        top_k: int = 5,
+        crop_type_hint: str | None = None,
     ) -> list[tuple[str, float]]:
         """Heuristic-based prediction using visual features."""
         import cv2
@@ -226,12 +264,27 @@ class CropClassifier:
         hue_std = float(np.std(h))
         saturation_mean = float(np.mean(s))
         value_mean = float(np.mean(v))
+        color_ratios = {
+            "green": self._hsv_ratio(hsv, [25, 45, 45], [95, 255, 255]),
+            "yellow": self._hsv_ratio(hsv, [12, 70, 60], [40, 255, 255]),
+            "red": self._hsv_ratio(hsv, [0, 70, 55], [12, 255, 255])
+            + self._hsv_ratio(hsv, [165, 70, 55], [180, 255, 255]),
+            "brown": self._hsv_ratio(hsv, [6, 45, 35], [28, 225, 205]),
+            "purple": self._hsv_ratio(hsv, [125, 45, 45], [165, 255, 255]),
+            "gold": self._hsv_ratio(hsv, [16, 55, 70], [34, 255, 255]),
+        }
+        normalized_hint = self._normalize_crop_hint(crop_type_hint)
         
         # Score each crop type based on characteristics
         scores = {}
         
         for crop_type in self.CROP_METADATA.keys():
-            score = 0.0
+            metadata = self.CROP_METADATA[crop_type]
+            score = 0.08
+            for color in metadata.get("typical_colors", []):
+                score += min(color_ratios.get(color, 0.0) * 0.55, 0.22)
+            if normalized_hint == crop_type:
+                score += 0.35
             
             # Hue-based scoring
             if crop_type == "rice":
@@ -254,6 +307,18 @@ class CropClassifier:
                 # Wheat is golden/green
                 score += 0.3 if 15 < hue_mean < 60 else 0.1
                 score += 0.2 if hue_std > 10 else 0.1
+            elif crop_type == "banana":
+                score += 0.25 if color_ratios["green"] > 0.35 or color_ratios["yellow"] > 0.20 else 0.08
+                score += 0.15 if color_ratios["brown"] < 0.20 else 0.05
+            elif crop_type == "mango":
+                score += 0.20 if color_ratios["green"] > 0.25 or color_ratios["yellow"] > 0.18 else 0.08
+                score += 0.10 if saturation_mean > 45 else 0.04
+            elif crop_type == "onion":
+                score += 0.30 if color_ratios["purple"] > 0.08 or color_ratios["brown"] > 0.16 else 0.08
+            elif crop_type == "eggplant":
+                score += 0.30 if color_ratios["purple"] > 0.10 or color_ratios["green"] > 0.25 else 0.08
+            elif crop_type == "cabbage":
+                score += 0.28 if color_ratios["green"] > 0.45 and hue_std < 35 else 0.08
             
             # Brightness-based scoring
             if value_mean > 150:
@@ -265,7 +330,31 @@ class CropClassifier:
         
         # Return top-k sorted by score
         sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        return [(name, float(score) / 2.0) for name, score in sorted_scores[:top_k]]
+        return [(name, min(float(score), 0.95)) for name, score in sorted_scores[:top_k]]
+
+    def _normalize_crop_hint(self, crop_type_hint: str | None) -> str | None:
+        if not crop_type_hint:
+            return None
+        normalized = crop_type_hint.strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "maize": "corn",
+            "mais": "corn",
+            "palay": "rice",
+            "kamatis": "tomato",
+            "patatas": "potato",
+            "saging": "banana",
+            "mangga": "mango",
+            "sibuyas": "onion",
+            "talong": "eggplant",
+            "repolyo": "cabbage",
+        }
+        return aliases.get(normalized, normalized)
+
+    def _hsv_ratio(self, hsv: np.ndarray, lower: list[int], upper: list[int]) -> float:
+        import cv2
+
+        mask = cv2.inRange(hsv, np.array(lower), np.array(upper))
+        return float(np.count_nonzero(mask) / mask.size)
     
     def _ensemble_predictions(
         self,

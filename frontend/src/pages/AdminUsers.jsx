@@ -66,19 +66,21 @@ export default function AdminUsers() {
       void load({ silent: true }).catch(() => {});
     }
 
-    function handleFarmNotification(event) {
-      if (event.detail?.notification?.type !== 'farm_pending') return;
+    function handleAdminNotification(event) {
+      const notification = event.detail?.notification;
+      const notificationType = notification?.payload?.type || notification?.type;
+      if (!['farm_pending', 'flagged_crop'].includes(notificationType)) return;
       refreshSilently();
     }
 
     const intervalId = window.setInterval(refreshSilently, ADMIN_AJAX_REFRESH_MS);
     window.addEventListener('focus', refreshSilently);
-    window.addEventListener('agriscan:notification', handleFarmNotification);
+    window.addEventListener('agriscan:notification', handleAdminNotification);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener('focus', refreshSilently);
-      window.removeEventListener('agriscan:notification', handleFarmNotification);
+      window.removeEventListener('agriscan:notification', handleAdminNotification);
     };
   }, [load]);
 
@@ -182,15 +184,15 @@ export default function AdminUsers() {
               {t('userManagement')}
             </h2>
             {userActionError ? <div className="danger-message mt-4">{userActionError}</div> : null}
-            <div className="table-shell mt-4">
-              <table className="w-full table-fixed text-left text-sm">
+            <div className="table-shell mt-4 overflow-x-auto">
+              <table className="user-table-mobile w-full text-left text-sm">
                 <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase text-stone-500">
                   <tr>
-                    <th className="w-[30%] px-4 py-3">{t('name')}</th>
-                    <th className="w-[14%] px-4 py-3">{t('role')}</th>
-                    <th className="w-[14%] px-4 py-3">{t('status')}</th>
-                    <th className="w-[24%] px-4 py-3">{t('lastLogin')}</th>
-                    <th className="w-[18%] px-4 py-3 text-right">{t('actions')}</th>
+                    <th className="px-3 py-3 sm:px-4">{t('name')}</th>
+                    <th className="hidden sm:table-cell px-4 py-3">{t('role')}</th>
+                    <th className="hidden md:table-cell px-4 py-3">{t('status')}</th>
+                    <th className="hidden lg:table-cell px-4 py-3">{t('lastLogin')}</th>
+                    <th className="px-3 py-3 sm:px-4 text-right">{t('actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
@@ -199,22 +201,30 @@ export default function AdminUsers() {
                     const toggleLabel = user.is_active ? t('disableAccount') : t('enableAccount');
                     return (
                       <tr key={user.id} className="transition hover:bg-stone-50/70">
-                        <td className="px-4 py-3 align-top">
-                          <p className="break-words font-semibold text-stone-900">{user.full_name}</p>
-                          <p className="break-all text-xs text-stone-500">{user.email}</p>
+                        <td className="px-3 py-3 align-top sm:px-4">
+                          <div className="flex flex-col gap-1">
+                            <p className="break-words font-semibold text-stone-900">{user.full_name}</p>
+                            <p className="break-all text-xs text-stone-500">{user.email}</p>
+                            <div className="flex flex-wrap gap-2 sm:hidden">
+                              <span className="status-pill bg-stone-100 text-stone-700 w-fit text-xs">{user.role.name}</span>
+                              <span className={`status-pill w-fit text-xs ${user.is_active ? 'bg-leaf-50 text-leaf-800' : 'bg-red-50 text-red-700'}`}>
+                                {user.is_active ? t('active') : t('disabled')}
+                              </span>
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 align-top">
+                        <td className="hidden sm:table-cell px-4 py-3 align-top">
                           <span className="status-pill bg-stone-100 text-stone-700">{user.role.name}</span>
                         </td>
-                        <td className="px-4 py-3 align-top">
+                        <td className="hidden md:table-cell px-4 py-3 align-top">
                           <span className={`status-pill ${user.is_active ? 'bg-leaf-50 text-leaf-800' : 'bg-red-50 text-red-700'}`}>
                             {user.is_active ? t('active') : t('disabled')}
                           </span>
                         </td>
-                        <td className="break-words px-4 py-3 align-top text-stone-600">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '-'}</td>
-                        <td className="px-4 py-3 text-right align-top">
+                        <td className="hidden lg:table-cell break-words px-4 py-3 align-top text-stone-600">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '-'}</td>
+                        <td className="user-row-actions px-3 py-3 text-right align-top sm:px-4">
                           <button
-                            className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold transition focus-ring disabled:cursor-not-allowed disabled:opacity-60 ${
+                            className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-2 py-1.5 text-xs font-bold transition focus-ring disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 ${
                               user.is_active
                                 ? 'border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50'
                                 : 'border-leaf-200 bg-leaf-50 text-leaf-800 hover:border-leaf-300 hover:bg-leaf-100'
@@ -231,7 +241,7 @@ export default function AdminUsers() {
                             ) : (
                               <CheckCircle2 className="h-3.5 w-3.5" />
                             )}
-                            {toggleLabel}
+                            <span className="hidden sm:inline">{toggleLabel}</span>
                           </button>
                         </td>
                       </tr>
@@ -271,25 +281,26 @@ export default function AdminUsers() {
                     <span>{t('correctedResult')}</span>
                     <span className="text-right">{t('decision')}</span>
                   </div>
-                  <div>
+                  <div className="flagged-review-list">
                     {visibleFlaggedReviews.map((review) => {
                       const isPending = review.verification_status === 'pending';
                       const isDecided = !isPending;
                       return (
                         <article key={review.id} className="flagged-review-row">
                           <div className="flagged-review-person">
-                            <div className="flagged-review-image">
-                              {review.image_url ? (
+                            {review.image_url ? (
+                              <div className="flagged-review-image">
                                 <img
                                   src={review.image_url}
                                   alt={t('scanImage')}
                                   className="h-full w-full object-cover"
                                   onError={(event) => {
-                                    event.currentTarget.style.display = 'none';
+                                    const wrapper = event.currentTarget.closest('.flagged-review-image');
+                                    if (wrapper) wrapper.style.display = 'none';
                                   }}
                                 />
-                              ) : null}
-                            </div>
+                              </div>
+                            ) : null}
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-stone-900" title={review.user_name}>{review.user_name}</p>
                               <p className="truncate text-xs text-stone-500" title={review.user_email}>{review.user_email}</p>

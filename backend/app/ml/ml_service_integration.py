@@ -16,6 +16,44 @@ _crop_detector = None
 _crop_classifier = None
 
 
+def _resolve_backend_path(settings: Any, configured_path: str | Path) -> Path:
+    path = Path(configured_path)
+    if path.is_absolute():
+        return path
+    return (settings.backend_path / path).resolve()
+
+
+def _first_existing_path(paths: list[Path]) -> Path | None:
+    for path in paths:
+        if path.exists():
+            return path
+    return None
+
+
+def _crop_detection_model_path(settings: Any) -> Path | None:
+    configured = _resolve_backend_path(settings, settings.model_path)
+    if configured.suffix == ".pt" and configured.exists():
+        return configured
+    return _first_existing_path(
+        [
+            settings.backend_path / "app/ml/artifacts/crop_detection.pt",
+            settings.backend_path / "app/ml/runs/agriscan-detect/weights/best.pt",
+        ]
+    )
+
+
+def _crop_classifier_model_path(settings: Any) -> Path | None:
+    configured = _resolve_backend_path(settings, settings.model_path)
+    if configured.exists() and configured.stem.startswith("crop_classifier"):
+        return configured
+    return _first_existing_path(
+        [
+            settings.backend_path / "app/ml/artifacts/crop_classifier.keras",
+            settings.backend_path / "app/ml/artifacts/crop_classifier.pt",
+        ]
+    )
+
+
 def get_crop_detector():
     """Get or create crop detector instance."""
     global _crop_detector
@@ -25,7 +63,7 @@ def get_crop_detector():
             from app.core.config import get_settings
             
             settings = get_settings()
-            model_path = settings.model_path if hasattr(settings, "model_path") else None
+            model_path = _crop_detection_model_path(settings)
             _crop_detector = create_crop_detector(model_path=model_path)
             logger.info("Crop detector initialized")
         except Exception as e:
@@ -43,7 +81,7 @@ def get_crop_classifier():
             from app.core.config import get_settings
             
             settings = get_settings()
-            model_path = settings.model_path if hasattr(settings, "model_path") else None
+            model_path = _crop_classifier_model_path(settings)
             _crop_classifier = create_crop_classifier(model_path=model_path, use_ensemble=True)
             logger.info("Crop classifier initialized")
         except Exception as e:
@@ -104,11 +142,13 @@ class CropDetectionService:
                     {
                         "crop_type": crop.crop_type,
                         "confidence": crop.confidence,
+                        "bounding_box": crop.bounding_box,
                         "quality_score": crop.quality_score,
                         "growth_stage": crop.growth_stage,
                         "detected_issues": crop.detected_issues,
                         "is_occluded": crop.is_occluded,
                         "occlusion_percentage": crop.occlusion_percentage,
+                        "environment_context": crop.environment_context,
                         "visual_features": crop.visual_features,
                     }
                     for crop in result.crops
