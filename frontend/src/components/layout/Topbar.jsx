@@ -257,24 +257,24 @@ export default function Topbar() {
 
   return (
     <>
-      <header className="topbar fixed inset-x-0 top-0 z-[70] border-b border-stone-200/90 bg-white/95 shadow-[0_1px_2px_rgba(15,23,42,0.035)] backdrop-blur">
+      <header className="topbar fixed inset-x-0 top-0 z-[70] border-b border-stone-200/90 bg-white">
         <div className="topbar-shell">
           <Link
             to="/"
-            className="topbar-brand flex h-full min-w-0 flex-1 items-center gap-2 border-0 px-3 sm:gap-3 sm:px-5 lg:flex-none lg:px-6"
+            className="topbar-brand flex h-full min-w-0 flex-1 items-center gap-2 border-0 px-3 sm:gap-3 sm:px-5 lg:flex-none lg:px-5"
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-700 text-white sm:h-11 sm:w-11">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-700 text-white">
               <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
             </span>
-            <span className="truncate text-lg font-bold text-leaf-600 sm:text-2xl">AgriScan</span>
+            <span className="truncate text-lg font-bold text-leaf-700 sm:text-xl">AgriScan</span>
           </Link>
 
-          <div className="hidden min-w-0 flex-col justify-center px-3 sm:px-5 lg:flex lg:min-w-0 lg:px-7 xl:px-9">
-            <p className="hidden truncate text-lg font-bold text-stone-950 lg:block">{t(pageTitleKey(location.pathname))}</p>
+          <div className="hidden min-w-0 flex-col justify-center px-3 sm:px-5 lg:flex lg:min-w-0 lg:px-5 xl:px-7">
+            <p className="hidden truncate text-base font-bold text-stone-950 lg:block">{t(pageTitleKey(location.pathname))}</p>
             <p className="truncate text-sm font-semibold text-stone-600 sm:text-xs md:text-stone-500">{user?.full_name || user?.email || 'AgriScan User'}</p>
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-1.5 border-0 px-3 sm:gap-2 sm:px-5 lg:min-w-0 lg:px-7 xl:px-9">
+          <div className="flex shrink-0 items-center justify-end gap-1.5 border-0 px-3 sm:gap-2 sm:px-5 lg:min-w-0 lg:px-5 xl:px-7">
             <div className="hidden sm:block lg:hidden">
               <LanguageToggle />
             </div>
@@ -457,7 +457,7 @@ export default function Topbar() {
         </div>
       ) : null}
       {notificationToast ? (
-        <div className="fixed right-3 top-20 z-[90] w-[min(92vw,360px)] rounded-lg border border-leaf-100 bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+        <div className="fixed right-3 top-20 z-[90] w-[min(92vw,360px)] rounded-lg border border-stone-200 bg-white p-4 shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
               <Bell className="h-5 w-5" />

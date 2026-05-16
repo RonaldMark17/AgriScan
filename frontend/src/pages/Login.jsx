@@ -88,14 +88,14 @@ export default function Login() {
 
   return (
     <main className="auth-page grid place-items-center">
-      <div className="auth-card grid min-h-[calc(100svh-3rem)] w-full max-w-6xl overflow-hidden lg:min-h-[680px] lg:grid-cols-[minmax(0,1fr)_430px]">
+      <div className="auth-card grid min-h-[calc(100svh-2.5rem)] w-full max-w-5xl overflow-hidden lg:min-h-[640px] lg:grid-cols-[minmax(0,1fr)_410px]">
         <section className="relative hidden overflow-hidden bg-leaf-950 lg:block">
           <img src={loginHeroImage} alt="Farmer using AgriScan in a rice field" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-[linear-gradient(112deg,rgba(15,23,42,0.72)_0%,rgba(20,83,45,0.48)_52%,rgba(15,23,42,0.18)_100%)]" />
+          <div className="absolute inset-0 bg-stone-950/45" />
 
           <div className="relative flex h-full flex-col justify-between p-8 xl:p-10">
             <div className="flex items-center gap-3 text-white">
-              <span className="grid h-12 w-12 place-items-center rounded-lg border border-white/20 bg-white/10 text-white backdrop-blur">
+              <span className="grid h-11 w-11 place-items-center rounded-lg border border-white/25 bg-white/10 text-white">
                 <Leaf className="h-7 w-7" />
               </span>
               <div>
@@ -106,10 +106,10 @@ export default function Login() {
 
             <div className="max-w-2xl pb-2">
               <p className="text-xs font-bold uppercase tracking-wide text-white/70">Farm intelligence</p>
-              <h1 className="mt-3 max-w-xl text-4xl font-bold leading-tight text-white xl:text-5xl">
+              <h1 className="mt-3 max-w-xl text-4xl font-bold leading-tight text-white">
                 {t('heroHeadline')}
               </h1>
-              <p className="mt-4 max-w-xl text-base leading-7 text-white/90 drop-shadow-sm">
+              <p className="mt-4 max-w-xl text-base leading-7 text-white/90">
                 {t('heroBody')}
               </p>
             </div>

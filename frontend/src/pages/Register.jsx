@@ -53,10 +53,10 @@ export default function Register() {
           <LanguageToggle />
         </div>
 
-        <form className="auth-card grid overflow-hidden lg:grid-cols-[0.78fr_1.22fr]" onSubmit={handleSubmit}>
+        <form className="auth-card grid overflow-hidden lg:grid-cols-[0.72fr_1.28fr]" onSubmit={handleSubmit}>
           <div className="border-b border-stone-200 bg-stone-50 p-5 sm:p-6 lg:border-b-0 lg:border-r">
-            <div className="grid h-12 w-12 place-items-center rounded-lg bg-white text-leaf-800 shadow-[0_8px_18px_rgba(15,23,42,0.06)]">
-              <Leaf className="h-7 w-7" />
+            <div className="grid h-11 w-11 place-items-center rounded-lg border border-stone-200 bg-white text-leaf-800">
+              <Leaf className="h-6 w-6" />
             </div>
             <h1 className="mt-4 text-2xl font-bold leading-tight text-stone-950">{t('register')}</h1>
             <p className="mt-2 text-sm leading-6 text-stone-600">{t('strongPasswordRequired')}</p>

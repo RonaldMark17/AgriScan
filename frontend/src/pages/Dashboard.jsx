@@ -48,15 +48,15 @@ function MetricCard({ icon: Icon, label, value, unit, status, tone = 'green', he
   return (
     <Component
       to={to}
-      className={`surface rounded-lg p-5 ${to ? 'block transition hover:-translate-y-0.5 hover:border-leaf-200 hover:bg-leaf-50/40' : ''}`}
+      className={`surface rounded-lg p-4 sm:p-5 ${to ? 'block transition hover:border-leaf-200 hover:bg-leaf-50/40' : ''}`}
     >
       <div className="flex items-center justify-between gap-3">
         <Icon className={`h-6 w-6 ${toneClass}`} />
         <span className="rounded-full border border-stone-200 px-3 py-1 text-xs font-bold text-stone-600">{status}</span>
       </div>
-      <p className="mt-6 text-sm font-semibold text-stone-500 sm:mt-8">{label}</p>
+      <p className="mt-5 text-sm font-semibold text-stone-500 sm:mt-6">{label}</p>
       <div className="mt-1 flex min-w-0 items-end gap-1">
-        <span className="min-w-0 break-words text-3xl font-bold tracking-normal text-stone-950 sm:text-4xl">{value}</span>
+        <span className="min-w-0 break-words text-3xl font-bold tracking-normal text-stone-950">{value}</span>
         {unit && <span className="mb-1 text-base font-semibold text-stone-500">{unit}</span>}
       </div>
       <p className="mt-4 text-sm text-stone-500">{helper}</p>

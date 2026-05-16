@@ -82,21 +82,21 @@ export default function BottomNav() {
       isActive ? 'bg-leaf-50 text-leaf-800' : 'text-stone-500 hover:bg-stone-50'
     }`;
   const scanNavItemClass = (isActive) =>
-    `relative -mt-1 flex min-h-[3.65rem] min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-leaf-600 bg-leaf-700 px-0.5 py-1 text-[9px] font-bold leading-tight text-white shadow-[0_10px_22px_rgba(21,128,61,0.24)] transition hover:bg-leaf-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white min-[390px]:text-[10px] sm:-mt-1.5 sm:min-h-[3.85rem] sm:gap-1 sm:px-2 sm:text-[11px] ${
+    `relative -mt-0.5 flex min-h-[3.5rem] min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-leaf-700 bg-leaf-700 px-0.5 py-1 text-[9px] font-bold leading-tight text-white transition hover:bg-leaf-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white min-[390px]:text-[10px] sm:min-h-[3.65rem] sm:gap-1 sm:px-2 sm:text-[11px] ${
       isActive ? 'ring-2 ring-leaf-200 ring-offset-1 ring-offset-white' : ''
     }`;
 
   return (
     <nav
       ref={navRef}
-      className="bottom-nav fixed bottom-0 left-0 right-0 z-30 grid items-stretch border-t border-stone-200 bg-white/95 px-1 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-1px_2px_rgba(15,23,42,0.04)] backdrop-blur sm:px-2 lg:hidden"
+      className="bottom-nav fixed bottom-0 left-0 right-0 z-30 grid items-stretch border-t border-stone-200 bg-white px-1 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:px-2 lg:hidden"
       aria-label="Mobile navigation"
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
     >
       {scanMenuOpen ? (
         <div
           id={scanMenuId}
-          className="absolute bottom-[calc(100%+0.45rem)] left-1/2 z-40 grid w-[min(19rem,calc(100vw-1.5rem))] -translate-x-1/2 grid-cols-2 gap-2 rounded-lg border border-stone-200 bg-white/95 p-2 shadow-[0_16px_36px_rgba(15,23,42,0.16)] backdrop-blur"
+          className="scan-menu-popover absolute bottom-[calc(100%+0.45rem)] left-1/2 z-40 grid w-[min(19rem,calc(100vw-1.5rem))] -translate-x-1/2 grid-cols-2 gap-2 rounded-lg border border-stone-200 bg-white p-2 shadow-[0_8px_18px_rgba(15,23,42,0.08)]"
           role="menu"
           aria-label={t('scan')}
         >
