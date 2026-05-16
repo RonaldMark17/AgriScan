@@ -28,6 +28,7 @@ const TRANSPORT_IMAGE_MAX_DIMENSION = 1600;
 const CUSTOM_CROP_OPTION = '__other_crop__';
 const INVALID_CROP_IMAGE_MESSAGE =
   'Upload a clear close-up crop leaf, fruit, stem, or plant-part photo with the crop as the main subject. Grass or leaves in the background are not enough for diagnosis.';
+
 class CropTypeMismatchError extends Error {
   constructor(message) {
     super(message);
@@ -415,6 +416,7 @@ const offlineDiseaseGuide = {
     treatment: 'Retake a close, well-lit photo of one affected leaf or fruit, select the crop type, and confirm with a local agriculture officer before treatment.',
   },
 };
+
 const correctionConditionsByCrop = {
   rice: [
     'Healthy crop',
@@ -2333,23 +2335,25 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
   }
 
   return (
-    <section ref={panelRef} className="surface scroll-mt-panel overflow-hidden rounded-lg">
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="p-5 sm:p-7">
+    <section ref={panelRef} className="scroll-mt-panel">
+      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_320px]">
+        
+        {/* Left Column: Text & Stats */}
+        <div className="flex min-w-0 flex-col">
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold sm:px-4 ${statusClass}`}>
+            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold sm:px-4 ${!result ? 'bg-leaf-50 text-leaf-700' : statusClass}`}>
               <FlaskConical className="h-4 w-4" />
-              {needsReview ? t('reviewNeeded') : t('analysisReady')}
+              {!result ? t('diseaseAnalysis', 'Disease Analysis') : needsReview ? t('reviewNeeded') : t('analysisReady')}
             </span>
-            {cropLabel !== '--' && (
-              <span className="rounded-full bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700 sm:px-4">
+            {cropLabel !== '--' && result && (
+              <span className="rounded-full bg-stone-100 px-3 py-1.5 text-sm font-bold text-stone-700 sm:px-4">
                 {translatedCropLabel}
               </span>
             )}
           </div>
 
           <h2 className="mt-5 break-words text-2xl font-bold text-stone-950 sm:text-3xl">
-            {result?.disease_name ? translateDiseaseName(result.disease_name, t) : t('readyForDiseaseAnalysis')}
+            {result?.disease_name ? translateDiseaseName(result.disease_name, t) : t('readyForDiseaseAnalysis', 'Ready for analysis')}
           </h2>
           {!result ? (
             <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
@@ -2358,7 +2362,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           ) : null}
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+            <article className="rounded-lg border border-stone-200 bg-white p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('detectedCrop')}</p>
               <p className="mt-2 text-lg font-bold text-stone-950">{translatedCropLabel}</p>
               <p className="mt-1 text-sm text-stone-500">
@@ -2367,7 +2371,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
             </article>
             <article className={`rounded-lg border p-4 ${confidenceClass}`}>
               <p className={`text-xs font-bold uppercase tracking-wide ${confidenceLabelClass}`}>{needsReview ? t('scanCertainty') : t('confidence')}</p>
-              <p className={`mt-2 text-3xl font-bold ${confidenceTextClass}`}>{confidence || '--'}%</p>
+              <p className={`mt-2 text-3xl font-bold ${confidenceTextClass}`}>{result ? confidence + '%' : '--%'}</p>
               <div className="mt-3 h-2 rounded-full bg-stone-100">
                 <div className={`h-2 rounded-full ${confidenceBarClass}`} style={{ width: result ? `${confidence}%` : '0%' }} />
               </div>
@@ -2638,18 +2642,19 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           )}
         </div>
 
-        <div className="border-t border-stone-100 bg-stone-50 p-5 lg:border-l lg:border-t-0">
-          <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('uploadCropImage')}</p>
-          <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
+        {/* Right Column: Preview Image */}
+        <div className="flex flex-col">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-stone-500">{t('cropOrLeafPhoto', 'Crop or leaf photo')}</p>
+          <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
             {displayPreviewUrl ? (
-              <div className="relative h-52 w-full bg-stone-950 sm:h-64">
-                <img src={displayPreviewUrl} alt={t('uploadCropImage')} className="h-full w-full object-cover" />
+              <div className="relative w-full overflow-hidden bg-stone-950" style={{ paddingBottom: '66.666%' }}>
+                <img src={displayPreviewUrl} alt={t('uploadCropImage')} className="absolute inset-0 h-full w-full object-cover" />
                 {yoloDetections.map((detection, index) => {
                   const box = detection.box;
                   return (
                     <div
                       key={`${detection.raw_label || detection.label}-${index}`}
-                      className={`absolute border-2 ${detection.selected ? 'border-leaf-300' : 'border-amber-300'} bg-stone-950/10`}
+                      className={`absolute border-2 transition-colors ${detection.selected ? 'border-leaf-400' : 'border-amber-300'} bg-stone-950/5`}
                       style={{
                         left: `${Number(box.x) * 100}%`,
                         top: `${Number(box.y) * 100}%`,
@@ -2657,7 +2662,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                         height: `${Number(box.height) * 100}%`,
                       }}
                     >
-                      <span className={`absolute left-0 top-0 max-w-full truncate px-2 py-1 text-[10px] font-bold text-stone-950 ${detection.selected ? 'bg-leaf-300' : 'bg-amber-300'}`}>
+                      <span className={`absolute left-0 top-0 whitespace-nowrap truncate rounded px-2 py-1 text-[10px] font-bold text-stone-950 ${detection.selected ? 'bg-leaf-300' : 'bg-amber-300'}`}>
                         {translateDiseaseName(detection.label, t)} {Math.round(Number(detection.confidence) * 100)}%
                       </span>
                     </div>
@@ -2665,31 +2670,32 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                 })}
               </div>
             ) : (
-              <div className="relative h-52 overflow-hidden bg-leaf-50 sm:h-64">
-                <img src={diseaseDetectorImage} alt={t('uploadCropImage')} className="h-full w-full object-cover opacity-25" />
-                <div className="absolute inset-0 grid place-items-center bg-white/45 p-5 text-stone-600">
-                  <div className="max-w-56 text-center">
-                    <span className="mx-auto grid h-14 w-14 place-items-center rounded-lg border border-stone-200 bg-white/90 text-leaf-700 shadow-sm">
-                      <ImagePlus className="h-7 w-7" />
+              <div className="relative w-full overflow-hidden bg-leaf-50" style={{ paddingBottom: '66.666%' }}>
+                <img src={diseaseDetectorImage} alt={t('uploadCropImage')} className="absolute inset-0 h-full w-full object-cover opacity-20" />
+                <div className="absolute inset-0 flex items-center justify-center bg-white/40 p-4 text-stone-600">
+                  <div className="max-w-52 text-center">
+                    <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-stone-200 bg-white/95 text-leaf-700 shadow-sm sm:h-14 sm:w-14">
+                      <ImagePlus className="h-6 w-6 sm:h-7 sm:w-7" />
                     </span>
-                    <p className="mt-3 text-sm font-semibold leading-6">{t('diseaseAnalysisPrompt')}</p>
+                    <p className="mt-2 text-xs font-semibold leading-5 sm:mt-3 sm:text-sm sm:leading-6">{t('diseaseAnalysisPrompt')}</p>
                   </div>
                 </div>
               </div>
             )}
           </div>
-          {result?.image_name && <p className="mt-3 break-all text-sm font-semibold text-stone-700">{result.image_name}</p>}
+          {result?.image_name && <p className="mt-3 break-all text-xs font-semibold text-stone-600 sm:text-sm sm:text-stone-700">{result.image_name}</p>}
           {yoloDetections.length > 0 && (
-            <div className="mt-4 space-y-2">
+            <div className="mt-3 grid gap-2 grid-cols-2 sm:mt-4 sm:grid-cols-1 sm:gap-3 lg:grid-cols-2">
               {yoloDetections.slice(0, 4).map((detection, index) => (
                 <div key={`${detection.raw_label || detection.label}-summary-${index}`} className="rounded-lg border border-stone-200 bg-white p-3">
-                  <p className="truncate text-sm font-bold text-stone-900">{translateDiseaseName(detection.label, t)}</p>
+                  <p className="truncate text-xs font-bold text-stone-900 sm:text-sm">{translateDiseaseName(detection.label, t)}</p>
                   <p className="mt-1 text-xs font-semibold text-stone-500">{Math.round(Number(detection.confidence) * 100)}% {t('confidence')}</p>
                 </div>
               ))}
             </div>
           )}
         </div>
+
       </div>
     </section>
   );
@@ -3108,23 +3114,25 @@ export default function PlantDiseaseDetector() {
         </div>
       </header>
 
-      <div className="split-layout">
-        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 xl:sticky sticky-panel xl:self-start">
+      <div className="grid gap-6 lg:grid-cols-5 lg:gap-8 xl:gap-10">
+        
+        {/* Fixed to be standard static positioning layout without sticky class */}
+        <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5 lg:col-span-2 lg:self-start lg:h-fit">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-stone-950">{t('uploadCropImage')}</h2>
-              <p className="mt-1 text-sm text-stone-500">{t('uploadClearCropImage')}</p>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('uploadCropImage')}</h2>
+              <p className="mt-1 text-xs sm:text-sm text-stone-500">{t('uploadClearCropImage')}</p>
             </div>
-            <button className="btn-icon" type="button" onClick={resetForm} title={t('resetForm')}>
+            <button className="btn-icon shrink-0" type="button" onClick={resetForm} title={t('resetForm')}>
               <RotateCcw className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="mt-6 space-y-5">
+          <div className="mt-4 space-y-5 sm:mt-6">
             <label className="block">
-              <span className="text-sm font-bold text-stone-700">{t('cropType')}</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-stone-700 sm:text-sm">{t('cropType')}</span>
               <select
-                className="field mt-2 h-12"
+                className="field mt-2 h-11 sm:h-12"
                 value={selectedCrop}
                 onChange={(event) => {
                   setSelectedCrop(event.target.value);
@@ -3139,7 +3147,7 @@ export default function PlantDiseaseDetector() {
               </select>
               {selectedCrop === CUSTOM_CROP_OPTION && (
                 <input
-                  className="field mt-3 h-12"
+                  className="field mt-3 h-11 sm:h-12"
                   maxLength={80}
                   placeholder={t('cropName')}
                   value={customCrop}
@@ -3148,7 +3156,7 @@ export default function PlantDiseaseDetector() {
               )}
             </label>
 
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 sm:p-4">
               <input
                 accept="image/*"
                 className="hidden"
@@ -3167,61 +3175,61 @@ export default function PlantDiseaseDetector() {
                 onChange={handleFileInputChange}
               />
               <button
-                className="flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                className="group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-stone-300 bg-white text-center transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
                 type="button"
                 onClick={() => setShowImageSourcePicker(true)}
               >
                 {previewUrl ? (
-                  <img src={previewUrl} alt={t('uploadCropImage')} className="h-48 w-full rounded-lg object-cover sm:h-56" />
+                  <img src={previewUrl} alt={t('uploadCropImage')} className="h-40 w-full object-cover sm:h-48" />
                 ) : (
-                  <>
-                    <Upload className="h-10 w-10 text-leaf-600" />
-                    <p className="mt-4 text-base font-bold text-stone-900">{t('takeOrUploadPhoto')}</p>
-                    <p className="mt-2 max-w-xs text-sm leading-6 text-stone-500">
+                  <div className="px-4 py-6 sm:px-5 sm:py-8">
+                    <Upload className="mx-auto h-9 w-9 text-leaf-600 sm:h-10 sm:w-10" />
+                    <p className="mt-3 text-sm font-bold text-stone-900 sm:mt-4 sm:text-base">{t('takeOrUploadPhoto')}</p>
+                    <p className="mt-1 text-xs leading-5 text-stone-500 sm:mt-2 sm:text-sm sm:leading-6">
                       {t('takeClearCropPhoto')}
                     </p>
-                  </>
+                  </div>
                 )}
               </button>
 
               {showImageSourcePicker && (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2" role="dialog" aria-label={t('chooseImageSource')}>
+                <div className="mt-3 grid gap-2 grid-cols-2 sm:mt-4 sm:gap-3" role="dialog" aria-label={t('chooseImageSource')}>
                   <button
-                    className="flex min-h-20 items-center gap-3 rounded-lg border border-stone-200 bg-white p-4 text-left transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                    className="flex min-h-16 sm:min-h-20 items-center gap-2 sm:gap-3 rounded-lg border border-stone-200 bg-white p-2 sm:p-4 text-left text-xs sm:text-sm transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
                     type="button"
                     onClick={() => chooseImageSource('gallery')}
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-leaf-50 text-leaf-700">
-                      <ImagePlus className="h-5 w-5" />
+                    <span className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg bg-leaf-50 text-leaf-700">
+                      <ImagePlus className="h-4 w-4 sm:h-5 sm:w-5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-bold text-stone-950">{t('uploadFromGallery')}</span>
-                      <span className="mt-1 block text-xs font-medium text-stone-500">{t('chooseExistingPhoto')}</span>
+                      <span className="block font-bold text-stone-950">{t('uploadFromGallery')}</span>
+                      <span className="mt-0.5 block font-medium text-stone-500 sm:mt-1">{t('chooseExistingPhoto')}</span>
                     </span>
                   </button>
                   <button
-                    className="flex min-h-20 items-center gap-3 rounded-lg border border-stone-200 bg-white p-4 text-left transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                    className="flex min-h-16 sm:min-h-20 items-center gap-2 sm:gap-3 rounded-lg border border-stone-200 bg-white p-2 sm:p-4 text-left text-xs sm:text-sm transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
                     type="button"
                     onClick={() => chooseImageSource('camera')}
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-700">
-                      <Camera className="h-5 w-5" />
+                    <span className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-700">
+                      <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-bold text-stone-950">{t('useCamera')}</span>
-                      <span className="mt-1 block text-xs font-medium text-stone-500">{t('takeNewPhoto')}</span>
+                      <span className="block font-bold text-stone-950">{t('useCamera')}</span>
+                      <span className="mt-0.5 block font-medium text-stone-500 sm:mt-1">{t('takeNewPhoto')}</span>
                     </span>
                   </button>
                 </div>
               )}
 
               {imageFile && (
-                <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3">
+                <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3 sm:mt-4">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-stone-900">{imageFile.name}</p>
+                    <p className="truncate text-xs font-bold text-stone-900 sm:text-sm">{imageFile.name}</p>
                     <p className="mt-1 text-xs text-stone-500">{formatFileSize(imageFile.size)}</p>
                   </div>
-                  <button className="btn-icon h-9 w-9 shrink-0" type="button" onClick={clearImage} aria-label={t('removePhoto')}>
+                  <button className="btn-icon h-8 w-8 shrink-0 sm:h-9 sm:w-9" type="button" onClick={clearImage} aria-label={t('removePhoto')}>
                     <X className="h-4 w-4" />
                   </button>
                 </div>
@@ -3229,15 +3237,15 @@ export default function PlantDiseaseDetector() {
             </div>
           </div>
 
-          {error && <div className="mt-5 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
+          {error && <div className="mt-4 rounded-lg bg-red-50 p-3 text-xs font-medium text-red-700 sm:mt-5 sm:text-sm">{error}</div>}
 
-          <button className="btn-primary mt-6 h-12 w-full text-base" disabled={!canSubmit || loading}>
+          <button className="btn-primary mt-4 h-11 w-full text-sm font-bold sm:mt-6 sm:h-12 sm:text-base" disabled={!canSubmit || loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             {loading ? t('analyzingCropImage') : t('analyzeCropImage')}
           </button>
         </form>
 
-        <div className="space-y-6">
+        <div className="space-y-6 lg:col-span-3">
           <ResultPanel
             panelRef={resultPanelRef}
             result={result}
