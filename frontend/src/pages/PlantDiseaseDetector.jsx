@@ -255,7 +255,7 @@ function translateDiseaseName(name, t) {
 
 const offlineDiseaseGuide = {
   pest_leaf_damage: {
-    disease_name: 'Pest or physical leaf damage',
+    disease_name: 'Pest-related leaf damage',
     cause: 'The photo shows torn leaf edges, holes, or missing tissue. This often points to chewing pests or recent physical damage rather than a leaf disease.',
     treatment: 'Inspect both sides of nearby leaves for larvae or insects, remove badly damaged leaves when practical, and use integrated pest management before any pesticide decision.',
   },
@@ -630,7 +630,7 @@ const correctionConditionsByCrop = {
 function getCorrectionConditionOptions(cropLabel) {
   const cropKey = normalizeCropKey(cropLabel);
   const options = correctionConditionsByCrop[cropKey];
-  const cropOptions = options?.length ? options : ['Healthy crop', 'Leaf spot or blight symptoms', 'Pest or physical leaf damage'];
+  const cropOptions = options?.length ? options : ['Healthy crop', 'Leaf spot or blight symptoms', 'Pest-related leaf damage'];
   return ['Not a crop image', ...cropOptions];
 }
 
@@ -684,7 +684,15 @@ function scanRequestErrorMessage(error, fallback = 'Disease detection failed.') 
 
 function isLocalVisualAnalysisMode(mode) {
   const text = (mode || '').toLowerCase();
-  return text.includes('offline') || text.includes('fallback') || text.includes('browser') || text.includes('crop-part') || text.includes('review');
+  return (
+    text.includes('offline') ||
+    text.includes('fallback') ||
+    text.includes('browser') ||
+    text.includes('crop-part') ||
+    text.includes('review') ||
+    text.includes('visual analysis') ||
+    text.includes('visual fallback')
+  );
 }
 
 function healthyKeyForCrop(crop) {
@@ -832,10 +840,11 @@ function buildPossibleUnsupportedResult(features, cropLabel) {
     treatment,
     status: 'offline',
     image_path: 'offline-browser-analysis',
-    analysis_mode: 'unsupported crop browser analysis',
+    analysis_mode: 'unsupported crop visual analysis',
     reference_url: onlineReferenceSearchUrl(referenceKey, cropLabel),
-    reference_title: 'Search online crop disease reference',
+    reference_title: 'Crop disease reference',
     created_at: new Date().toISOString(),
+    _offline_primary_key: referenceKey,
   };
 }
 
@@ -1308,6 +1317,195 @@ function pickOfflineDiseaseKey(crop, features) {
 function computeOfflineConfidence(features, crop) {
   const confidence = 0.56 + Math.min(features.lesionWithinPlant * 0.35, 0.18) + Math.min(features.lesionRatio * 1.5, 0.1) + (crop ? 0.08 : 0);
   return Math.min(Math.max(confidence, 0.6), 0.86);
+}
+
+function normalizeDiseaseKey(value) {
+  return (value || '').toLowerCase().replace(/\s+/g, '_').replace(/-+/g, '_');
+}
+
+function offlineSeverityFromFeatures(features) {
+  const lesionRatio = features.lesionRatio || 0;
+  const darkLesionRatio = features.darkLesionRatio || 0;
+  const yellowRatio = features.yellowRatio || 0;
+  const rustRatio = features.rustRatio || 0;
+  const edgeLesionRatio = features.edgeLesionRatio || 0;
+  const totalDamage = lesionRatio + yellowRatio * 0.6 + rustRatio * 0.7;
+  const affectedArea = Math.min(100, totalDamage * 100);
+
+  let severity = 'critical';
+  if (affectedArea < 5) severity = 'mild';
+  else if (affectedArea < 25) severity = 'moderate';
+  else if (affectedArea < 60) severity = 'severe';
+
+  if (darkLesionRatio > 0.15) {
+    if (severity === 'mild') severity = 'moderate';
+    else if (severity === 'moderate') severity = 'severe';
+  }
+  if (edgeLesionRatio > 0.3 && (severity === 'mild' || severity === 'moderate')) {
+    severity = severity === 'moderate' ? 'severe' : 'moderate';
+  }
+
+  return { severity, affectedArea };
+}
+
+function offlineDiseaseStageFromFeatures(features) {
+  const lesionRatio = features.lesionRatio || 0;
+  if (lesionRatio < 0.08) return 'early';
+  if (lesionRatio < 0.25) return 'mid';
+  if (lesionRatio < 0.5) return 'late';
+  return 'advanced';
+}
+
+function offlineVisualSymptoms(diseaseKey, features) {
+  const symptoms = [];
+  const lesionRatio = features.lesionRatio || 0;
+  const darkLesionRatio = features.darkLesionRatio || 0;
+  const yellowRatio = features.yellowRatio || 0;
+  const rustRatio = features.rustRatio || 0;
+  const greenLeafRatio = features.greenLeafRatio || 1;
+  const edgeLesionRatio = features.edgeLesionRatio || 0;
+
+  if (lesionRatio > 0.1) {
+    symptoms.push(darkLesionRatio > 0.05 ? 'Dark necrotic lesions visible' : 'Brown or tan spots detected');
+  }
+  if (yellowRatio > 0.15) symptoms.push('Yellowing or chlorosis present');
+  if (rustRatio > 0.1) symptoms.push('Rust-colored pustules visible');
+  if (edgeLesionRatio > 0.2) symptoms.push('Lesions concentrated at leaf edges');
+  if (greenLeafRatio < 0.6) symptoms.push('Significant leaf area affected');
+
+  if (diseaseKey.includes('blight')) {
+    symptoms.push(darkLesionRatio > 0.15 ? 'Late blight pattern detected' : 'Early blight-type lesions');
+  }
+  if (diseaseKey.includes('blast')) symptoms.push('Blast-like lesion pattern');
+  if (diseaseKey.includes('rust')) {
+    symptoms.push(rustRatio > 0.2 ? 'Heavy rust infection' : 'Early rust pustules');
+  }
+  if (diseaseKey.includes('spot') || diseaseKey.includes('spot_or_blight')) {
+    symptoms.push(lesionRatio > 0.3 ? 'Multiple coalescing spots' : 'Scattered spotting pattern');
+  }
+  if (diseaseKey.includes('pest') || diseaseKey.includes('insect') || diseaseKey.includes('damage')) {
+    symptoms.push('Physical feeding damage detected');
+    symptoms.push('Irregular damage pattern');
+  }
+  if (diseaseKey.includes('wilt') || diseaseKey.includes('yellowing')) {
+    symptoms.push('General decline in plant vigor');
+  }
+
+  return [...new Set(symptoms)].slice(0, 6);
+}
+
+function offlineConfidenceAssessment(confidence, diseaseKey, features) {
+  const lesionRatio = features.lesionRatio || 0;
+  const visualEvidenceStrength = lesionRatio > 0 ? lesionRatio : 0.3;
+  let reliability = confidence * 0.85;
+  if (['healthy', 'invalid_crop_image', 'review_needed'].includes(diseaseKey)) {
+    reliability = 0.95;
+  } else if (diseaseKey.endsWith('_healthy')) {
+    reliability = 0.9;
+  } else if (visualEvidenceStrength > 0.25) {
+    reliability = Math.min(1, confidence * 1.1);
+  }
+
+  if (confidence >= 0.75) return { confidenceBand: 'high', reliabilityScore: reliability };
+  if (confidence >= 0.55) return { confidenceBand: 'medium', reliabilityScore: reliability };
+  return { confidenceBand: 'low', reliabilityScore: reliability };
+}
+
+function offlineImmediateActions(diseaseKey, severity) {
+  const actions = [];
+  if (severity === 'severe' || severity === 'critical') {
+    actions.push('Alert: Isolate affected plants if possible to prevent spread');
+  }
+  if (severity === 'moderate' || severity === 'severe' || severity === 'critical') {
+    actions.push('Trim: Remove heavily affected leaves or plant parts');
+  }
+  if (diseaseKey.includes('blight') || diseaseKey.includes('blast')) {
+    actions.push('Dry: Avoid overhead watering and keep foliage dry');
+    actions.push('Air: Improve airflow and reduce humidity');
+  }
+  if (diseaseKey.includes('rust') || diseaseKey.includes('powdery_mildew')) {
+    actions.push('Air: Ensure good air circulation');
+  }
+  if (diseaseKey.includes('spot') || diseaseKey.includes('spot_or_blight')) {
+    actions.push('Clean: Remove infected leaves promptly');
+  }
+  if (diseaseKey.includes('pest') || diseaseKey.includes('insect') || diseaseKey.includes('damage')) {
+    actions.push('Scout: Inspect leaf undersides for insects');
+    actions.push('Protect: Preserve beneficial insects if possible');
+  }
+  if (diseaseKey.includes('wilt') || diseaseKey.includes('root')) {
+    actions.push('Water: Check soil drainage and moisture');
+    actions.push('Roots: Ensure proper water availability');
+  }
+  if (severity === 'moderate' || severity === 'severe' || severity === 'critical') {
+    actions.push('Sanitize: Practice good field sanitation');
+  }
+  actions.push('Watch: Monitor closely for disease progression');
+  return [...new Set(actions)].slice(0, 5);
+}
+
+function offlineImageQualityIssues(features) {
+  const issues = [];
+  const width = Number(features.sourceWidth || 0);
+  const height = Number(features.sourceHeight || 0);
+  const contrast = Number(features.contrast || 50);
+  const greenLeafRatio = Number(features.greenLeafRatio || 1);
+  const componentCount = Number(features.componentCount || 1);
+
+  if (width && height) {
+    if (width < 320 || height < 320) issues.push('Low resolution - consider retaking with higher quality image');
+    else if (width < 640 || height < 640) issues.push('Medium resolution - higher resolution recommended');
+  }
+  if (contrast < 30) issues.push('Low contrast - image appears too dark or washed out');
+  else if (contrast > 100) issues.push('Very high contrast - may affect lesion detection');
+  if (componentCount > 50) issues.push('Image contains multiple fragments - focus on single leaf');
+  if (greenLeafRatio > 0.95) issues.push('Image shows mostly healthy tissue - hard to diagnose disease');
+
+  return issues;
+}
+
+function buildOfflineAnalysisMode({ key, cropSelected, analysisCrop, cornEarIssue, healthyRicePanicle, healthyBananaBunch }) {
+  if (key === 'review_needed') return 'uncertain visual review';
+  if (cornEarIssue) return 'crop-part visual fallback';
+  if (healthyRicePanicle) return 'rice panicle visual analysis';
+  if (healthyBananaBunch) return 'banana bunch visual analysis';
+  if (cropSelected) return 'offline crop-guided fallback';
+  if (analysisCrop) return 'offline crop-inferred fallback';
+  return 'offline visual fallback';
+}
+
+function enrichOfflineResult(result, features, cropType, primaryKey) {
+  const baseResult = { ...result };
+  delete baseResult._offline_primary_key;
+  const warnings = offlineQualityWarnings(features);
+  const nextResult = {
+    ...baseResult,
+    detections: [
+      { kind: 'quality_report', overall: warnings.length ? 'needs_better_photo' : 'good', warnings },
+      ...offlineAnalysisStages(baseResult, features, cropType, warnings),
+      ...warnings,
+      ...offlineAlternativeMatches(features, cropType, primaryKey, baseResult),
+    ],
+  };
+
+  if (nextResult.disease_name === 'Invalid crop or leaf image') {
+    return nextResult;
+  }
+
+  const diseaseKey = normalizeDiseaseKey(nextResult.disease_name || primaryKey);
+  const { severity, affectedArea } = offlineSeverityFromFeatures(features);
+  const { confidenceBand, reliabilityScore } = offlineConfidenceAssessment(nextResult.confidence, diseaseKey, features);
+
+  nextResult.severity = severity;
+  nextResult.affected_area_percentage = affectedArea;
+  nextResult.disease_stage = offlineDiseaseStageFromFeatures(features);
+  nextResult.visual_symptoms = offlineVisualSymptoms(diseaseKey, features);
+  nextResult.confidence_band = confidenceBand;
+  nextResult.reliability_score = reliabilityScore;
+  nextResult.immediate_actions = offlineImmediateActions(diseaseKey, severity);
+  nextResult.image_quality_issues = offlineImageQualityIssues(features);
+
+  return nextResult;
 }
 
 function looksLikeRedPurpleBulb(features, crop) {
@@ -2213,7 +2411,8 @@ async function analyzeImageOffline(file, cropType) {
     supportedInference: featureCrop,
   });
   if (possibleUnsupportedLabel) {
-    return buildPossibleUnsupportedResult(features, possibleUnsupportedLabel);
+    const unsupportedResult = buildPossibleUnsupportedResult(features, possibleUnsupportedLabel);
+    return enrichOfflineResult(unsupportedResult, features, cropType, unsupportedResult._offline_primary_key || 'review_needed');
   }
 
   const reliableFeatureCrop = isReliableVisualCropInference(features, featureCrop) ? featureCrop : '';
@@ -2253,32 +2452,19 @@ async function analyzeImageOffline(file, cropType) {
     treatment: guide.treatment,
     status: 'offline',
     image_path: 'offline-browser-analysis',
-    analysis_mode:
-      key === 'review_needed'
-        ? 'uncertain browser visual review'
-        : cornEarIssue
-          ? 'crop-part browser analysis'
-        : healthyRicePanicle
-          ? 'rice panicle browser analysis'
-          : healthyBananaBunch
-            ? 'banana bunch browser analysis'
-            : crop
-              ? 'offline browser analysis'
-              : analysisCrop
-                ? 'offline browser crop-inferred analysis'
-                : 'offline browser visual analysis',
+    analysis_mode: buildOfflineAnalysisMode({
+      key,
+      cropSelected: Boolean(crop),
+      analysisCrop,
+      cornEarIssue,
+      healthyRicePanicle,
+      healthyBananaBunch,
+    }),
     reference_url: null,
     reference_title: null,
     created_at: new Date().toISOString(),
   };
-  const warnings = offlineQualityWarnings(features);
-  result.detections = [
-    { kind: 'quality_report', overall: warnings.length ? 'needs_better_photo' : 'good', warnings },
-    ...offlineAnalysisStages(result, features, cropType, warnings),
-    ...warnings,
-    ...offlineAlternativeMatches(features, cropType, key, result),
-  ];
-  return result;
+  return enrichOfflineResult(result, features, cropType, key);
 }
 
 function getYoloDetections(result) {
@@ -3141,7 +3327,6 @@ export default function PlantDiseaseDetector() {
           ...offlineResult,
           local_id: makeHistoryId(),
           image_name: imageFile.name,
-          analysis_mode: 'offline browser fallback',
         });
         queueResultReveal();
         setResult(nextResult);

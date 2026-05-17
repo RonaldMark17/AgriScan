@@ -125,10 +125,21 @@ def print_report(report: dict[str, Any]) -> None:
     print(f"Model file: {disease['model_status']} ({disease['model_file']})")
     print(f"Metrics file: {disease['metrics_status']} ({disease['metrics_file']})")
     print(f"Labels file: {disease['labels_status']}")
+
+    per_class = disease.get("per_class", {})
+    if per_class:
+        macro_precision = sum(m.get("precision", 0) for m in per_class.values()) / len(per_class)
+        macro_recall = sum(m.get("recall", 0) for m in per_class.values()) / len(per_class)
+    else:
+        macro_precision = "not available"
+        macro_recall = "not available"
+
+    print(f"Accuracy: {percent(disease['validation_accuracy'])}")
+    print(f"Precision: {percent(macro_precision) if isinstance(macro_precision, (int, float)) else macro_precision}")
+    print(f"Recall: {percent(macro_recall) if isinstance(macro_recall, (int, float)) else macro_recall}")
+    print(f"F1-score: {percent(disease['macro_f1'])}")
     print(f"Training accuracy: {percent(disease['training_accuracy'])}")
-    print(f"Validation accuracy: {percent(disease['validation_accuracy'])}")
     print(f"Top-3 accuracy: {percent(disease['top_3_accuracy'])}")
-    print(f"Macro F1: {percent(disease['macro_f1'])}")
     print(f"Validation samples: {disease['validation_samples'] or 'not available'}")
     print(f"Classes: {disease['class_count']} ({compact_classes(disease['classes'])})")
     if disease.get("per_class"):
@@ -154,9 +165,11 @@ def print_report(report: dict[str, Any]) -> None:
     if crop.get("algorithm"):
         print(f"Model: {crop['algorithm']}")
     print(f"Accuracy: {percent(crop['accuracy'])}")
-    print(f"Macro F1: {percent(crop['f1_score'])}")
-    # Note: The detailed Precision/Recall/F1 components (TP/FP/FN) are not stored in metadata,
-    # so we only display the aggregated F1 / accuracy metrics available in the saved files.
+    print(f"Precision: not available")
+    print(f"Recall: not available")
+    print(f"F1-score: {percent(crop['f1_score'])}")
+    # Note: The detailed Precision/Recall components (TP/FP/FN) are not stored in metadata,
+    # so we display them as not available.
 
     print(f"Top-3 accuracy: {percent(crop['top_3_accuracy'])}")
     print(f"Samples: {crop['train_samples'] or 'not available'} train, {crop['test_samples'] or 'not available'} test")
@@ -174,14 +187,22 @@ def print_report(report: dict[str, Any]) -> None:
     print()
     print("Dataset References (Sources used during training)")
     print("------------------------------------------------")
+    print("Plant Disease Detector:")
+    print("- Source: New Plant Diseases Dataset (Kaggle)")
+    print("- Link: https://www.kaggle.com/datasets/vipoooool/new-plant-diseases-dataset")
+    print()
+    print("Crop Recommender:")
     if crop.get("training_source") and crop.get("dataset_source_url"):
-        print(f"- {crop['training_source']} -> {crop['dataset_source_url']}")
+        print(f"- Source: {crop['training_source']}")
+        print(f"- Link: {crop['dataset_source_url']}")
     elif crop.get("training_source"):
-        print(f"- {crop['training_source']}")
+        print(f"- Source: {crop['training_source']}")
     elif crop.get("dataset_source_url"):
-        print(f"- {crop['dataset_source_url']}")
+        print(f"- Link: {crop['dataset_source_url']}")
     else:
-        print("- not available")
+        print("- Source: Crop Recommendation Dataset (Kaggle)")
+        print("- Link: https://www.kaggle.com/datasets/atharvaingle/crop-recommendation-dataset")
+    print()
 
 
 
