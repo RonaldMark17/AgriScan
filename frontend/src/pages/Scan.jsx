@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api/client.js';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
@@ -839,6 +840,7 @@ function formatScoreValue(value) {
 function lockDocumentScroll() {
   const { body, documentElement } = document;
   const appContent = document.querySelector('.app-content');
+  const hasAppContentStyles = Boolean(appContent && typeof appContent === 'object' && 'style' in appContent);
   const scrollY = window.scrollY;
   const previous = {
     htmlOverflow: documentElement.style.overflow,
@@ -849,8 +851,8 @@ function lockDocumentScroll() {
     bodyRight: body.style.right,
     bodyWidth: body.style.width,
     bodyPaddingRight: body.style.paddingRight,
-    appContentOverflowY: appContent instanceof HTMLElement ? appContent.style.overflowY : '',
-    appContentOverscrollBehavior: appContent instanceof HTMLElement ? appContent.style.overscrollBehavior : '',
+    appContentOverflowY: hasAppContentStyles ? appContent.style.overflowY : '',
+    appContentOverscrollBehavior: hasAppContentStyles ? appContent.style.overscrollBehavior : '',
   };
   const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
 
@@ -864,7 +866,7 @@ function lockDocumentScroll() {
   if (scrollbarWidth > 0) {
     body.style.paddingRight = `${scrollbarWidth}px`;
   }
-  if (appContent instanceof HTMLElement) {
+  if (hasAppContentStyles) {
     appContent.style.overflowY = 'hidden';
     appContent.style.overscrollBehavior = 'none';
   }
@@ -878,7 +880,7 @@ function lockDocumentScroll() {
     body.style.right = previous.bodyRight;
     body.style.width = previous.bodyWidth;
     body.style.paddingRight = previous.bodyPaddingRight;
-    if (appContent instanceof HTMLElement) {
+    if (hasAppContentStyles) {
       appContent.style.overflowY = previous.appContentOverflowY;
       appContent.style.overscrollBehavior = previous.appContentOverscrollBehavior;
     }
@@ -895,43 +897,61 @@ function GuideSection({ accent = 'leaf', icon: Icon, title, children }) {
   };
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="crop-guide-section rounded-[1.35rem] border border-stone-200 bg-white p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <div className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl ${accentClasses[accent] || accentClasses.leaf}`}>
           <Icon className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-bold tracking-tight text-stone-950 sm:text-lg">{title}</h3>
-          <div className="mt-3 text-sm leading-7 text-stone-600 sm:text-[15px]">{children}</div>
+          <div className="mt-3 text-sm leading-7 text-stone-600 sm:text-[15px] sm:leading-8">{children}</div>
         </div>
       </div>
     </section>
   );
 }
 
-function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
-  if (!crop) return null;
+function CropGuideMetric({ label, value, tone = 'stone' }) {
+  const toneClasses = {
+    leaf: 'border-leaf-200 bg-leaf-50/80',
+    stone: 'border-stone-200 bg-white/90',
+    sky: 'border-sky-200 bg-sky-50/80',
+  };
 
   return (
-    <div className="crop-guide-overlay fixed inset-0 z-[70] overflow-hidden overscroll-none bg-stone-950/70 backdrop-blur-[2px] px-3 py-4 sm:px-6 sm:py-8" onClick={onClose}>
+    <div className={`rounded-2xl border px-4 py-3 ${toneClasses[tone] || toneClasses.stone}`}>
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{label}</p>
+      <div className="mt-2 text-sm font-semibold leading-6 text-stone-900">
+        {typeof value === 'string' ? <TranslatedText text={value} /> : value}
+      </div>
+    </div>
+  );
+}
+
+function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
+  if (!crop || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="crop-guide-overlay fixed inset-0 z-[140] overflow-hidden overscroll-none bg-stone-950/78 px-3 py-4 backdrop-blur-sm sm:px-6 sm:py-8" onClick={onClose}>
       <div className="flex h-full items-center justify-center">
         <div
-          className="crop-guide-dialog surface flex max-h-[85vh] w-[95vw] max-w-[780px] flex-col overflow-hidden rounded-[1.25rem] border border-white/70 bg-white shadow-2xl ring-1 ring-stone-950/5 sm:max-h-[80vh] sm:w-full"
+          className="crop-guide-dialog surface flex max-h-[85vh] w-[92vw] max-w-[760px] flex-col overflow-hidden rounded-[1.5rem] border border-white/80 bg-white ring-1 ring-stone-950/5 sm:max-h-[82vh] sm:w-[94vw]"
           onClick={(event) => event.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="crop-guide-title"
+          aria-describedby="crop-guide-summary"
         >
-          <div className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-4 border-b border-stone-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-6">
-            <div className="min-w-0">
+          <div className="crop-guide-header sticky top-0 z-20 flex shrink-0 items-start justify-between gap-4 border-b border-stone-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-leaf-700 sm:text-sm">{t('cropGuide')}</p>
-              <h2 id="crop-guide-title" className="mt-2 truncate text-2xl font-bold tracking-tight text-stone-950 sm:text-[2rem]">{crop.name}</h2>
+              <h2 id="crop-guide-title" className="mt-2 break-words text-2xl font-bold tracking-tight text-stone-950 sm:text-[2rem]">{crop.name}</h2>
               <p className="mt-1 text-sm leading-6 text-stone-500">
                 {translatedCategory(crop.variety, t)} | <TranslatedText text={crop.window} />
               </p>
             </div>
             <button
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-700 shadow-sm transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 active:scale-[0.98]"
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-leaf-50 text-leaf-800 transition hover:border-leaf-200 hover:bg-white hover:text-leaf-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 active:scale-[0.98]"
               type="button"
               onClick={onClose}
               aria-label={t('closeCropGuide')}
@@ -940,9 +960,9 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-stone-50/70 px-5 py-5 sm:px-6 sm:py-6">
+          <div className="crop-guide-body min-h-0 flex-1 overflow-y-auto overscroll-contain bg-gradient-to-b from-stone-50 via-stone-50/70 to-white px-4 py-4 sm:px-6 sm:py-6">
             <div className="space-y-4 sm:space-y-5">
-              <section className="rounded-2xl border border-leaf-100 bg-gradient-to-br from-leaf-50 via-white to-leaf-100/70 p-5 shadow-sm sm:p-6">
+              <section className="crop-guide-hero rounded-[1.35rem] border border-leaf-200 bg-gradient-to-br from-leaf-50 via-white to-[#ecfdf3] p-5 sm:p-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-2 rounded-full bg-leaf-700 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-sm">
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -955,9 +975,15 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
                 <h3 className="mt-4 text-2xl font-bold tracking-tight text-stone-950 sm:text-3xl">{crop.name}</h3>
                 <TranslatedText
                   as="p"
+                  id="crop-guide-summary"
                   className="mt-3 max-w-3xl text-sm leading-7 text-stone-600 sm:text-[15px] sm:leading-8 line-clamp-3"
                   text={crop.guide}
                 />
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <CropGuideMetric label={t('cropType')} value={translatedCategory(crop.variety, t)} />
+                  <CropGuideMetric label={t('plantingWindow')} value={crop.window} />
+                  <CropGuideMetric label={t('suitability')} tone="leaf" value={<span className="text-lg font-bold text-leaf-800">{crop.score}%</span>} />
+                </div>
               </section>
 
               <GuideSection accent="leaf" icon={Leaf} title={t('whyRecommended')}>
@@ -965,8 +991,8 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
               </GuideSection>
 
               <GuideSection accent="sky" icon={Sun} title={t('soilWeatherSuitability')}>
-                <div className="space-y-3">
-                  <div className="rounded-2xl bg-sky-50 p-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">{t('liveWeatherContext')}</p>
                     {weatherSummary ? (
                       <TranslatedText as="p" className="mt-2 text-sm leading-7 text-stone-700" text={weatherSummary} />
@@ -974,7 +1000,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
                       <p className="mt-2 text-sm leading-7 text-stone-700">{t('refreshWeatherContext')}</p>
                     )}
                   </div>
-                  <div className="rounded-2xl bg-stone-50 p-4">
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-stone-500">{t('plantingWindow')}</p>
                     <TranslatedText as="p" className="mt-2 text-sm leading-7 text-stone-700" text={crop.window} />
                   </div>
@@ -993,7 +1019,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
               <GuideSection accent="stone" icon={TrendingUp} title={t('scoreBreakdown')}>
                 <div className="space-y-3">
-                  <div className="rounded-2xl bg-stone-50 p-4">
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-stone-500">{t('overallSuitability')}</p>
@@ -1010,7 +1036,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
                   {crop.scoreBreakdown?.length > 0 ? (
                     <div className="space-y-2">
                       {crop.scoreBreakdown.map((item, index) => (
-                        <div key={`${item.label}-${index}`} className="flex items-start justify-between gap-4 rounded-2xl bg-stone-50 px-4 py-3">
+                        <div key={`${item.label}-${index}`} className="flex items-start justify-between gap-4 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-bold text-stone-900">{item.label}</p>
                             {item.detail && <TranslatedText as="p" className="mt-1 text-xs leading-6 text-stone-500" text={item.detail} />}
@@ -1048,7 +1074,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
             </div>
           </div>
 
-          <div className="sticky bottom-0 z-20 shrink-0 border-t border-stone-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-6">
+          <div className="crop-guide-footer sticky bottom-0 z-20 shrink-0 border-t border-stone-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button className="btn-secondary w-full justify-center sm:w-auto" type="button" onClick={onPlayAudio}>
                 <Play className="mr-2 h-4 w-4" />
@@ -1061,7 +1087,8 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1070,7 +1097,7 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
     <article
       className={`surface flex h-full flex-col overflow-hidden rounded-[1rem] border w-full transition-shadow ${
         crop.isBestMatch
-          ? 'border-leaf-200 bg-gradient-to-br from-leaf-50/70 via-white to-white shadow-lg ring-1 ring-leaf-100'
+          ? 'crop-card-best-match border-leaf-300 bg-gradient-to-br from-leaf-50 via-white to-white ring-1 ring-leaf-100'
           : 'border-stone-200 bg-white'
       }`}
     >
