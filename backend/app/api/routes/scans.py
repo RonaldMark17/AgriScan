@@ -223,8 +223,14 @@ async def create_scan(
             )
         file_path.write_bytes(content)
 
+    original_filename = image.filename if image is not None else None
+
     if file_path is not None:
-        crop_mismatch = detector.validate_selected_crop_type(str(file_path), crop_type)
+        crop_mismatch = detector.validate_selected_crop_type(
+            str(file_path),
+            crop_type,
+            original_filename=original_filename,
+        )
         if crop_mismatch:
             file_path.unlink(missing_ok=True)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=crop_mismatch)
@@ -232,7 +238,7 @@ async def create_scan(
         detector.detect(
             str(file_path),
             crop_type=crop_type,
-            original_filename=None,
+            original_filename=original_filename,
             allow_online_lookup=not offline_mode,
         )
         if file_path is not None

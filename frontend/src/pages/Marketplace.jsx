@@ -1,4 +1,19 @@
-import { ArrowRight, Crosshair, Droplets, Filter, Leaf, Loader2, MapPin, Play, TrendingUp, X } from 'lucide-react';
+import {
+  ArrowRight,
+  CalendarClock,
+  CheckCircle2,
+  Crosshair,
+  Droplets,
+  Filter,
+  FlaskConical,
+  Leaf,
+  Loader2,
+  MapPin,
+  Play,
+  Sun,
+  TrendingUp,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
@@ -97,6 +112,7 @@ function buildCropCard(item, result) {
   const category = getCropCategory(item.crop);
   const locationTag = result?.location?.label ? 'Location Aware' : 'Soil Match';
   const weatherTag = result?.weather_summary ? 'Live Weather' : 'Manual Soil';
+  const isBestMatch = item.crop === result?.best_crop;
 
   return {
     id: `${item.crop}-${item.suitability}`,
@@ -104,11 +120,14 @@ function buildCropCard(item, result) {
     variety: category,
     category,
     score: item.suitability,
-    tags: [locationTag, weatherTag, item.crop === result?.best_crop ? 'Top Match' : 'Alternative'],
+    isBestMatch,
+    tags: [locationTag, weatherTag, isBestMatch ? 'Top Match' : 'Alternative'],
     window: item.planting_window,
     guide: item.reason,
     watering: item.watering,
     fertilizer: item.fertilizer,
+    scoreBreakdown: item.score_breakdown || [],
+    riskFlags: item.risk_flags || [],
   };
 }
 
@@ -134,68 +153,234 @@ function buildAudioGuide(selectedCrop, result, t) {
   return t('audioRecommendationReady');
 }
 
+function lockDocumentScroll() {
+  const { body, documentElement } = document;
+  const appContent = document.querySelector('.app-content');
+  const scrollY = window.scrollY;
+  const previous = {
+    htmlOverflow: documentElement.style.overflow,
+    bodyOverflow: body.style.overflow,
+    bodyPosition: body.style.position,
+    bodyTop: body.style.top,
+    bodyLeft: body.style.left,
+    bodyRight: body.style.right,
+    bodyWidth: body.style.width,
+    bodyPaddingRight: body.style.paddingRight,
+    appContentOverflowY: appContent instanceof HTMLElement ? appContent.style.overflowY : '',
+    appContentOverscrollBehavior: appContent instanceof HTMLElement ? appContent.style.overscrollBehavior : '',
+  };
+  const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
+
+  documentElement.style.overflow = 'hidden';
+  body.style.overflow = 'hidden';
+  body.style.position = 'fixed';
+  body.style.top = `-${scrollY}px`;
+  body.style.left = '0';
+  body.style.right = '0';
+  body.style.width = '100%';
+  if (scrollbarWidth > 0) {
+    body.style.paddingRight = `${scrollbarWidth}px`;
+  }
+  if (appContent instanceof HTMLElement) {
+    appContent.style.overflowY = 'hidden';
+    appContent.style.overscrollBehavior = 'none';
+  }
+
+  return () => {
+    documentElement.style.overflow = previous.htmlOverflow;
+    body.style.overflow = previous.bodyOverflow;
+    body.style.position = previous.bodyPosition;
+    body.style.top = previous.bodyTop;
+    body.style.left = previous.bodyLeft;
+    body.style.right = previous.bodyRight;
+    body.style.width = previous.bodyWidth;
+    body.style.paddingRight = previous.bodyPaddingRight;
+    if (appContent instanceof HTMLElement) {
+      appContent.style.overflowY = previous.appContentOverflowY;
+      appContent.style.overscrollBehavior = previous.appContentOverscrollBehavior;
+    }
+    window.scrollTo(0, scrollY);
+  };
+}
+
+function formatScoreValue(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '';
+  return number > 0 ? `+${number}` : `${number}`;
+}
+
+function GuideSection({ accent = 'leaf', icon: Icon, title, children }) {
+  const accentClasses = {
+    leaf: 'bg-leaf-100 text-leaf-700',
+    sky: 'bg-sky-100 text-sky-700',
+    amber: 'bg-amber-100 text-amber-700',
+    stone: 'bg-stone-100 text-stone-700',
+  };
+
+  return (
+    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-start gap-3">
+        <div className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl ${accentClasses[accent] || accentClasses.leaf}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-bold tracking-tight text-stone-950 sm:text-lg">{title}</h3>
+          <div className="mt-3 text-sm leading-7 text-stone-600 sm:text-[15px]">{children}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
   if (!crop) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4" onClick={onClose}>
+    <div className="crop-guide-overlay fixed inset-0 z-[70] overflow-hidden overscroll-none bg-stone-950/70 backdrop-blur-[2px] px-3 py-4 sm:px-6 sm:py-8" onClick={onClose}>
+      <div className="flex h-full items-center justify-center">
       <div
-        className="surface max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-lg bg-white"
+        className="crop-guide-dialog surface flex max-h-[85vh] w-[95vw] max-w-[780px] flex-col overflow-hidden rounded-[1.25rem] border border-white/70 bg-white shadow-2xl ring-1 ring-stone-950/5 sm:max-h-[80vh] sm:w-full"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="crop-guide-title"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-5 sm:p-6">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-leaf-700">{t('cropGuide')}</p>
-            <h2 id="crop-guide-title" className="mt-1 text-2xl font-bold text-stone-950">{crop.name}</h2>
-            <p className="mt-2 text-sm text-stone-500">{translatedCategory(crop.variety, t)} - <TranslatedText text={crop.window} /></p>
+        <div className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-4 border-b border-stone-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-6">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-leaf-700 sm:text-sm">{t('cropGuide')}</p>
+            <h2 id="crop-guide-title" className="mt-2 truncate text-2xl font-bold tracking-tight text-stone-950 sm:text-[2rem]">{crop.name}</h2>
+            <p className="mt-1 text-sm leading-6 text-stone-500">{translatedCategory(crop.variety, t)} | <TranslatedText text={crop.window} /></p>
           </div>
-          <button className="btn-icon shrink-0" type="button" onClick={onClose} aria-label={t('closeCropGuide')}>
+          <button
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-700 shadow-sm transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 active:scale-[0.98]"
+            type="button"
+            onClick={onClose}
+            aria-label={t('closeCropGuide')}
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="max-h-[calc(85vh-110px)] overflow-y-auto p-5 sm:p-6">
-          <div className="rounded-lg bg-leaf-50/70 p-4">
-            <TranslatedText as="p" className="text-sm leading-7 text-stone-700" text={crop.guide} />
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-stone-50/70 px-5 py-5 sm:px-6 sm:py-6">
+          <div className="space-y-4 sm:space-y-5">
+            <section className="rounded-2xl border border-leaf-100 bg-gradient-to-br from-leaf-50 via-white to-leaf-100/70 p-5 shadow-sm sm:p-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full bg-leaf-700 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-sm">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {crop.isBestMatch ? `#1 ${t('topMatch')}` : t('alternative')}
+                </span>
+                <span className="rounded-full border border-leaf-200 bg-white/80 px-3 py-1 text-xs font-semibold text-leaf-800">
+                  {translatedCategory(crop.variety, t)}
+                </span>
+              </div>
+              <h3 className="mt-4 text-2xl font-bold tracking-tight text-stone-950 sm:text-3xl">{crop.name}</h3>
+              <TranslatedText
+                as="p"
+                className="mt-3 max-w-3xl text-sm leading-7 text-stone-600 sm:text-[15px] sm:leading-8 line-clamp-3"
+                text={crop.guide}
+              />
+            </section>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-stone-200 p-4">
-              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('watering')}</p>
-              <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={crop.watering} />
+            <GuideSection accent="leaf" icon={Leaf} title={t('whyRecommended')}>
+              <TranslatedText as="p" className="text-sm leading-7 text-stone-600 sm:text-[15px] sm:leading-8" text={crop.guide} />
+            </GuideSection>
+
+            <GuideSection accent="sky" icon={Sun} title={t('soilWeatherSuitability')}>
+              <div className="space-y-3">
+                <div className="rounded-2xl bg-sky-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">{t('liveWeatherContext')}</p>
+                  {weatherSummary ? (
+                    <TranslatedText as="p" className="mt-2 text-sm leading-7 text-stone-700" text={weatherSummary} />
+                  ) : (
+                    <p className="mt-2 text-sm leading-7 text-stone-700">{t('refreshWeatherContext')}</p>
+                  )}
+                </div>
+                <div className="rounded-2xl bg-stone-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-stone-500">{t('plantingWindow')}</p>
+                  <TranslatedText as="p" className="mt-2 text-sm leading-7 text-stone-700" text={crop.window} />
+                </div>
+              </div>
+            </GuideSection>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <GuideSection accent="leaf" icon={Droplets} title={t('wateringGuide')}>
+                <TranslatedText as="p" className="text-sm leading-7 text-stone-600 sm:text-[15px] sm:leading-8" text={crop.watering} />
+              </GuideSection>
+
+              <GuideSection accent="stone" icon={FlaskConical} title={t('fertilizerGuide')}>
+                <TranslatedText as="p" className="text-sm leading-7 text-stone-600 sm:text-[15px] sm:leading-8" text={crop.fertilizer} />
+              </GuideSection>
             </div>
-            <div className="rounded-lg border border-stone-200 p-4">
-              <p className="text-sm font-bold uppercase tracking-wide text-stone-500">{t('fertilizer')}</p>
-              <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={crop.fertilizer} />
-            </div>
-          </div>
 
-          <div className="mt-5 rounded-lg border border-sky-100 bg-sky-50 p-4">
-            <p className="text-sm font-bold uppercase tracking-wide text-sky-700">{t('liveWeatherContext')}</p>
-            {weatherSummary ? <TranslatedText as="p" className="mt-2 text-sm text-stone-700" text={weatherSummary} /> : <p className="mt-2 text-sm text-stone-700">{t('refreshWeatherContext')}</p>}
-          </div>
+            <GuideSection accent="stone" icon={TrendingUp} title={t('scoreBreakdown')}>
+              <div className="space-y-3">
+                <div className="rounded-2xl bg-stone-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-stone-500">{t('overallSuitability')}</p>
+                      <p className="mt-1 text-2xl font-bold tracking-tight text-stone-950">{crop.score}%</p>
+                    </div>
+                    <div className="w-full max-w-xs">
+                      <div className="h-2.5 rounded-full bg-leaf-100">
+                        <div className="h-2.5 rounded-full bg-leaf-600" style={{ width: `${crop.score}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            {crop.tags.map((tag) => (
-              <span key={tag} className="rounded-full border border-leaf-100 bg-leaf-50 px-3 py-1 text-sm font-semibold text-leaf-800">
-                {translatedTag(tag, t)}
-              </span>
-            ))}
-          </div>
+                {crop.scoreBreakdown?.length > 0 ? (
+                  <div className="space-y-2">
+                    {crop.scoreBreakdown.map((item, index) => (
+                      <div key={`${item.label}-${index}`} className="flex items-start justify-between gap-4 rounded-2xl bg-stone-50 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-stone-900">{item.label}</p>
+                          {item.detail && <TranslatedText as="p" className="mt-1 text-xs leading-6 text-stone-500" text={item.detail} />}
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${Number(item.value) >= 0 ? 'bg-leaf-50 text-leaf-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {formatScoreValue(item.value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {crop.tags.map((tag) => (
+                      <span key={tag} className="rounded-full border border-leaf-100 bg-leaf-50 px-3 py-1 text-xs font-semibold text-leaf-800 sm:text-sm">
+                        {translatedTag(tag, t)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </GuideSection>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button className="btn-secondary" type="button" onClick={onPlayAudio}>
-              <Play className="h-4 w-4" />
+            {crop.riskFlags?.length > 0 && (
+              <GuideSection accent="amber" icon={CalendarClock} title={t('riskFlags')}>
+                <ul className="space-y-2 pl-1 text-sm leading-7 text-amber-900">
+                  {crop.riskFlags.map((flag) => (
+                    <li key={flag} className="flex gap-2">
+                      <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-600" />
+                      <TranslatedText text={flag} />
+                    </li>
+                  ))}
+                </ul>
+              </GuideSection>
+            )}
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-stone-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button className="btn-secondary w-full justify-center sm:w-auto" type="button" onClick={onPlayAudio}>
+              <Play className="mr-2 h-4 w-4" />
               {t('playAudioGuide')}
             </button>
-            <button className="btn-primary" type="button" onClick={onClose}>
+            <button className="btn-primary w-full justify-center sm:w-auto" type="button" onClick={onClose}>
               {t('closeCropGuide')}
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -203,26 +388,45 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
 function CropCard({ crop, onGuide, weatherSummary, t }) {
   return (
-    <article className="surface flex h-full flex-col overflow-hidden rounded-lg">
+    <article
+      className={`surface flex h-full flex-col overflow-hidden rounded-[1rem] border transition-shadow ${
+        crop.isBestMatch
+          ? 'border-leaf-200 bg-gradient-to-br from-leaf-50/70 via-white to-white shadow-lg ring-1 ring-leaf-100'
+          : 'border-stone-200 bg-white'
+      }`}
+    >
       <div className="flex flex-1 flex-col p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${
+              crop.isBestMatch
+                ? 'bg-leaf-700 text-white shadow-sm'
+                : 'border border-stone-200 bg-stone-50 text-stone-600'
+            }`}
+          >
+            {crop.isBestMatch && <CheckCircle2 className="h-3.5 w-3.5" />}
+            {crop.isBestMatch ? `#1 ${t('topMatch')}` : t('alternative')}
+          </span>
+        </div>
+
         <div className="flex flex-col gap-4 min-[440px]:flex-row min-[440px]:items-start min-[440px]:justify-between">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-600">
+            <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${crop.isBestMatch ? 'bg-leaf-100 text-leaf-700' : 'bg-leaf-50 text-leaf-600'}`}>
               <Leaf className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <h2 className="break-words text-xl font-bold leading-tight text-stone-950">{crop.name}</h2>
-              <p className="mt-0.5 text-sm text-stone-500">{translatedCategory(crop.variety, t)}</p>
+              <h2 className="break-words text-xl font-bold leading-tight tracking-tight text-stone-950">{crop.name}</h2>
+              <p className="mt-0.5 text-sm font-medium text-stone-500">{translatedCategory(crop.variety, t)}</p>
             </div>
           </div>
           <div className="text-left min-[440px]:text-right">
-            <p className="text-3xl font-bold leading-none text-leaf-600">{crop.score}%</p>
+            <p className={`text-3xl font-bold leading-none ${crop.isBestMatch ? 'text-leaf-700' : 'text-leaf-600'}`}>{crop.score}%</p>
             <p className="mt-1 text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
           </div>
         </div>
 
         <div className="mt-6 h-2 rounded-full bg-leaf-50">
-          <div className="h-2 rounded-full bg-leaf-500" style={{ width: `${crop.score}%` }} />
+          <div className={`h-2 rounded-full ${crop.isBestMatch ? 'bg-leaf-700' : 'bg-leaf-500'}`} style={{ width: `${crop.score}%` }} />
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
@@ -244,12 +448,12 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
           <TranslatedText as="span" className="min-w-0 break-words min-[460px]:text-right" text={crop.window} />
         </div>
 
-        <div className="mt-5 rounded-lg bg-leaf-50/60 p-4">
+        <div className={`mt-5 rounded-xl p-4 ${crop.isBestMatch ? 'bg-leaf-50/80' : 'bg-leaf-50/60'}`}>
           <TranslatedText as="p" className="text-sm leading-6 text-stone-700" text={crop.guide} />
         </div>
       </div>
 
-      <footer className="flex flex-col gap-3 border-t border-stone-100 px-4 py-4 text-sm min-[460px]:flex-row min-[460px]:items-center min-[460px]:justify-between sm:px-5">
+      <footer className="flex flex-col gap-3 border-t border-stone-100 bg-stone-50/50 px-4 py-4 text-sm min-[460px]:flex-row min-[460px]:items-center min-[460px]:justify-between sm:px-5">
         <span className="inline-flex min-w-0 items-center gap-2 text-stone-500">
           <Droplets className="h-4 w-4 shrink-0" />
           {weatherSummary ? <TranslatedText text={weatherSummary} /> : t('waitingLiveWeather')}
@@ -322,6 +526,7 @@ export default function Marketplace() {
 
   useEffect(() => {
     if (!selectedCrop) return undefined;
+    const unlockScroll = lockDocumentScroll();
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
@@ -330,7 +535,10 @@ export default function Marketplace() {
     }
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      unlockScroll();
+    };
   }, [selectedCrop]);
 
   const crops = useMemo(

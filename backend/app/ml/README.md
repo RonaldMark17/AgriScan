@@ -114,6 +114,33 @@ For the production model, merge these verified feedback images into the main pre
 
 The FastAPI scan route loads this model automatically through `MODEL_PATH` and `MODEL_LABELS_PATH`.
 
+## 3A.2 Register Verified Visual-Memory Examples
+
+For single images or small batches that should immediately influence live detection, you can register them as verified visual-memory examples instead of waiting for a full classifier retrain.
+
+Create a JSON manifest with entries like:
+
+```json
+[
+  {
+    "source_path": "C:/path/to/image.jpg",
+    "id": "sample_unique_id",
+    "class_key": "invalid_crop_image",
+    "crop_label": null,
+    "confidence": 0.0,
+    "match_threshold": 0.05
+  }
+]
+```
+
+Then run:
+
+```powershell
+python app/ml/register_visual_memory_examples.py --manifest path/to/manifest.json --backup
+```
+
+This updates `app/ml/artifacts/visual_memory_examples.json`, which the scan service reads automatically for verified-example matching.
+
 ## 3B. Train Manual Scan Crop Recommender
 
 The Manual Scan form uses a separate tabular scikit-learn Decision Tree classifier trained on the public Kaggle Crop Recommendation Dataset:

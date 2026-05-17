@@ -1845,6 +1845,196 @@ class CropDiseaseDetector:
             "center_tan_ratio": float(np.mean(tan_subject_pixels[center_mask])),
         }
 
+    def _disease_region_entries(
+        self,
+        image_path: str | None,
+        disease_name: str,
+        confidence: float,
+        existing_detections: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        if not image_path or confidence <= 0:
+            return []
+
+        if any(isinstance(item, dict) and item.get("box") for item in (existing_detections or [])):
+            return []
+
+        disease_key = self._canonical_key_for_label(disease_name)
+        if any(token in disease_key for token in ("healthy", "review", "invalid_crop", "low_confidence")):
+            return []
+
+        try:
+            import cv2
+
+            image = Image.open(image_path).convert("RGB")
+            array = np.asarray(image, dtype=np.float32) / 255.0
+            if array.ndim != 3 or array.shape[2] < 3:
+                return []
+
+            image_height, image_width = array.shape[:2]
+            if image_height <= 0 or image_width <= 0:
+                return []
+
+            red_channel = array[:, :, 0]
+            green_channel = array[:, :, 1]
+            blue_channel = array[:, :, 2]
+            max_channel = np.max(array, axis=2)
+            min_channel = np.min(array, axis=2)
+            saturation = max_channel - min_channel
+
+            green_leaf_pixels = (
+                (green_channel > red_channel * 1.05)
+                & (green_channel > blue_channel * 1.05)
+                & (green_channel > 0.15)
+                & (saturation > 0.08)
+            )
+            brown_lesion_pixels = (
+                (red_channel > 0.23)
+                & (green_channel > 0.12)
+                & (blue_channel < 0.38)
+                & (red_channel > green_channel * 1.02)
+                & (saturation > 0.10)
+                & (max_channel < 0.82)
+            )
+            dark_lesion_pixels = (
+                (red_channel > 0.14)
+                & (green_channel > 0.08)
+                & (blue_channel < 0.28)
+                & (red_channel >= green_channel * 0.85)
+                & (green_channel > blue_channel * 1.08)
+                & (saturation > 0.08)
+                & (max_channel < 0.55)
+            )
+            yellow_halo_pixels = (
+                (red_channel > 0.45)
+                & (green_channel > 0.35)
+                & (blue_channel < 0.25)
+                & (red_channel > green_channel * 0.85)
+                & (green_channel > blue_channel * 1.2)
+                & (saturation > 0.16)
+            )
+            yellow_pixels = (
+                (red_channel > 0.45)
+                & (green_channel > 0.42)
+                & (blue_channel < 0.32)
+                & (green_channel > blue_channel * 1.15)
+            )
+            rust_pixels = (
+                (red_channel > 0.48)
+                & (green_channel > 0.20)
+                & (green_channel < 0.48)
+                & (blue_channel < 0.24)
+                & (red_channel > green_channel * 1.20)
+            )
+            red_purple_bulb_pixels = (
+                (red_channel > 0.24)
+                & (blue_channel > 0.10)
+                & (red_channel > green_channel * 1.06)
+                & (red_channel >= blue_channel * 0.90)
+                & (saturation > 0.08)
+                & (max_channel > 0.28)
+                & (max_channel < 0.98)
+                & ~green_leaf_pixels
+            )
+            banana_fruit_pixels = (
+                (red_channel > 0.36)
+                & (green_channel > 0.32)
+                & (blue_channel < 0.55)
+                & (red_channel > blue_channel * 1.12)
+                & (green_channel > blue_channel * 1.10)
+                & (red_channel < green_channel * 1.45)
+                & (green_channel < red_channel * 1.55)
+                & (saturation > 0.05)
+                & ~green_leaf_pixels
+            )
+
+            symptom_pixels = brown_lesion_pixels | dark_lesion_pixels | yellow_halo_pixels | rust_pixels
+            if any(token in disease_key for token in ("blight", "spot", "rust", "virus", "rot", "anthracnose", "canker", "mildew")):
+                symptom_pixels = symptom_pixels | yellow_pixels
+
+            plant_pixels = green_leaf_pixels | symptom_pixels | red_purple_bulb_pixels | banana_fruit_pixels
+            if int(np.sum(plant_pixels)) == 0:
+                return []
+
+            kernel = np.ones((5, 5), dtype=np.uint8)
+            symptom_mask = cv2.morphologyEx(symptom_pixels.astype("uint8"), cv2.MORPH_CLOSE, kernel, iterations=1)
+            symptom_mask = cv2.dilate(symptom_mask, kernel, iterations=1)
+            plant_mask = cv2.dilate(plant_pixels.astype("uint8"), kernel, iterations=2)
+            symptom_mask = cv2.bitwise_and(symptom_mask, plant_mask)
+
+            points_y, points_x = np.where(symptom_mask > 0)
+            if points_x.size == 0 or points_y.size == 0:
+                return []
+
+            image_area = max(image_width * image_height, 1)
+            mask_area = int(points_x.size)
+            min_component_area = max(24, int(image_area * 0.001))
+
+            def build_box(x: int, y: int, width: int, height: int) -> dict[str, float]:
+                pad_x = max(int(width * 0.08), 6)
+                pad_y = max(int(height * 0.08), 6)
+                x1 = max(0, x - pad_x)
+                y1 = max(0, y - pad_y)
+                x2 = min(image_width, x + width + pad_x)
+                y2 = min(image_height, y + height + pad_y)
+                return {
+                    "x": round(x1 / max(image_width, 1), 4),
+                    "y": round(y1 / max(image_height, 1), 4),
+                    "width": round(max(0, x2 - x1) / max(image_width, 1), 4),
+                    "height": round(max(0, y2 - y1) / max(image_height, 1), 4),
+                }
+
+            min_x = int(points_x.min())
+            min_y = int(points_y.min())
+            max_x = int(points_x.max())
+            max_y = int(points_y.max())
+            entries: list[dict[str, Any]] = [
+                {
+                    "kind": "disease_region",
+                    "label": "Affected area",
+                    "confidence": round(float(confidence), 4),
+                    "area_ratio": round(mask_area / image_area, 4),
+                    "box": build_box(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1),
+                    "selected": True,
+                }
+            ]
+
+            component_count, _, stats, _ = cv2.connectedComponentsWithStats(symptom_mask, connectivity=8)
+            components: list[dict[str, int]] = []
+            for index in range(1, component_count):
+                area = int(stats[index, cv2.CC_STAT_AREA])
+                if area < min_component_area:
+                    continue
+                components.append(
+                    {
+                        "area": area,
+                        "x": int(stats[index, cv2.CC_STAT_LEFT]),
+                        "y": int(stats[index, cv2.CC_STAT_TOP]),
+                        "width": int(stats[index, cv2.CC_STAT_WIDTH]),
+                        "height": int(stats[index, cv2.CC_STAT_HEIGHT]),
+                    }
+                )
+
+            components.sort(key=lambda item: item["area"], reverse=True)
+            for index, component in enumerate(components[:2], start=1):
+                component_area_ratio = component["area"] / image_area
+                if component_area_ratio < 0.003 and component["area"] < mask_area * 0.18:
+                    continue
+                entries.append(
+                    {
+                        "kind": "disease_region",
+                        "label": "Disease cluster",
+                        "confidence": round(max(0.25, float(confidence) * (0.92 - (index - 1) * 0.12)), 4),
+                        "area_ratio": round(component_area_ratio, 4),
+                        "box": build_box(component["x"], component["y"], component["width"], component["height"]),
+                        "selected": False,
+                    }
+                )
+
+            return entries[:3]
+        except Exception:
+            logger.debug("Disease-region highlighting unavailable for %s", image_path, exc_info=True)
+            return []
+
     def _visual_memory_signature(self, features: dict[str, float]) -> dict[str, float]:
         return {key: round(float(features.get(key, 0.0)), 5) for key in VISUAL_MEMORY_FEATURE_KEYS}
 
@@ -2164,6 +2354,15 @@ class CropDiseaseDetector:
             if not isinstance(item, dict)
             or item.get("kind") not in {"pipeline_stage", "quality_warning", "alternative", "quality_report"}
         ]
+        if image_path:
+            existing.extend(
+                self._disease_region_entries(
+                    image_path,
+                    detection.disease_name,
+                    detection.confidence,
+                    existing_detections=existing,
+                )
+            )
         metadata_entries: list[dict[str, Any]] = [
             {"kind": "quality_report", **{key: value for key, value in quality_report.items() if key != "kind"}},
             *self._pipeline_stage_entries(detection, features, crop_type, quality_report),
@@ -2817,24 +3016,36 @@ class CropDiseaseDetector:
             )
         return False
 
-    def validate_selected_crop_type(self, image_path: str, crop_type: str | None) -> str | None:
+    def validate_selected_crop_type(
+        self,
+        image_path: str,
+        crop_type: str | None,
+        original_filename: str | None = None,
+    ) -> str | None:
         selected_crop = self._normalize_crop_type(crop_type)
         if not crop_type or not crop_type.strip():
             return None
         if selected_crop is None:
             return None
 
-        features = self._extract_leaf_features(image_path)
-        visual_crop = self._infer_crop_key_from_features(features)
-        if (
-            visual_crop is None
-            or visual_crop == selected_crop
-            or not self._is_reliable_visual_crop_inference(features, visual_crop)
-        ):
+        filename_crop, _, _ = self._filename_context(original_filename, crop_type)
+        if filename_crop == selected_crop:
             return None
 
+        mismatch_crop = filename_crop
+        if mismatch_crop is None:
+            features = self._extract_leaf_features(image_path)
+            visual_crop = self._infer_crop_key_from_features(features)
+            if (
+                visual_crop is None
+                or visual_crop == selected_crop
+                or not self._is_reliable_visual_crop_inference(features, visual_crop)
+            ):
+                return None
+            mismatch_crop = visual_crop
+
         selected_label = self._display_crop_label(selected_crop) or self._freeform_unsupported_crop_label(crop_type) or crop_type
-        visual_label = self._display_crop_label(visual_crop) or visual_crop.replace("_", " ").title()
+        visual_label = self._display_crop_label(mismatch_crop) or mismatch_crop.replace("_", " ").title()
         return f"Selected crop is {selected_label}, but the uploaded image looks like {visual_label}. Choose {visual_label} or use Auto detect crop."
 
     def _looks_like_non_crop_foreground(self, features: dict[str, float], crop_key: str | None) -> bool:
@@ -3820,7 +4031,6 @@ class CropDiseaseDetector:
         allow_online_lookup: bool = True,
         allow_visual_memory: bool = True,
     ) -> DiseaseDetection:
-        original_filename = None
         features = self._extract_leaf_features(image_path)
         normalized_crop = self._normalize_crop_type(crop_type)
         filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
@@ -3829,7 +4039,7 @@ class CropDiseaseDetector:
             strict_visual_memory = self._visual_memory_detection(
                 features,
                 crop_type=None,
-                original_filename=None,
+                original_filename=original_filename,
                 allow_online_lookup=allow_online_lookup,
             )
             if strict_visual_memory is not None:
@@ -4142,7 +4352,6 @@ class CropDiseaseDetector:
         original_filename: str | None = None,
         allow_online_lookup: bool = True,
     ) -> DiseaseDetection:
-        original_filename = None
         if self._has_non_crop_filename_context(original_filename):
             return self._invalid_crop_image_detection()
 
@@ -4165,6 +4374,28 @@ class CropDiseaseDetector:
 
         normalized_crop = self._normalize_crop_type(crop_type)
         filename_unsupported_crop = self._unsupported_crop_label_from_filename(original_filename)
+
+        # Verified visual-memory matches should be able to override the generic model,
+        # especially for hard negatives and small local sample sets that were added after training.
+        if normalized_crop is None:
+            strict_visual_memory = self._visual_memory_detection(
+                features,
+                crop_type=None,
+                original_filename=original_filename,
+                allow_online_lookup=allow_online_lookup,
+            )
+            if strict_visual_memory is not None:
+                return finalize(strict_visual_memory)
+
+        visual_memory = self._visual_memory_detection(
+            features,
+            crop_type=crop_type,
+            original_filename=original_filename,
+            allow_online_lookup=allow_online_lookup,
+        )
+        if visual_memory is not None:
+            return finalize(visual_memory)
+
         if (
             not filename_unsupported_crop
             and not self._has_crop_part_signal(features, normalized_crop)

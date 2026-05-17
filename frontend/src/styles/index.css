@@ -985,6 +985,15 @@ button {
   }
 }
 
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   html {
     scroll-behavior: smooth;
@@ -1014,6 +1023,14 @@ button {
 
   .scan-menu-popover {
     animation: centered-menu-rise var(--motion-base) var(--motion-ease) both;
+  }
+
+  .crop-guide-overlay {
+    animation: overlay-fade var(--motion-base) var(--motion-ease) both;
+  }
+
+  .crop-guide-dialog {
+    animation: soft-pop var(--motion-slow) var(--motion-ease) both;
   }
 
   :where(.success-message, .danger-message, .state-message, .offline-banner, .flagged-review-row) {
