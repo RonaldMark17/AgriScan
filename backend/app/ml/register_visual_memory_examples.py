@@ -18,6 +18,8 @@ def resolve_project_path(path_str: str, *, base_dir: Path | None = None) -> Path
         candidate = (base_dir / path).resolve()
         if candidate.exists():
             return candidate
+    if path.parts and path.parts[0] == "backend":
+        return (BACKEND_DIR.parent / path).resolve()
     if path.parts and path.parts[0] in {"app", "uploads", "data"}:
         return (BACKEND_DIR / path).resolve()
     cwd_path = (Path.cwd() / path).resolve()

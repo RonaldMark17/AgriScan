@@ -1,5 +1,5 @@
-import { CheckCircle2, ChevronLeft, ChevronRight, Flag, Loader2, RefreshCw, RotateCcw, ShieldCheck, UserRoundCheck, XCircle } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Flag, Loader2, RefreshCw, RotateCcw, Search, ShieldCheck, UserRoundCheck, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
@@ -14,9 +14,18 @@ const REVIEW_STATUS_ORDER = {
   rejected: 1,
 };
 const ADMIN_AJAX_REFRESH_MS = 30000;
+const FLAGGED_REVIEW_SORT_MODES = ['priority', 'newest', 'oldest'];
 
-function sortFlaggedReviews(reviews) {
+function sortFlaggedReviews(reviews, mode = 'priority') {
   return [...reviews].sort((first, second) => {
+    if (mode === 'newest') {
+      return new Date(second.created_at).getTime() - new Date(first.created_at).getTime();
+    }
+
+    if (mode === 'oldest') {
+      return new Date(first.created_at).getTime() - new Date(second.created_at).getTime();
+    }
+
     const firstOrder = REVIEW_STATUS_ORDER[first.verification_status] ?? 2;
     const secondOrder = REVIEW_STATUS_ORDER[second.verification_status] ?? 2;
     if (firstOrder !== secondOrder) return firstOrder - secondOrder;
@@ -39,6 +48,8 @@ export default function AdminUsers() {
   const [reviewDecision, setReviewDecision] = useState(null);
   const [reviewActionError, setReviewActionError] = useState('');
   const [flaggedPage, setFlaggedPage] = useState(1);
+  const [userSearch, setUserSearch] = useState('');
+  const [flaggedSortMode, setFlaggedSortMode] = useState('priority');
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -50,7 +61,7 @@ export default function AdminUsers() {
       ]);
       setUsers(usersResponse.data);
       setFarms(farmsResponse.data);
-      setFlaggedReviews(sortFlaggedReviews(flaggedReviewsResponse.data));
+      setFlaggedReviews(flaggedReviewsResponse.data);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -134,13 +145,42 @@ export default function AdminUsers() {
     setReviewActionError('');
     try {
       const { data } = await api.patch(`/admin/flagged-reviews/${id}/${decision}`);
-      setFlaggedReviews((current) => sortFlaggedReviews(current.map((review) => (review.id === id ? data : review))));
+      setFlaggedReviews((current) => current.map((review) => (review.id === id ? data : review)));
     } catch (error) {
       setReviewActionError(getApiErrorMessage(error, t('reviewActionFailed')));
     } finally {
       setReviewDecision(null);
     }
   }
+
+  function translateFlaggedReviewSortMode(mode) {
+    if (mode === 'newest') return t('reviewSortNewest');
+    if (mode === 'oldest') return t('reviewSortOldest');
+    return t('reviewSortPriority');
+  }
+
+  const filteredUsers = useMemo(() => {
+    const normalizedQuery = userSearch.trim().toLowerCase();
+    if (!normalizedQuery) return users;
+
+    return users.filter((user) => {
+      const searchableParts = [
+        user.full_name,
+        user.email,
+        user.role?.name,
+        user.is_active ? t('active') : t('disabled'),
+      ]
+        .filter(Boolean)
+        .map((value) => String(value).toLowerCase());
+
+      return searchableParts.some((value) => value.includes(normalizedQuery));
+    });
+  }, [userSearch, users, t]);
+
+  const orderedFlaggedReviews = useMemo(
+    () => sortFlaggedReviews(flaggedReviews, flaggedSortMode),
+    [flaggedReviews, flaggedSortMode]
+  );
 
   function reviewStatusClass(status) {
     if (status === 'verified') return 'bg-leaf-50 text-leaf-800';
@@ -158,7 +198,6 @@ export default function AdminUsers() {
 
   const flaggedPageCount = Math.max(1, Math.ceil(flaggedReviews.length / FLAGGED_REVIEWS_PAGE_SIZE));
   const flaggedStartIndex = (flaggedPage - 1) * FLAGGED_REVIEWS_PAGE_SIZE;
-  const orderedFlaggedReviews = sortFlaggedReviews(flaggedReviews);
   const visibleFlaggedReviews = orderedFlaggedReviews.slice(flaggedStartIndex, flaggedStartIndex + FLAGGED_REVIEWS_PAGE_SIZE);
   const flaggedShowingStart = flaggedReviews.length === 0 ? 0 : flaggedStartIndex + 1;
   const flaggedShowingEnd = Math.min(flaggedStartIndex + FLAGGED_REVIEWS_PAGE_SIZE, flaggedReviews.length);
@@ -179,10 +218,25 @@ export default function AdminUsers() {
       <div className="content-sidebar-layout">
         <div className="space-y-5">
           <section className="surface rounded-lg p-4 sm:p-5">
-            <h2 className="section-title flex items-center gap-2">
-              <UserRoundCheck className="h-5 w-5 text-leaf-700" />
-              {t('userManagement')}
-            </h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="section-title flex items-center gap-2">
+                  <UserRoundCheck className="h-5 w-5 text-leaf-700" />
+                  {t('userManagement')}
+                </h2>
+              </div>
+              <label className="relative w-full sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                <input
+                  className="field min-h-10 pl-10"
+                  type="search"
+                  value={userSearch}
+                  onChange={(event) => setUserSearch(event.target.value)}
+                  placeholder={t('searchUsersPlaceholder')}
+                  aria-label={t('searchUsers')}
+                />
+              </label>
+            </div>
             {userActionError ? <div className="danger-message mt-4">{userActionError}</div> : null}
             <div className="table-shell mt-4 overflow-x-auto">
               <table className="user-table-mobile w-full text-left text-sm">
@@ -196,7 +250,7 @@ export default function AdminUsers() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {users.map((user) => {
+                  {filteredUsers.map((user) => {
                     const isCurrentUser = user.id === currentUser?.id;
                     const toggleLabel = user.is_active ? t('disableAccount') : t('enableAccount');
                     return (
@@ -249,9 +303,12 @@ export default function AdminUsers() {
                   })}
                 </tbody>
               </table>
-              {users.length === 0 ? (
+              {filteredUsers.length === 0 ? (
                 <div className="p-4">
-                  <EmptyState title={t('noUsersFound')} body={t('usersAppearAfterRegistration')} />
+                  <EmptyState
+                    title={t('noUsersFound')}
+                    body={users.length === 0 ? t('usersAppearAfterRegistration') : t('searchUsersEmptyBody')}
+                  />
                 </div>
               ) : null}
             </div>
@@ -259,13 +316,35 @@ export default function AdminUsers() {
 
           <section className="surface rounded-lg p-4 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <h2 className="section-title flex items-center gap-2">
-                <Flag className="h-5 w-5 text-leaf-700" />
-                {t('flaggedReviews')}
-              </h2>
-              <span className="status-pill border border-stone-200 bg-white text-stone-700">
-                {flaggedReviews.length} {t('total')}
-              </span>
+              <div>
+                <h2 className="section-title flex items-center gap-2">
+                  <Flag className="h-5 w-5 text-leaf-700" />
+                  {t('flaggedReviews')}
+                </h2>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <label className="flex items-center gap-2 text-sm font-semibold text-stone-600">
+                  <span>{t('sort')}</span>
+                  <select
+                    className="field min-h-10 w-full sm:w-[180px]"
+                    value={flaggedSortMode}
+                    onChange={(event) => {
+                      setFlaggedSortMode(event.target.value);
+                      setFlaggedPage(1);
+                    }}
+                    aria-label={t('sortFlaggedReviews')}
+                  >
+                    {FLAGGED_REVIEW_SORT_MODES.map((mode) => (
+                      <option key={mode} value={mode}>
+                        {translateFlaggedReviewSortMode(mode)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="status-pill border border-stone-200 bg-white text-stone-700">
+                  {flaggedReviews.length} {t('total')}
+                </span>
+              </div>
             </div>
             {reviewActionError ? <div className="danger-message mt-4">{reviewActionError}</div> : null}
             {flaggedReviews.length === 0 ? (

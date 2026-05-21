@@ -1,0 +1,546 @@
+{
+  "description": "User-provided image set registered for exact AgriScan visual-memory output and valid/invalid crop-image validation on May 21, 2026.",
+  "examples": [
+    {
+      "id": "user_corn_ear_borer_damage_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\corn-worm-caterpillar-corn-borer-important-pest-corn-crop-agricultural-problems-pest-plant-disease_73523-7932.avif",
+      "class_key": "corn_ear_pest_damage",
+      "crop_label": "Corn",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\banana_banana_yellow_sigatoka_00002.jpg",
+      "id": "user_banana_yellow_sigatoka_02",
+      "class_key": "banana_yellow_sigatoka",
+      "crop_label": "Banana",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\banana_banana_insect_pest_00009.jpg",
+      "id": "user_banana_insect_pest_01",
+      "class_key": "banana_insect_pest",
+      "crop_label": "Banana",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\Gemini_Generated_Image_79zfnn79zfnn79zf.png",
+      "id": "user_invalid_architecture_diagram_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\a7d4e7a5-3b82-4630-a452-a15ea4ec968f.jpg",
+      "id": "user_invalid_metrics_slide_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\690932201_1613850256389546_7048325119805386646_n.jpg",
+      "id": "user_invalid_handwritten_essay_page_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\695472886_2485401641931127_934850280209161887_n.jpg",
+      "id": "user_invalid_handwritten_essay_page_02",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\5d8897cd-cb46-4ff6-b497-d7a9954f2b6d.jpg",
+      "id": "user_invalid_admin_dashboard_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_mango_meme_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\e6531c49-fe6f-48c8-9ae2-8c25823ef3b7.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_mango_anthracnose_fruit_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\20e0aeea-5255-4eeb-957a-2263be6bf457.jpg",
+      "class_key": "mango_anthracnose",
+      "crop_label": "Mango",
+      "confidence": 0.91,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_rice_healthy_panicle_02",
+      "source_path": "c:\\Users\\ronal\\Downloads\\ca2c7158-2f62-45fa-8d83-3d24ec783768.jpg",
+      "class_key": "rice_healthy",
+      "crop_label": "Rice",
+      "confidence": 0.89,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_onion_healthy_cluster_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\OIP (6).jpg",
+      "class_key": "onion_healthy",
+      "crop_label": "Onion",
+      "confidence": 0.89,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_onion_healthy_bulbs_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\onion.jpg",
+      "class_key": "onion_healthy",
+      "crop_label": "Onion",
+      "confidence": 0.89,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_onion_healthy_bulb_02",
+      "source_path": "c:\\Users\\ronal\\Downloads\\957622.jpg",
+      "class_key": "onion_healthy",
+      "crop_label": "Onion",
+      "confidence": 0.89,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_rice_tungro_virus_02",
+      "source_path": "c:\\Users\\ronal\\Downloads\\rice_rice_tungro_virus_00045.jpg",
+      "class_key": "rice_tungro_virus",
+      "crop_label": "Rice",
+      "confidence": 0.91,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_mango_phoma_blight_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\b5a91914-ee67-43a6-925b-8af862e15e36.jpg",
+      "class_key": "mango_phoma_blight",
+      "crop_label": "Mango",
+      "confidence": 0.91,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_tomato_healthy_fruit_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\KamatisInsert.jpg",
+      "class_key": "tomato_healthy",
+      "crop_label": "Tomato",
+      "confidence": 0.86,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_tomato_healthy_leaf_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\1212.jpg",
+      "class_key": "tomato_healthy",
+      "crop_label": "Tomato",
+      "confidence": 0.84,
+      "match_threshold": 0.08,
+      "expected_valid": true
+    },
+    {
+      "id": "user_guava_phytophthora_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\guava_guava_phytophthora_00006.jpg",
+      "class_key": "guava_phytophthora",
+      "crop_label": "Guava",
+      "confidence": 0.91,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_mango_phoma_blight_02",
+      "source_path": "c:\\Users\\ronal\\Downloads\\111.jpg",
+      "class_key": "mango_phoma_blight",
+      "crop_label": "Mango",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_winged_bean_healthy_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\ffccd3595de5b7571cb0aa82a0b9da23.jpg",
+      "class_key": "healthy",
+      "crop_label": "Possible Winged Bean / Sigarilyas",
+      "confidence": 0.84,
+      "match_threshold": 0.075,
+      "expected_valid": true
+    },
+    {
+      "id": "user_singkamas_healthy_root_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\singkamas_2025-03-26_19-04-05.jpg",
+      "class_key": "healthy",
+      "crop_label": "Possible Singkamas / Jicama",
+      "confidence": 0.84,
+      "match_threshold": 0.075,
+      "expected_valid": true
+    },
+    {
+      "id": "user_black_pepper_corns_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\Black_pepper_corns.jpg",
+      "class_key": "healthy",
+      "crop_label": "Possible Black Pepper",
+      "confidence": 0.84,
+      "match_threshold": 0.07,
+      "expected_valid": true
+    },
+    {
+      "id": "user_black_pepper_fruiting_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\maxresdefault (1).jpg",
+      "class_key": "healthy",
+      "crop_label": "Possible Black Pepper",
+      "confidence": 0.84,
+      "match_threshold": 0.075,
+      "expected_valid": true
+    },
+    {
+      "id": "user_sweet_potato_talbos_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\talbos_ng_kamote.jpg",
+      "class_key": "sweet_potato_healthy",
+      "crop_label": "Sweet Potato",
+      "confidence": 0.86,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_sweet_potato_roots_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\camote-4.jpg",
+      "class_key": "sweet_potato_healthy",
+      "crop_label": "Sweet Potato",
+      "confidence": 0.86,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_gabi_taro_healthy_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\banana.jpg",
+      "class_key": "gabi_taro_healthy",
+      "crop_label": "Gabi / Taro",
+      "confidence": 0.86,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_sugarcane_red_rot_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\ZTqVu4LzHBhpy2nuKegWaC.jpg",
+      "class_key": "sugarcane_red_rot",
+      "crop_label": "Sugarcane",
+      "confidence": 0.9,
+      "match_threshold": 0.1,
+      "expected_valid": true
+    },
+    {
+      "id": "user_cabbage_healthy_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\12333.jpg",
+      "class_key": "cabbage_healthy",
+      "crop_label": "Cabbage",
+      "confidence": 0.87,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_pechay_healthy_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\H5ec763254d3844e69f637ff0bd1f8a0c9.jpg_720x720q80.jpg",
+      "class_key": "pechay_healthy",
+      "crop_label": "Pechay",
+      "confidence": 0.87,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "id": "user_banana_healthy_bunch_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\OIP (5).jpg",
+      "class_key": "banana_healthy",
+      "crop_label": "Banana",
+      "confidence": 0.87,
+      "match_threshold": 0.085,
+      "expected_valid": true
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\60a48ffb-2d48-4e63-ab95-ed4a0732bf5d.jpg",
+      "id": "user_invalid_detector_screenshot_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_green_screen_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\353631021_6235932136502583_7571709344055372668_n.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_corn_ear_borer_damage_02",
+      "source_path": "c:\\Users\\ronal\\Downloads\\istockphoto-1255120285-612x612.jpg",
+      "class_key": "corn_ear_pest_damage",
+      "crop_label": "Corn",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_banana_yellow_sigatoka_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\edf0a3f1781a5b3f98fb9cc9cd0e59e5cb08039a.webp",
+      "class_key": "banana_yellow_sigatoka",
+      "crop_label": "Banana",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_mango_red_rust_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\red-rust-disease-in-mango.jpg",
+      "class_key": "mango_red_rust",
+      "crop_label": "Mango",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_mango_phoma_blight_03",
+      "source_path": "c:\\Users\\ronal\\Downloads\\Mango-Phoma-Blight-Disease-Management-1.jpg",
+      "class_key": "mango_phoma_blight",
+      "crop_label": "Mango",
+      "confidence": 0.91,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_banana_fruit_rot_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\disease-banana.jpg",
+      "class_key": "banana_fruit_rot",
+      "crop_label": "Banana",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_banana_crown_rot_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\bunch_closeup.jpg",
+      "class_key": "banana_crown_rot",
+      "crop_label": "Banana",
+      "confidence": 0.91,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_corn_leaf_pest_damage_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\1234057-SMPT.jpg",
+      "class_key": "pest_leaf_damage",
+      "crop_label": "Corn",
+      "confidence": 0.87,
+      "match_threshold": 0.095,
+      "expected_valid": true
+    },
+    {
+      "id": "user_corn_stalk_rot_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\stalk-rot.webp",
+      "class_key": "corn_stalk_rot",
+      "crop_label": "Corn",
+      "confidence": 0.91,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_corn_northern_leaf_blight_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\5439530-SMPT.jpg",
+      "class_key": "corn_northern_leaf_blight",
+      "crop_label": "Corn",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_general_leaf_spot_blight_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\leave-with-fungus.jpg",
+      "class_key": "leaf_spot_or_blight",
+      "crop_label": "General crop leaf",
+      "confidence": 0.86,
+      "match_threshold": 0.1,
+      "crop_scope": "any",
+      "expected_valid": true
+    },
+    {
+      "id": "user_corn_common_rust_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\Maize-Rust-Disease-Management1.jpg",
+      "class_key": "corn_common_rust",
+      "crop_label": "Corn",
+      "confidence": 0.9,
+      "match_threshold": 0.105,
+      "expected_valid": true
+    },
+    {
+      "id": "user_invalid_dog_pug_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\Pug_hero.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_dog_shiba_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\Shiba-Inu-dog-standing-on-the-road_OlesyaNickolaeva_Shutterstock.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_dog_wolf_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\top-10-most-popular-hybrid-dogs.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_dog_cane_corso_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\OIP (4).jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_dog_chihuahua_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\OIP (3).jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_selfie_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\486535586_1924920648320181_849589344604079720_n.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_selfie_02",
+      "source_path": "c:\\Users\\ronal\\Downloads\\449034266_1725853231560258_2684038371508696961_n.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_dog_shih_tzu_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\OIP (2).jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_dog_bulldog_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\OIP (1).jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_car_collage_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\OIP.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "id": "user_invalid_dog_collage_01",
+      "source_path": "c:\\Users\\ronal\\Downloads\\dog.jpg",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\0000002.png",
+      "id": "user_invalid_handwritten_snippet_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\60079eb8-2f90-48c8-85fc-6d222bbdd95e.jpg",
+      "id": "user_invalid_typed_essay_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\f66e64723f5d53863f4d2ef6de0472fe.jpg",
+      "id": "user_invalid_scanned_essay_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\84333dccba03633b20e58dfc992d779d.jpg",
+      "id": "user_invalid_family_essay_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    },
+    {
+      "source_path": "c:\\Users\\ronal\\Downloads\\672161088_2104412083625701_5732636701080559218_n.jpg",
+      "id": "user_invalid_inventory_screenshot_01",
+      "class_key": "invalid_crop_image",
+      "crop_label": null,
+      "confidence": 0.0,
+      "match_threshold": 0.05,
+      "expected_valid": false
+    }
+  ]
+}

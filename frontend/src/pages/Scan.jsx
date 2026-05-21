@@ -1545,8 +1545,11 @@ export default function Scan() {
         </div>
       </header>
 
-      <div className="split-layout flex flex-col xl:flex-row gap-6 lg:gap-8 w-full items-start">
-        <form onSubmit={submit} className="manual-scan-form surface flex flex-col overflow-hidden rounded-lg xl:sticky sticky-panel xl:top-6 xl:self-start w-full xl:w-[420px] shrink-0 border border-stone-200">
+      <div className="split-layout flex flex-col lg:flex-row gap-6 lg:gap-8 w-full items-start">
+        <form
+          onSubmit={submit}
+          className="manual-scan-form surface flex flex-col overflow-hidden rounded-lg w-full lg:w-[420px] shrink-0 border border-stone-200 lg:self-start"
+        >
           <div className="manual-scan-form-title flex items-start justify-between p-4 sm:p-5 border-b border-stone-100 bg-stone-50/50">
             <div className="flex min-w-0 items-start gap-3 flex-1">
               <span className="manual-scan-form-icon grid place-items-center h-10 w-10 shrink-0 bg-white border border-stone-200 rounded-lg text-stone-600">
@@ -1562,7 +1565,7 @@ export default function Scan() {
             </button>
           </div>
 
-          <div className="manual-scan-form-body p-4 sm:p-5 space-y-6">
+          <div className="manual-scan-form-body">
             <ManualFormSection>
             <label className="block w-full">
               <span className="text-sm font-bold text-stone-700">{t('soilType')}</span>

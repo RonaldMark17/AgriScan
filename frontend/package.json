@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node ./scripts/sync-visual-memory.mjs",
     "dev": "vite --host 0.0.0.0",
+    "prebuild": "node ./scripts/sync-visual-memory.mjs",
     "build": "vite build",
+    "prebuild:backend": "node ./scripts/sync-visual-memory.mjs",
     "build:backend": "vite build --mode backend --outDir ../backend/static/frontend --emptyOutDir",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint ."

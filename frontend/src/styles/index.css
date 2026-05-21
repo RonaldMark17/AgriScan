@@ -402,6 +402,7 @@ button {
 .manual-scan-form-body {
   display: grid;
   gap: 0;
+  min-height: 0;
 }
 
 .manual-field-section {

@@ -66,6 +66,9 @@ class Settings(BaseSettings):
 
     upload_dir: str = "uploads"
     frontend_dist_dir: str = "static/frontend"
+    frontend_source_dir: str = "../frontend"
+    frontend_auto_build: bool = True
+    frontend_auto_build_timeout_seconds: int = 180
     model_path: str = "app/ml/artifacts/crop_disease_model.keras"
     model_labels_path: str = "app/ml/artifacts/labels.json"
     visual_memory_path: str = "app/ml/artifacts/visual_memory_examples.json"
@@ -125,6 +128,11 @@ class Settings(BaseSettings):
     @property
     def backend_path(self) -> Path:
         return BACKEND_ROOT
+
+    @property
+    def frontend_source_path(self) -> Path:
+        path = Path(self.frontend_source_dir)
+        return path if path.is_absolute() else BACKEND_ROOT / path
 
     @property
     def firebase_service_account_path(self) -> Path | None:

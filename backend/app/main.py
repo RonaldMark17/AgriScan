@@ -1,5 +1,8 @@
 import asyncio
+import logging
+import os
 import re
+import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,6 +22,7 @@ from app.models import Role, User
 from app.services.firebase_storage import restore_upload_from_firebase
 from app.services.realtime_alerts import realtime_alert_hub
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 API_ROOT_PATH = settings.api_v1_prefix.strip("/").split("/", 1)[0]
@@ -26,6 +30,22 @@ FRONTEND_RESERVED_PATHS = {"uploads", "docs", "redoc", "openapi.json"}
 if API_ROOT_PATH:
     FRONTEND_RESERVED_PATHS.add(API_ROOT_PATH)
 HASHED_ASSET_PATTERN = re.compile(r"^(?P<base>.+)-[A-Za-z0-9_-]{6,}$")
+FRONTEND_SOURCE_PATTERNS = (
+    "index.html",
+    "package.json",
+    "package-lock.json",
+    "vite.config.*",
+    "postcss.config.*",
+    "tailwind.config.*",
+    "scripts/**/*",
+    "src/**/*",
+    "public/**/*",
+)
+FRONTEND_EXTRA_SOURCE_FILES = (
+    BACKEND_ROOT / "app" / "ml" / "artifacts" / "visual_memory_examples.json",
+    BACKEND_ROOT / "app" / "ml" / "export_visual_memory_runtime.py",
+)
+FRONTEND_BUILD_LOCK = asyncio.Lock()
 
 
 def get_frontend_dist_root() -> Path:
@@ -33,6 +53,100 @@ def get_frontend_dist_root() -> Path:
     if not dist_root.is_absolute():
         dist_root = BACKEND_ROOT / dist_root
     return dist_root.resolve()
+
+
+def get_frontend_source_root() -> Path:
+    return settings.frontend_source_path.resolve()
+
+
+def iter_frontend_source_files(source_root: Path):
+    seen: set[Path] = set()
+    for pattern in FRONTEND_SOURCE_PATTERNS:
+        for candidate in source_root.glob(pattern):
+            if not candidate.is_file():
+                continue
+            resolved = candidate.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            yield resolved
+    for candidate in FRONTEND_EXTRA_SOURCE_FILES:
+        if not candidate.is_file():
+            continue
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        yield resolved
+
+
+def latest_file_mtime(file_paths) -> float | None:
+    latest: float | None = None
+    for path in file_paths:
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            continue
+        latest = mtime if latest is None else max(latest, mtime)
+    return latest
+
+
+def frontend_bundle_is_stale(source_root: Path, dist_root: Path) -> bool:
+    if not source_root.is_dir():
+        return False
+
+    source_mtime = latest_file_mtime(iter_frontend_source_files(source_root))
+    if source_mtime is None:
+        return False
+
+    if not dist_root.is_dir():
+        return True
+
+    dist_mtime = latest_file_mtime(path for path in dist_root.rglob("*") if path.is_file())
+    if dist_mtime is None:
+        return True
+
+    return source_mtime > dist_mtime
+
+
+def build_frontend_bundle(source_root: Path) -> None:
+    npm_command = "npm.cmd" if os.name == "nt" else "npm"
+    result = subprocess.run(
+        [npm_command, "run", "build:backend"],
+        cwd=source_root,
+        capture_output=True,
+        text=True,
+        timeout=settings.frontend_auto_build_timeout_seconds,
+        check=False,
+    )
+    if result.returncode != 0:
+        output = "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part).strip()
+        raise RuntimeError(output or "Frontend build failed without diagnostic output.")
+
+
+async def ensure_frontend_dev_bundle(dist_root: Path) -> None:
+    if settings.environment == "production" or not settings.frontend_auto_build:
+        return
+
+    source_root = get_frontend_source_root()
+    if not frontend_bundle_is_stale(source_root, dist_root):
+        return
+
+    async with FRONTEND_BUILD_LOCK:
+        if not frontend_bundle_is_stale(source_root, dist_root):
+            return
+        logger.info("Frontend source files changed; rebuilding backend static bundle from %s.", source_root)
+        try:
+            await asyncio.to_thread(build_frontend_bundle, source_root)
+        except Exception as exc:
+            logger.exception("Automatic frontend build failed.", exc_info=exc)
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Frontend auto-build failed while serving localhost:8000. "
+                    "Run `npm run build:backend` from the frontend folder, or start the Vite dev server on localhost:5173."
+                ),
+            ) from exc
 
 
 def frontend_file_response(dist_root: Path, file_path: Path, *, media_type: str | None = None) -> FileResponse:
@@ -193,13 +307,17 @@ async def notification_stream(websocket: WebSocket) -> None:
 @app.get("/{full_path:path}", include_in_schema=False)
 async def serve_frontend(full_path: str):
     dist_root = get_frontend_dist_root()
+    clean_path = full_path.strip("/")
+    path_suffix = Path(clean_path).suffix
+    if not clean_path or not path_suffix:
+        await ensure_frontend_dev_bundle(dist_root)
+
     if not dist_root.is_dir():
         raise HTTPException(
             status_code=404,
             detail=f"Frontend build not found at {dist_root}. Run `npm run build:backend` from the frontend folder.",
         )
 
-    clean_path = full_path.strip("/")
     first_segment = clean_path.split("/", 1)[0]
     if first_segment in FRONTEND_RESERVED_PATHS:
         raise HTTPException(status_code=404, detail="Not found")
@@ -219,7 +337,7 @@ async def serve_frontend(full_path: str):
         if candidate.is_file():
             return frontend_file_response(dist_root, candidate)
 
-        if Path(clean_path).suffix:
+        if path_suffix:
             fallback_candidate = resolve_hashed_asset_fallback(dist_root, clean_path)
             if fallback_candidate is not None:
                 return frontend_file_response(dist_root, fallback_candidate)

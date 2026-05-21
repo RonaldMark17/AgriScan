@@ -68,6 +68,7 @@ uvicorn app.main:app --reload
 ```
 
 Open `http://localhost:8000`; API routes remain under `/api/v1`.
+In development, FastAPI now auto-rebuilds `backend/static/frontend` when `frontend/src` is newer than the served bundle, so opening `http://localhost:8000` picks up recent frontend edits without a separate manual rebuild.
 
 Database:
 

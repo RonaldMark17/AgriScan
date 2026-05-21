@@ -32,6 +32,7 @@ uvicorn app.main:app --reload
 ```
 
 Then open `http://localhost:8000`. FastAPI will serve the React app and keep the API under `/api/v1`.
+In development, FastAPI also auto-rebuilds the frontend bundle when files in `frontend/src` are newer than `backend/static/frontend`, so recent React/CSS edits show up on `http://localhost:8000` without a manual rebuild step.
 
 ## ML Models
 

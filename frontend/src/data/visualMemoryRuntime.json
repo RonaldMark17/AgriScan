@@ -1,6 +1,185 @@
 {
   "created_at": "2026-05-21T11:44:14+00:00",
-  "description": "Numeric feature signatures from verified crop and crop-condition examples. Training images are not stored here, and runtime crop analysis does not use upload filenames for classification.",
+  "description": "Frontend-safe visual-memory runtime exported from the backend detector.",
+  "feature_keys": [
+    "green_leaf_ratio",
+    "lesion_ratio",
+    "lesion_within_plant",
+    "yellow_ratio",
+    "rust_ratio",
+    "dark_lesion_ratio",
+    "edge_lesion_ratio",
+    "component_count",
+    "max_component_area_ratio",
+    "max_component_aspect",
+    "green_component_count",
+    "max_green_area_ratio",
+    "max_green_aspect",
+    "green_edge_ratio",
+    "adjacent_nonleaf_ratio",
+    "banana_fruit_ratio",
+    "fruit_component_count",
+    "max_fruit_area_ratio",
+    "max_fruit_aspect",
+    "chroma_green_ratio",
+    "natural_green_ratio",
+    "center_green_ratio",
+    "center_chroma_green_ratio",
+    "center_natural_green_ratio",
+    "center_lesion_ratio",
+    "center_fruit_ratio",
+    "center_neutral_ratio",
+    "center_tan_ratio",
+    "contrast"
+  ],
+  "distance_scales": {
+    "contrast": 80.0,
+    "component_count": 35.0,
+    "green_component_count": 25.0,
+    "fruit_component_count": 25.0,
+    "max_component_aspect": 8.0,
+    "max_green_aspect": 8.0,
+    "max_fruit_aspect": 8.0
+  },
+  "strict_distance": 0.055,
+  "hinted_distance": 0.16,
+  "class_metadata": {
+    "banana_crown_rot": {
+      "name": "Banana crown or bunch rot symptoms",
+      "cause": "The image shows dark decay around the banana crown, cut ends, or bunch tissue, which is more consistent with bunch or postharvest rot than a leaf blight.",
+      "treatment": "Separate affected hands, avoid wounding fruit during harvest, clean tools and handling surfaces, and confirm locally before applying any postharvest treatment."
+    },
+    "banana_fruit_rot": {
+      "name": "Banana fruit rot symptoms",
+      "cause": "The image shows dark, sunken, or spreading lesions on banana fruit tissue instead of a leaf-only disease pattern.",
+      "treatment": "Remove badly affected fruit, keep bunches dry and protected from injury, improve sanitation, and ask local agriculture support to confirm anthracnose, crown rot, or another postharvest rot before treatment."
+    },
+    "banana_healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, good field sanitation, balanced watering, and proper nutrition."
+    },
+    "banana_insect_pest": {
+      "name": "Banana insect pest damage",
+      "cause": "Visible feeding, chewing, or sap-sucking damage indicates an active pest pressure on the crop.",
+      "treatment": "Confirm the pest species in the field, preserve beneficial insects, and use threshold-based pest management before spraying."
+    },
+    "banana_yellow_sigatoka": {
+      "name": "Banana yellow sigatoka",
+      "cause": "A fungal banana leaf disease is causing streaking and spots that reduce photosynthesis over time.",
+      "treatment": "Prune infected leaves, keep plantations well ventilated, and follow local disease-management advice for Sigatoka control."
+    },
+    "cabbage_healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, good field sanitation, balanced watering, and proper nutrition."
+    },
+    "corn_common_rust": {
+      "name": "Corn common rust",
+      "cause": "Rust spores are infecting leaf tissue, especially under cool to mild humid conditions.",
+      "treatment": "Scout early, plant resistant varieties where possible, maintain good field hygiene, and apply approved fungicide if pressure becomes severe."
+    },
+    "corn_ear_pest_damage": {
+      "name": "Corn earworm or borer damage",
+      "cause": "The image shows damaged corn kernels or husk tissue, which is more consistent with ear-feeding pest damage than a leaf disease.",
+      "treatment": "Inspect nearby ears for larvae and frass, remove badly damaged ears, improve field sanitation, and follow local corn IPM thresholds before using any pesticide."
+    },
+    "corn_northern_leaf_blight": {
+      "name": "Corn northern leaf blight",
+      "cause": "A fungal infection is causing elongated lesions and can spread in humid fields with infected residue.",
+      "treatment": "Rotate crops, remove residue, plant tolerant varieties, and follow local fungicide advice when disease pressure is high."
+    },
+    "corn_stalk_rot": {
+      "name": "Corn stalk rot symptoms",
+      "cause": "The image shows browning, decay, or lesions on corn stalk tissue instead of a leaf-only disease pattern.",
+      "treatment": "Remove heavily affected stalks after harvest, improve field drainage and residue management, avoid plant stress where practical, and confirm the stalk rot cause with a local agriculture officer."
+    },
+    "gabi_taro_healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, good field sanitation, balanced watering, and proper nutrition."
+    },
+    "guava_phytophthora": {
+      "name": "Guava phytophthora disease",
+      "cause": "A water mold infection is favored by wet soil, splash, and prolonged humidity.",
+      "treatment": "Improve drainage, reduce standing water, remove infected tissues, and follow crop-specific oomycete management guidance locally."
+    },
+    "healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, balanced watering, sanitation, and nutrient management."
+    },
+    "invalid_crop_image": {
+      "name": "Invalid crop or leaf image",
+      "cause": "The uploaded photo does not appear to be a crop, leaf, fruit, or plant part that AgriScan can diagnose.",
+      "treatment": "Upload a clear close-up photo of one crop leaf, fruit, stem, or plant part. Avoid animals, people, tools, vehicles, and indoor objects."
+    },
+    "leaf_spot_or_blight": {
+      "name": "Leaf spot or blight symptoms",
+      "cause": "The image shows brown or yellow necrotic patches on leaf tissue, which is consistent with a leaf spot or blight pattern.",
+      "treatment": "Remove heavily affected leaves, improve airflow, avoid wetting foliage, and confirm the specific disease with a local agriculture officer before spraying."
+    },
+    "mango_anthracnose": {
+      "name": "Mango anthracnose",
+      "cause": "A fungal disease is creating dark, sunken, or spreading lesions on leaves or fruit tissues.",
+      "treatment": "Prune infected tissues, avoid prolonged wetness, improve airflow, and use approved fungicide or protective spray when recommended."
+    },
+    "mango_phoma_blight": {
+      "name": "Mango phoma blight",
+      "cause": "A fungal blight is causing large brown to black necrotic patches and leaf dieback, commonly seen on infected mango foliage.",
+      "treatment": "Prune and destroy infected leaves or twigs, improve canopy airflow, avoid overhead watering, and confirm local fungicide guidance before spraying."
+    },
+    "mango_red_rust": {
+      "name": "Mango red rust",
+      "cause": "A rust-type disease is infecting the leaf surface and reducing healthy photosynthetic area.",
+      "treatment": "Prune infected foliage, improve canopy ventilation, and use approved fungicide guidance if symptoms continue to spread."
+    },
+    "onion_healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, good field sanitation, balanced watering, and proper nutrition."
+    },
+    "pechay_healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, good field sanitation, balanced watering, and proper nutrition."
+    },
+    "pest_leaf_damage": {
+      "name": "Pest-related leaf damage",
+      "cause": "Chewing or sucking insects are causing visible lesions, holes, or discoloration on the leaf surface.",
+      "treatment": "Inspect leaf undersides, remove heavily affected leaves, and follow integrated pest management before using any DA-approved pesticide."
+    },
+    "rice_healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, good field sanitation, balanced watering, and proper nutrition."
+    },
+    "rice_tungro_virus": {
+      "name": "Rice tungro virus",
+      "cause": "A virus is being spread by insect vectors, leading to yellowing, stunting, and reduced vigor.",
+      "treatment": "Rogue severely affected plants, control insect vectors early, synchronize planting where possible, and use tolerant varieties."
+    },
+    "sugarcane_red_rot": {
+      "name": "Sugarcane Red Rot",
+      "cause": "The trained model detected this crop condition from visual leaf patterns.",
+      "treatment": "Confirm with an agriculture officer and follow local integrated pest and disease management guidance."
+    },
+    "sweet_potato_healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, good field sanitation, balanced watering, and proper nutrition."
+    },
+    "tomato_early_blight": {
+      "name": "Tomato early blight",
+      "cause": "A fungal disease is creating dark concentric lesions, often when plants are stressed or older leaves stay wet.",
+      "treatment": "Remove older infected leaves, mulch or stake plants to limit splash, and use approved fungicide if symptoms spread quickly."
+    },
+    "tomato_healthy": {
+      "name": "Healthy crop",
+      "cause": "No major disease pattern was detected by the model.",
+      "treatment": "Continue regular monitoring, good field sanitation, balanced watering, and proper nutrition."
+    }
+  },
   "examples": [
     {
       "class_key": "corn_ear_pest_damage",
@@ -3786,37 +3965,5 @@
         "contrast": 23.15663
       }
     }
-  ],
-  "feature_keys": [
-    "green_leaf_ratio",
-    "lesion_ratio",
-    "lesion_within_plant",
-    "yellow_ratio",
-    "rust_ratio",
-    "dark_lesion_ratio",
-    "edge_lesion_ratio",
-    "component_count",
-    "max_component_area_ratio",
-    "max_component_aspect",
-    "green_component_count",
-    "max_green_area_ratio",
-    "max_green_aspect",
-    "green_edge_ratio",
-    "adjacent_nonleaf_ratio",
-    "banana_fruit_ratio",
-    "fruit_component_count",
-    "max_fruit_area_ratio",
-    "max_fruit_aspect",
-    "chroma_green_ratio",
-    "natural_green_ratio",
-    "center_green_ratio",
-    "center_chroma_green_ratio",
-    "center_natural_green_ratio",
-    "center_lesion_ratio",
-    "center_fruit_ratio",
-    "center_neutral_ratio",
-    "center_tan_ratio",
-    "contrast"
-  ],
-  "version": "agriscan-verified-visual-memory-v2"
+  ]
 }

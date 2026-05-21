@@ -18,6 +18,7 @@ import { api, getApiBaseUrl } from '../api/client.js';
 import { diseaseDetectorImage } from '../assets/visuals/index.js';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
+import visualMemoryRuntime from '../data/visualMemoryRuntime.json';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 
 const HISTORY_STORAGE_KEY = 'agriscan_disease_scans';
@@ -118,6 +119,12 @@ const unsupportedCropAliasEntries = [
   ['rose', 'Rose'],
 ].sort((first, second) => second[0].length - first[0].length);
 const unsupportedCropNameGuards = ['black pepper', 'peppercorn', 'peppercorns', 'pepper corns', 'paminta'];
+const visualMemoryExamples = Array.isArray(visualMemoryRuntime?.examples) ? visualMemoryRuntime.examples : [];
+const visualMemoryFeatureKeys = Array.isArray(visualMemoryRuntime?.feature_keys) ? visualMemoryRuntime.feature_keys : [];
+const visualMemoryDistanceScales = visualMemoryRuntime?.distance_scales || {};
+const visualMemoryStrictDistance = Number(visualMemoryRuntime?.strict_distance || 0.055);
+const visualMemoryHintedDistance = Number(visualMemoryRuntime?.hinted_distance || 0.16);
+const visualMemoryClassMetadata = visualMemoryRuntime?.class_metadata || {};
 
 function makeHistoryId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -688,6 +695,7 @@ function isLocalVisualAnalysisMode(mode) {
     text.includes('offline') ||
     text.includes('fallback') ||
     text.includes('browser') ||
+    text.includes('visual memory') ||
     text.includes('crop-part') ||
     text.includes('review') ||
     text.includes('visual analysis') ||
@@ -916,6 +924,258 @@ function buildPossibleUnsupportedResult(features, cropLabel) {
     created_at: new Date().toISOString(),
     _offline_primary_key: referenceKey,
   };
+}
+
+function normalizeSupportedCropKey(value) {
+  const cropKey = normalizeCropKey(value);
+  return cropDisplayNamesByKey[cropKey] ? cropKey : '';
+}
+
+function roundVisualMemoryValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Number(numeric.toFixed(5));
+}
+
+function canonicalVisualMemoryKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/-+/g, '_');
+}
+
+function visualMemoryCropKeyFromClassKey(classKey) {
+  return Object.keys(cropDisplayNamesByKey).find((cropKey) => classKey.startsWith(`${cropKey}_`)) || '';
+}
+
+function titleCaseTokens(value) {
+  return String(value || '')
+    .split('_')
+    .filter(Boolean)
+    .map((token) => (token === 'ipm' ? 'IPM' : token.charAt(0).toUpperCase() + token.slice(1)))
+    .join(' ');
+}
+
+function visualMemoryMetadataForKey(key) {
+  const classKey = canonicalVisualMemoryKey(key);
+  if (visualMemoryClassMetadata[classKey]) return visualMemoryClassMetadata[classKey];
+  if (offlineDiseaseGuide[classKey]) {
+    return {
+      name: offlineDiseaseGuide[classKey].disease_name,
+      cause: offlineDiseaseGuide[classKey].cause,
+      treatment: offlineDiseaseGuide[classKey].treatment,
+    };
+  }
+  if (classKey === 'healthy' || classKey.endsWith('_healthy')) {
+    return {
+      name: offlineDiseaseGuide.healthy.disease_name,
+      cause: offlineDiseaseGuide.healthy.cause,
+      treatment: offlineDiseaseGuide.healthy.treatment,
+    };
+  }
+  return {
+    name: titleCaseTokens(classKey),
+    cause: 'The trained model detected this crop condition from visual leaf patterns.',
+    treatment: 'Confirm with a local agriculture officer and follow integrated pest and disease management guidance.',
+  };
+}
+
+function visualMemorySignature(features) {
+  const source = {
+    green_leaf_ratio: features.greenLeafRatio,
+    lesion_ratio: features.lesionRatio,
+    lesion_within_plant: features.lesionWithinPlant,
+    yellow_ratio: features.yellowRatio,
+    rust_ratio: features.rustRatio,
+    dark_lesion_ratio: features.darkLesionRatio,
+    edge_lesion_ratio: features.edgeLesionRatio,
+    component_count: features.componentCount,
+    max_component_area_ratio: features.maxAreaRatio,
+    max_component_aspect: features.maxAspect,
+    green_component_count: features.greenComponentCount,
+    max_green_area_ratio: features.maxGreenAreaRatio,
+    max_green_aspect: features.maxGreenAspect,
+    green_edge_ratio: features.greenEdgeRatio,
+    adjacent_nonleaf_ratio: features.adjacentNonleafRatio,
+    banana_fruit_ratio: features.bananaFruitRatio,
+    fruit_component_count: features.fruitComponentCount,
+    max_fruit_area_ratio: features.maxFruitAreaRatio,
+    max_fruit_aspect: features.maxFruitAspect,
+    chroma_green_ratio: features.chromaGreenRatio,
+    natural_green_ratio: features.naturalGreenRatio,
+    center_green_ratio: features.centerGreenRatio,
+    center_chroma_green_ratio: features.centerChromaGreenRatio,
+    center_natural_green_ratio: features.centerNaturalGreenRatio,
+    center_lesion_ratio: features.centerLesionRatio,
+    center_fruit_ratio: features.centerFruitRatio,
+    center_neutral_ratio: features.centerNeutralRatio,
+    center_tan_ratio: features.centerTanRatio,
+    contrast: features.contrast,
+  };
+
+  return Object.fromEntries(visualMemoryFeatureKeys.map((key) => [key, roundVisualMemoryValue(source[key] ?? 0)]));
+}
+
+function visualMemoryDistance(first, second) {
+  const distances = [];
+  for (const key of visualMemoryFeatureKeys) {
+    const left = Number(first?.[key] ?? 0);
+    const right = Number(second?.[key] ?? 0);
+    if (!Number.isFinite(left) || !Number.isFinite(right)) continue;
+    const scale = Number(visualMemoryDistanceScales?.[key] ?? 1) || 1;
+    distances.push(Math.min(Math.abs(left - right) / scale, 1));
+  }
+  if (!distances.length) return 1;
+  return distances.reduce((total, distance) => total + distance, 0) / distances.length;
+}
+
+function visualMemoryHasTextHint(example, originalFilename, cropType) {
+  const context = normalizeContextText(`${originalFilename || ''} ${cropType || ''}`);
+  if (!context) return false;
+
+  const hints = new Set();
+  for (const value of [example?.id, example?.crop_label, example?.disease_name, example?.class_key]) {
+    for (const token of String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .split(/\s+/)
+      .filter((token) => token.length >= 4)) {
+      hints.add(token);
+    }
+  }
+
+  return [...hints].some((token) => new RegExp(`\\b${escapeRegExp(token)}\\b`).test(context));
+}
+
+function visualMemoryCropAllowed(example, selectedCropKey) {
+  const classKey = canonicalVisualMemoryKey(example?.class_key);
+  if (classKey === 'invalid_crop_image') {
+    return !selectedCropKey;
+  }
+  if (String(example?.crop_scope || '').toLowerCase() === 'any') {
+    return true;
+  }
+  if (!selectedCropKey) {
+    return true;
+  }
+  const exampleCropKey = normalizeSupportedCropKey(example?.crop_label || '');
+  if (!exampleCropKey) {
+    return false;
+  }
+  return exampleCropKey === selectedCropKey;
+}
+
+function buildOfflineVisualMemoryResult(example, bestDistance, { cropType = '', originalFilename = '' } = {}) {
+  const selectedCropKey = normalizeSupportedCropKey(cropType);
+  const classKey = canonicalVisualMemoryKey(example?.class_key || 'review_needed');
+  const metadata = visualMemoryMetadataForKey(classKey);
+  const hasHint = visualMemoryHasTextHint(example, originalFilename, cropType);
+  let cropLabel = String(example?.crop_label || '') || cropDisplayName(visualMemoryCropKeyFromClassKey(classKey));
+  if (String(example?.crop_scope || '').toLowerCase() === 'any' && selectedCropKey) {
+    cropLabel = cropDisplayName(selectedCropKey) || cropLabel;
+  }
+
+  if (classKey === 'invalid_crop_image') {
+    return {
+      id: Date.now(),
+      user_id: 0,
+      farm_id: null,
+      crop_id: null,
+      crop_type: '',
+      crop_label: '',
+      disease_name: metadata.name,
+      confidence: 0,
+      cause: metadata.cause,
+      treatment: metadata.treatment,
+      status: 'offline',
+      image_path: 'offline-browser-analysis',
+      analysis_mode: 'verified visual memory rejection',
+      reference_url: null,
+      reference_title: null,
+      created_at: new Date().toISOString(),
+      _offline_primary_key: classKey,
+    };
+  }
+
+  const unsupportedCrop =
+    cropLabel.startsWith('Possible ') || (!normalizeSupportedCropKey(cropLabel) && ['healthy', 'review_needed'].includes(classKey));
+  const baseConfidence = Number(example?.confidence || 0.88);
+  const confidence = Math.max(0.72, Math.min(0.96, baseConfidence - bestDistance * 1.25));
+
+  if (unsupportedCrop && ['healthy', 'review_needed'].includes(classKey)) {
+    const displayCrop = cropLabel.replace(/^Possible\s+/i, '').trim() || cropLabel;
+    return {
+      id: Date.now(),
+      user_id: 0,
+      farm_id: null,
+      crop_id: null,
+      crop_type: cropLabel.startsWith('Possible ') ? cropLabel : `Possible ${cropLabel}`,
+      crop_label: cropLabel.startsWith('Possible ') ? cropLabel : `Possible ${cropLabel}`,
+      disease_name: classKey === 'healthy' ? 'Possible healthy crop' : 'Crop scan needs review',
+      confidence,
+      cause: `AgriScan matched this image to a verified ${displayCrop} sample. This crop is not in the trained crop list, so the result is shown as a possible crop match.`,
+      treatment:
+        'Compare with a trusted crop reference, monitor for spots, wilting, rot, or pest damage, and confirm with a local agriculture officer before applying treatment.',
+      status: 'offline',
+      image_path: 'offline-browser-analysis',
+      analysis_mode: 'verified visual memory',
+      reference_url: null,
+      reference_title: null,
+      created_at: new Date().toISOString(),
+      _offline_primary_key: classKey,
+    };
+  }
+
+  const cause = hasHint || selectedCropKey ? `${metadata.cause} This result matched a verified AgriScan training example.` : metadata.cause;
+  return {
+    id: Date.now(),
+    user_id: 0,
+    farm_id: null,
+    crop_id: null,
+    crop_type: cropLabel || 'General crop leaf',
+    crop_label: cropLabel || 'General crop leaf',
+    disease_name: example?.disease_name || metadata.name,
+    confidence,
+    cause,
+    treatment: metadata.treatment,
+    status: 'offline',
+    image_path: 'offline-browser-analysis',
+    analysis_mode: 'verified visual memory',
+    reference_url: null,
+    reference_title: null,
+    created_at: new Date().toISOString(),
+    _offline_primary_key: classKey,
+  };
+}
+
+function detectOfflineVisualMemory(features, { cropType = '', originalFilename = '' } = {}) {
+  if (!visualMemoryExamples.length || !visualMemoryFeatureKeys.length) return null;
+
+  const signature = visualMemorySignature(features);
+  const selectedCropKey = normalizeSupportedCropKey(cropType);
+  let bestExample = null;
+  let bestDistance = 1;
+
+  for (const example of visualMemoryExamples) {
+    if (!visualMemoryCropAllowed(example, selectedCropKey)) continue;
+    const distance = visualMemoryDistance(signature, example?.feature_signature || {});
+    const hasHint = visualMemoryHasTextHint(example, originalFilename, cropType);
+    let threshold = Number(example?.match_threshold);
+    if (!Number.isFinite(threshold)) {
+      threshold = selectedCropKey || hasHint ? visualMemoryHintedDistance : visualMemoryStrictDistance;
+    }
+    if (selectedCropKey || hasHint) {
+      threshold = Math.max(threshold, visualMemoryHintedDistance);
+    }
+    if (distance <= threshold && distance < bestDistance) {
+      bestExample = example;
+      bestDistance = distance;
+    }
+  }
+
+  if (!bestExample) return null;
+  return buildOfflineVisualMemoryResult(bestExample, bestDistance, { cropType, originalFilename });
 }
 
 function looksLikeBananaFruitIssue(features, crop) {
@@ -2163,6 +2423,7 @@ function subjectFocusedPixels(image, size) {
 
 async function analyzeImageOffline(file, cropType) {
   const crop = normalizeCropKey(cropType);
+  const selectedCrop = cropDisplayNamesByKey[crop] ? crop : '';
   const filenameContext = inferFilenameAnalysisContext(file?.name || '', cropType);
   const filenameCrop = filenameContext.cropKey || '';
 
@@ -2483,10 +2744,38 @@ async function analyzeImageOffline(file, cropType) {
     contrast: Math.sqrt(Math.max(variance, 0)) * 255,
   };
 
-  validateSelectedCropAgainstImage(features, crop, file?.name || '');
+  if (!selectedCrop) {
+    const strictVisualMemoryResult = detectOfflineVisualMemory(features, {
+      cropType: '',
+      originalFilename: file?.name || '',
+    });
+    if (strictVisualMemoryResult) {
+      return enrichOfflineResult(
+        strictVisualMemoryResult,
+        features,
+        cropType,
+        strictVisualMemoryResult._offline_primary_key || 'review_needed',
+      );
+    }
+  }
+
+  validateSelectedCropAgainstImage(features, selectedCrop || cropType, file?.name || '');
 
   if (shouldRejectNonCropForeground(features, crop || filenameCrop)) {
     throw new Error(INVALID_CROP_IMAGE_MESSAGE);
+  }
+
+  const guidedVisualMemoryResult = detectOfflineVisualMemory(features, {
+    cropType,
+    originalFilename: file?.name || '',
+  });
+  if (guidedVisualMemoryResult) {
+    return enrichOfflineResult(
+      guidedVisualMemoryResult,
+      features,
+      cropType,
+      guidedVisualMemoryResult._offline_primary_key || 'review_needed',
+    );
   }
 
   const featureCrop = inferOfflineCrop(features);
