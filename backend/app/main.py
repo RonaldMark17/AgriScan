@@ -118,6 +118,7 @@ def build_frontend_bundle(source_root: Path) -> None:
         text=True,
         timeout=settings.frontend_auto_build_timeout_seconds,
         check=False,
+        env=os.environ.copy(),
     )
     if result.returncode != 0:
         output = "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part).strip()
