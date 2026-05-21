@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { FarmAccessProvider } from './context/FarmAccessContext.jsx';
 import { I18nProvider } from './context/I18nContext.jsx';
 import { VoiceProvider } from './context/VoiceContext.jsx';
 import { registerServiceWorker } from './pwa/registerSW.js';
@@ -13,7 +14,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <I18nProvider>
       <VoiceProvider>
         <AuthProvider>
-          <App />
+          <FarmAccessProvider>
+            <App />
+          </FarmAccessProvider>
         </AuthProvider>
       </VoiceProvider>
     </I18nProvider>

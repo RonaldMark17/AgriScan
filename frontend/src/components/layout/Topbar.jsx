@@ -93,6 +93,7 @@ export default function Topbar() {
   const knownNotificationIdsRef = useRef(new Set());
   const notificationsInitializedRef = useRef(false);
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
+  const userDisplayName = user?.full_name || user?.email || 'AgriScan User';
   const unreadCount = useMemo(() => notifications.filter((item) => !item.is_read).length, [notifications]);
   const notificationSummary = useMemo(() => {
     if (unreadCount > 0) return t('unreadNotifications', { count: unreadCount });
@@ -274,13 +275,13 @@ export default function Topbar() {
             <p className="truncate text-sm font-semibold text-stone-600 sm:text-xs md:text-stone-500">{user?.full_name || user?.email || 'AgriScan User'}</p>
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-1.5 border-0 px-3 sm:gap-2 sm:px-5 lg:min-w-0 lg:px-5 xl:px-7">
-            <div className="hidden sm:block lg:hidden">
+          <div className="topbar-actions flex shrink-0 items-center justify-end gap-1.5 border-0 px-3 sm:gap-2 sm:px-4 md:px-5 lg:min-w-0 lg:px-5 xl:px-7">
+            <div className="hidden min-[700px]:block lg:hidden">
               <LanguageToggle />
             </div>
             <Link
               to="/settings/security"
-              className="focus-ring hidden h-10 w-10 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-800 md:grid"
+              className="focus-ring hidden h-9 w-9 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-800 md:grid lg:h-10 lg:w-10"
               onClick={(event) => {
                 if (!voiceAssistantEnabled || !speechSupported) return;
                 event.preventDefault();
@@ -291,10 +292,11 @@ export default function Topbar() {
             >
               <Mic className="h-4 w-4" />
             </Link>
+            <div className="topbar-presence-cluster flex items-center gap-1 md:gap-1.5">
             <div className="relative" ref={notificationsRef}>
               <button
                 type="button"
-                className="focus-ring relative grid h-10 w-10 place-items-center rounded-lg border border-transparent bg-white text-stone-700 transition hover:border-stone-200 hover:bg-stone-50"
+                className="topbar-icon-button focus-ring relative grid h-10 w-10 place-items-center rounded-xl border border-transparent bg-white text-stone-700 transition hover:border-stone-200 hover:bg-stone-50"
                 aria-label={t('notifications')}
                 aria-expanded={notificationsOpen}
                 onClick={() => {
@@ -302,20 +304,20 @@ export default function Topbar() {
                   setProfileOpen(false);
                 }}
               >
-                <Bell className="h-5 w-5" />
+                <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
                 {unreadCount > 0 ? (
                   <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
                 ) : null}
               </button>
 
             {notificationsOpen ? (
-              <div className="notification-menu surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-[min(92vw,380px)]">
-                <div className="flex items-start justify-between gap-3 px-3 py-2">
-                  <div>
+              <div className="notification-menu topbar-popover surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-[min(92vw,380px)]">
+                <div className="flex flex-col gap-3 px-3 py-2 min-[700px]:flex-row min-[700px]:items-start min-[700px]:justify-between">
+                  <div className="min-w-0">
                     <p className="text-sm font-bold text-stone-950">{t('notifications')}</p>
                     <p className="text-xs text-stone-500">{notificationSummary}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 min-[700px]:justify-end">
                     {unreadCount > 0 ? (
                       <button
                         type="button"
@@ -385,7 +387,7 @@ export default function Topbar() {
           <div className="relative" ref={profileRef}>
             <button
               type="button"
-              className="focus-ring relative grid h-10 w-10 place-items-center rounded-full bg-stone-100 text-stone-500 transition hover:bg-stone-200 sm:h-11 sm:w-11"
+              className="topbar-avatar-button focus-ring relative grid h-10 w-10 place-items-center rounded-full bg-stone-100 text-stone-500 transition hover:bg-stone-200 md:h-10 md:w-10 lg:h-11 lg:w-11"
               aria-label={t('settings')}
               aria-expanded={profileOpen}
               onClick={() => {
@@ -393,14 +395,14 @@ export default function Topbar() {
                 setNotificationsOpen(false);
               }}
             >
-              <UserRound className="h-5 w-5" />
-              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-leaf-500 ring-2 ring-white" />
+              <UserRound className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-leaf-500 ring-2 ring-white" />
             </button>
 
             {profileOpen ? (
-              <div className="profile-menu surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-[min(92vw,320px)]">
+              <div className="profile-menu topbar-popover surface fixed left-3 right-3 top-16 z-[80] rounded-lg p-2 sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-[min(92vw,320px)]">
                 <div className="rounded-lg bg-stone-50 px-3 py-3">
-                  <p className="text-sm font-bold text-stone-950">{user?.full_name || 'AgriScan User'}</p>
+                  <p className="text-sm font-bold text-stone-950">{userDisplayName}</p>
                   <p className="mt-1 text-xs text-stone-500">{user?.email || ''}</p>
                   <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
                     {t('role')}: {roleName}
@@ -430,6 +432,7 @@ export default function Topbar() {
                 </div>
               </div>
             ) : null}
+          </div>
           </div>
         </div>
         </div>

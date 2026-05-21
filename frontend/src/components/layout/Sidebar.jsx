@@ -7,11 +7,27 @@ import {
   Settings,
   UsersRound,
 } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useFarmAccess } from '../../context/FarmAccessContext.jsx';
 import { useI18n } from '../../context/I18nContext.jsx';
+import { routeRequiresRegisteredFarm } from '../../utils/farmAccess.js';
 
-function NavItem({ to, icon: Icon, children, end = false }) {
+function NavItem({ to, icon: Icon, children, end = false, disabled = false, disabledState = null, disabledTitle = '' }) {
+  if (disabled) {
+    return (
+      <Link
+        to="/farms"
+        state={disabledState}
+        title={disabledTitle}
+        className="group relative flex min-h-10 items-center gap-3 rounded-lg border border-dashed border-stone-200 bg-stone-50/90 px-3 py-2.5 text-sm font-semibold text-stone-400 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white xl:gap-4 xl:px-4"
+      >
+        <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+        <span className="min-w-0 truncate">{children}</span>
+      </Link>
+    );
+  }
+
   return (
     <NavLink
       to={to}
@@ -30,16 +46,43 @@ function NavItem({ to, icon: Icon, children, end = false }) {
 
 export default function Sidebar() {
   const { user } = useAuth();
+  const { farmAccessReady, isFarmRegistrationRequired } = useFarmAccess();
   const { language, setLanguage, t } = useI18n();
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name;
+  const lockMainFeatures = farmAccessReady && isFarmRegistrationRequired;
 
   return (
     <aside className="sidebar-shell fixed bottom-0 left-0 z-20 hidden flex-col overflow-y-auto border-r border-stone-200/90 bg-white lg:flex">
       <nav className="space-y-1.5 p-3 xl:p-4" aria-label="Primary navigation">
-        <NavItem to="/" icon={LayoutGrid} end>{t('dashboard')}</NavItem>
+        <NavItem
+          to="/"
+          icon={LayoutGrid}
+          end
+          disabled={lockMainFeatures && routeRequiresRegisteredFarm('/')}
+          disabledState={{ farmRequired: true, from: '/' }}
+          disabledTitle={t('registerFarmFirst')}
+        >
+          {t('dashboard')}
+        </NavItem>
         <NavItem to="/farms" icon={MapPinned}>{t('farms')}</NavItem>
-        <NavItem to="/scan" icon={ScanLine}>{t('manualScan')}</NavItem>
-        <NavItem to="/disease-detector" icon={Leaf}>{t('diseaseDetector')}</NavItem>
+        <NavItem
+          to="/scan"
+          icon={ScanLine}
+          disabled={lockMainFeatures && routeRequiresRegisteredFarm('/scan')}
+          disabledState={{ farmRequired: true, from: '/scan' }}
+          disabledTitle={t('registerFarmFirst')}
+        >
+          {t('manualScan')}
+        </NavItem>
+        <NavItem
+          to="/disease-detector"
+          icon={Leaf}
+          disabled={lockMainFeatures && routeRequiresRegisteredFarm('/disease-detector')}
+          disabledState={{ farmRequired: true, from: '/disease-detector' }}
+          disabledTitle={t('registerFarmFirst')}
+        >
+          {t('diseaseDetector')}
+        </NavItem>
         <NavItem to="/settings/security" icon={Settings}>{t('security')}</NavItem>
         {roleName === 'admin' && <NavItem to="/admin/users" icon={UsersRound}>{t('users')}</NavItem>}
       </nav>

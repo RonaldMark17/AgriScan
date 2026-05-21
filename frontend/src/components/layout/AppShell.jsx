@@ -22,18 +22,18 @@ export default function AppShell() {
   }, []);
 
   return (
-    <div className={`app-shell relative flex h-[100dvh] w-full flex-col overflow-hidden text-stone-900 md:flex-row ${online ? '' : 'app-shell-offline'}`}>
+    <div className={`app-shell relative flex h-[100dvh] min-h-0 w-full min-w-0 flex-col overflow-hidden text-stone-900 lg:flex-row ${online ? '' : 'app-shell-offline'}`}>
       {/* Renders at the top of the flex column on mobile */}
       <Topbar />
       <OfflineBanner online={online} />
       
-      {/* Hidden on mobile natively, renders as left column on md+ screens */}
+      {/* Hidden on mobile natively, renders as left column on lg+ screens */}
       <Sidebar />
       
       {/* Fills remaining space; handles its own independent scrolling */}
-      <div className="app-content relative z-0 flex h-full w-full flex-1 flex-col overflow-x-hidden overflow-y-auto scroll-smooth">
-        <main className="app-main flex-1">
-          <div key={location.pathname} className="route-transition">
+      <div className="app-content relative z-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain scroll-smooth">
+        <main className="app-main min-h-0 flex-1">
+          <div key={location.pathname} className="route-transition min-h-0">
             <Outlet />
           </div>
         </main>

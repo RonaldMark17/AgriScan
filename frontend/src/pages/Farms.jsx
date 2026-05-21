@@ -5,6 +5,7 @@ import { api } from '../api/client.js';
 import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useFarmAccess } from '../context/FarmAccessContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { getApiErrorMessage } from '../utils/apiErrors.js';
 import { reverseGeocodeLocation } from '../utils/openStreetMap.js';
@@ -173,6 +174,7 @@ function buildGpsErrorMessage(error, t) {
 
 export default function Farms() {
   const { user } = useAuth();
+  const { isFarmRegistrationRequired, refreshFarmAccess } = useFarmAccess();
   const { t } = useI18n();
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name;
   const isAdmin = roleName === 'admin';
@@ -202,6 +204,8 @@ export default function Farms() {
     () => farms.find((farm) => farm.id === selectedFarmId) || null,
     [farms, selectedFarmId]
   );
+  const hasDraftCoordinates = useMemo(() => hasCoordinates(form), [form]);
+  const hasBoundaryPreview = Boolean(draftBoundaryGeoJson);
 
   const loadFarms = useCallback(async (preferredFarmId = null) => {
     const { data } = await api.get('/farms');
@@ -503,6 +507,7 @@ export default function Farms() {
       const { data: createdFarm } = await api.post('/farms', payload);
       setForm(EMPTY_FORM);
       await loadFarms(createdFarm.id);
+      await refreshFarmAccess();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, t('couldNotSaveFarm')));
     }
@@ -515,44 +520,110 @@ export default function Farms() {
         title={t('farmRegistry')}
         body={t('farmRegistryBody')}
       />
+      {isFarmRegistrationRequired ? (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-900 shadow-[0_10px_24px_rgba(245,158,11,0.08)]">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-amber-700">{t('firstFarmRequiredTitle')}</p>
+          <p className="mt-2 text-sm leading-6 text-amber-900">{t('firstFarmRequiredBody')}</p>
+        </div>
+      ) : null}
       <div className="split-layout">
-        <form className="surface rounded-lg p-4 sm:p-5 xl:sticky sticky-panel xl:self-start" onSubmit={submit}>
-          <h2 className="section-title flex items-center gap-2">
-            <Plus className="h-5 w-5 text-leaf-700" />
-            {t('registerFarm')}
-          </h2>
-          {error && <div className="danger-message mt-4">{error}</div>}
-          <div className="mt-4 grid gap-3">
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('farmName')}</span>
-              <input className="field mt-2" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('barangay')}</span>
-              <input className="field mt-2" value={form.barangay} onChange={(event) => setForm({ ...form, barangay: event.target.value })} />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('municipalityCity')}</span>
-              <input className="field mt-2" value={form.municipality} onChange={(event) => setForm({ ...form, municipality: event.target.value })} />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('province')}</span>
-              <input className="field mt-2" value={form.province} onChange={(event) => setForm({ ...form, province: event.target.value })} />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-sm font-semibold text-stone-700">{t('latitude')}</span>
-                <input className="field mt-2" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-stone-700">{t('longitude')}</span>
-                <input className="field mt-2" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} />
-              </label>
+        <form className="manual-scan-form surface flex flex-col overflow-hidden rounded-lg xl:sticky sticky-panel xl:self-start" onSubmit={submit}>
+          <div className="manual-scan-form-title">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <span className="manual-scan-form-icon">
+                <Plus className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('registerFarm')}</h2>
+                <p className="mt-1 text-sm leading-6 text-stone-500">{t('farmRegistryBody')}</p>
+              </div>
             </div>
-            <label className="block">
-              <span className="text-sm font-semibold text-stone-700">{t('areaHectares')}</span>
-              <input className="field mt-2" value={form.area_hectares} onChange={(event) => setForm({ ...form, area_hectares: event.target.value })} />
-            </label>
+            <div className="hidden min-[420px]:flex shrink-0 flex-col items-end gap-2">
+              <span className="status-pill border border-stone-200 bg-white text-stone-700">{farms.length} {t('farms')}</span>
+              <span className={`status-pill ${hasBoundaryPreview ? 'bg-leaf-50 text-leaf-800' : 'bg-stone-100 text-stone-700'}`}>
+                {hasBoundaryPreview ? t('mapReady') : t('gps')}
+              </span>
+            </div>
+          </div>
+
+          {error ? (
+            <div className="px-4 pt-4 sm:px-5">
+              <div className="danger-message">{error}</div>
+            </div>
+          ) : null}
+
+          <div className="manual-scan-form-body">
+            <section className="manual-field-section">
+              <div className="manual-section-heading">
+                <h3>{t('registerFarm')}</h3>
+                <p>{t('farmRegistryBody')}</p>
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('farmName')}</span>
+                <input className="field mt-2" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('barangay')}</span>
+                <input className="field mt-2" value={form.barangay} onChange={(event) => setForm({ ...form, barangay: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('municipalityCity')}</span>
+                <input className="field mt-2" value={form.municipality} onChange={(event) => setForm({ ...form, municipality: event.target.value })} />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('province')}</span>
+                <input className="field mt-2" value={form.province} onChange={(event) => setForm({ ...form, province: event.target.value })} />
+              </label>
+            </section>
+
+            <section className="manual-field-section">
+              <div className="manual-section-heading">
+                <h3>{t('gpsBoundaryMap')}</h3>
+                <p>{t('addGpsAreaBoundary')}</p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-semibold text-stone-700">{t('latitude')}</span>
+                  <input className="field mt-2" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-stone-700">{t('longitude')}</span>
+                  <input className="field mt-2" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} />
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('areaHectares')}</span>
+                <input className="field mt-2" value={form.area_hectares} onChange={(event) => setForm({ ...form, area_hectares: event.target.value })} />
+              </label>
+
+              <div className="manual-location-panel">
+                <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('gpsBoundaryMap')}</p>
+                <p className="mt-1 text-sm leading-6 text-sky-900">
+                  {hasBoundaryPreview ? t('boundaryEstimated') : t('addGpsAreaBoundary')}
+                </p>
+              </div>
+            </section>
+          </div>
+
+          <div className="manual-scan-submit">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-stone-200 bg-white px-3 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">GPS</p>
+                <p className="mt-1 text-sm font-semibold text-stone-900">
+                  {hasDraftCoordinates ? `${form.latitude}, ${form.longitude}` : t('locationDetailsNotSet')}
+                </p>
+              </div>
+              <div className="rounded-lg border border-stone-200 bg-white px-3 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('area')}</p>
+                <p className="mt-1 text-sm font-semibold text-stone-900">
+                  {form.area_hectares ? `${form.area_hectares} ha` : '-'}
+                </p>
+              </div>
+            </div>
+
             <button type="button" className="btn-secondary" onClick={() => locate()} disabled={gpsLocating}>
               {gpsLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
               {gpsLocating ? t('locating') : t('useGpsLocation')}
@@ -562,16 +633,18 @@ export default function Farms() {
         </form>
 
         <section className="space-y-4">
-          <div className="surface rounded-lg p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="section-title flex items-center gap-2">
-                  <MapPinned className="h-5 w-5 text-leaf-700" />
-                  {t('gpsBoundaryMap')}
+          <div className="surface overflow-hidden rounded-lg">
+            <div className="flex flex-col gap-3 border-b border-stone-100 bg-stone-50/60 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="icon-tile">
+                  <MapPinned className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('gpsBoundaryMap')}</h2>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    {t('farmPinsBody')}
+                  </p>
                 </div>
-                <p className="mt-2 text-sm text-stone-500">
-                  {t('farmPinsBody')}
-                </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs font-bold uppercase tracking-wide text-stone-500">
                 <span className="rounded-full border border-stone-200 bg-white px-3 py-1">{farms.length} {t('farms')}</span>
@@ -579,29 +652,31 @@ export default function Farms() {
                 {selectedFarm && <span className="rounded-full border border-leaf-200 bg-leaf-50 px-3 py-1 text-leaf-700">{t('focusedFarm', { farm: selectedFarm.name })}</span>}
               </div>
             </div>
-            {mapState.notice && (
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {mapState.notice}
-              </div>
-            )}
-
-            <div className="relative z-0 isolate mt-4 overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
-              <div ref={mapHostRef} className="min-h-[300px] w-full sm:min-h-[380px] lg:min-h-[420px]" />
-              {(mapState.loading || mapState.error) && (
-                <div className="absolute inset-0 grid place-items-center bg-white/85 px-6 text-center">
-                  <div>
-                    {mapState.loading ? <Loader2 className="mx-auto h-6 w-6 animate-spin text-leaf-700" /> : null}
-                    <p className="mt-3 font-semibold text-stone-900">
-                      {mapState.loading ? t('loadingFarmMap') : t('mapCouldNotBeShown')}
-                    </p>
-                    <p className="mt-1 max-w-md text-sm text-stone-500">
-                      {mapState.loading
-                        ? t('preparingFarmMap')
-                        : mapState.error}
-                    </p>
-                  </div>
+            <div className="p-4 sm:p-5">
+              {mapState.notice && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {mapState.notice}
                 </div>
               )}
+
+              <div className="relative z-0 isolate mt-4 overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
+                <div ref={mapHostRef} className="min-h-[300px] w-full sm:min-h-[380px] lg:min-h-[420px]" />
+                {(mapState.loading || mapState.error) && (
+                  <div className="absolute inset-0 grid place-items-center bg-white/85 px-6 text-center">
+                    <div>
+                      {mapState.loading ? <Loader2 className="mx-auto h-6 w-6 animate-spin text-leaf-700" /> : null}
+                      <p className="mt-3 font-semibold text-stone-900">
+                        {mapState.loading ? t('loadingFarmMap') : t('mapCouldNotBeShown')}
+                      </p>
+                      <p className="mt-1 max-w-md text-sm text-stone-500">
+                        {mapState.loading
+                          ? t('preparingFarmMap')
+                          : mapState.error}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

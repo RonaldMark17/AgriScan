@@ -2,6 +2,7 @@ import { useLayoutEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppShell from './components/layout/AppShell.jsx';
 import ProtectedRoute from './router/ProtectedRoute.jsx';
+import FarmRequiredRoute from './router/FarmRequiredRoute.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Farms from './pages/Farms.jsx';
@@ -43,14 +44,16 @@ export default function App() {
         <Route path="/mfa/setup" element={<MfaSetup />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
-            <Route index element={<Dashboard />} />
             <Route path="/farms" element={<Farms />} />
-            <Route path="/scan" element={<Scan />} />
-            <Route path="/disease-detector" element={<PlantDiseaseDetector />} />
-            <Route path="/marketplace" element={<Navigate to="/scan" replace />} />
-            <Route path="/reports" element={<Reports />} />
             <Route path="/settings/security" element={<SecuritySettings />} />
             <Route path="/admin/users" element={<AdminUsers />} />
+            <Route element={<FarmRequiredRoute />}>
+              <Route index element={<Dashboard />} />
+              <Route path="/scan" element={<Scan />} />
+              <Route path="/disease-detector" element={<PlantDiseaseDetector />} />
+              <Route path="/marketplace" element={<Navigate to="/scan" replace />} />
+              <Route path="/reports" element={<Reports />} />
+            </Route>
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,20 @@
+{
+    "cookies":  [
+
+                ],
+    "origins":  [
+                    {
+                        "localStorage":  [
+                                             {
+                                                 "value":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc3OTM4MTgzNiwiZXhwIjoxNzc5MzgyNzM2LCJqdGkiOiJrSDBkc3lNOGtJUTlCTEF3cnhhbmxBIiwicm9sZSI6ImZhcm1lciIsIm1mYSI6dHJ1ZX0.8W8xlBB15K0sCKP5vRkSH13k5Y6dW0YlaHLdyX5nYc4",
+                                                 "name":  "agriscan_access"
+                                             },
+                                             {
+                                                 "value":  "{\"id\":2,\"email\":\"farmer@agriscanproject.com\",\"full_name\":\"Juan Dela Cruz\",\"phone\":\"+639171000101\",\"role\":\"farmer\",\"mfa_enabled\":false}",
+                                                 "name":  "agriscan_user"
+                                             }
+                                         ],
+                        "origin":  "http://127.0.0.1:8000"
+                    }
+                ]
+}
