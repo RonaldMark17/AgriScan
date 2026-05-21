@@ -9,7 +9,12 @@ export default function OfflineBanner({ online }) {
   return (
     <div className="offline-banner">
       <WifiOff className="h-4 w-4" />
-      {t('offlineMode')}
+      <span>{t('offlineMode')}</span>
+      <span className="offline-banner-loader" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
     </div>
   );
 }

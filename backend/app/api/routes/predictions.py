@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_registered_farm_for_farmer
 from app.core.database import get_db
 from app.models import Crop, CropRecommendationFeedback, Farm, Prediction, Scan, User
 from app.schemas.domain import PredictionRead
@@ -106,7 +106,7 @@ async def _recommendation_feedback_stats(db: AsyncSession, user_id: int) -> dict
 async def create_soil_scan_prediction(
     payload: SoilScanRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_registered_farm_for_farmer),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     latitude = payload.latitude
@@ -191,7 +191,10 @@ async def create_prediction(
     if farm is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found.")
     if current_user.role.name == "farmer" and farm.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only create predictions for your farms.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The selected farm belongs to another account. Farmer accounts can only create predictions for their own farms.",
+        )
 
     crop = None
     if payload.crop_id:

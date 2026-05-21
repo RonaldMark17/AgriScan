@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_registered_farm_for_farmer
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models import Farm, Role, Scan, ScanFeedback, User
@@ -188,7 +188,7 @@ async def create_scan(
     severity: str | None = Form(default=None, pattern="^(low|medium|high|mild|severe)$"),
     field_notes: str | None = Form(default=None, max_length=1500),
     offline_mode: bool = Form(default=False),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_registered_farm_for_farmer),
     db: AsyncSession = Depends(get_db),
 ) -> Scan:
     typed_observation = any(value and value.strip() for value in [crop_type, affected_part, symptoms, field_notes])
@@ -201,7 +201,10 @@ async def create_scan(
         if farm is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found.")
         if current_user.role.name == "farmer" and farm.user_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only scan your own farms.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="The selected farm belongs to another account. Farmer accounts can only create disease scans for their own farms.",
+            )
 
     file_path: Path | None = None
     if image is not None:

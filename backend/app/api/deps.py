@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import decode_token
-from app.models import User
+from app.models import Farm, User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -59,10 +59,33 @@ def require_roles(*roles: str) -> Callable:
     async def checker(current_user: User = Depends(get_current_user)) -> User:
         role_name = current_user.role.name
         if role_name not in roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions. Your current role is not allowed to perform this action.",
+            )
         return current_user
 
     return checker
+
+
+async def require_registered_farm_for_farmer(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    if current_user.role.name != "farmer":
+        return current_user
+
+    result = await db.execute(select(Farm.id).where(Farm.user_id == current_user.id).limit(1))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "No farm record was found for this farmer account. "
+                "Register your first farm before using Manual Scan or Disease Detector."
+            ),
+        )
+
+    return current_user
 
 
 def get_request_ip(request: Request) -> str:

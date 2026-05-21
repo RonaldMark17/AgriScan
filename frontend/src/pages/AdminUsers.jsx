@@ -5,7 +5,7 @@ import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 
 const FLAGGED_REVIEWS_PAGE_SIZE = 4;
 const REVIEW_STATUS_ORDER = {
@@ -42,6 +42,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
   const [rejectingId, setRejectingId] = useState(null);
+  const [undoingFarmId, setUndoingFarmId] = useState(null);
   const [farmActionError, setFarmActionError] = useState('');
   const [togglingUserId, setTogglingUserId] = useState(null);
   const [userActionError, setUserActionError] = useState('');
@@ -56,7 +57,7 @@ export default function AdminUsers() {
     try {
       const [usersResponse, farmsResponse, flaggedReviewsResponse] = await Promise.all([
         api.get('/users'),
-        api.get('/admin/pending-farms'),
+        api.get('/admin/farm-approvals'),
         api.get('/admin/flagged-reviews'),
       ]);
       setUsers(usersResponse.data);
@@ -80,7 +81,7 @@ export default function AdminUsers() {
     function handleAdminNotification(event) {
       const notification = event.detail?.notification;
       const notificationType = notification?.payload?.type || notification?.type;
-      if (!['farm_pending', 'flagged_crop'].includes(notificationType)) return;
+      if (!['farm_pending', 'farm_updated', 'farm_deleted', 'farm_approved', 'farm_rejected', 'farm_review_undone', 'flagged_crop'].includes(notificationType)) return;
       refreshSilently();
     }
 
@@ -107,7 +108,10 @@ export default function AdminUsers() {
       await api.patch(`/farms/${id}/approve`);
       await load();
     } catch (error) {
-      setFarmActionError(getApiErrorMessage(error, t('farmActionFailed')));
+      setFarmActionError(getDetailedApiErrorMessage(error, t('farmActionFailed'), {
+        title: 'Farm approval could not be saved.',
+        action: 'Confirm the farm still exists and your admin account has permission, then try again.',
+      }));
     } finally {
       setApprovingId(null);
     }
@@ -120,9 +124,28 @@ export default function AdminUsers() {
       await api.patch(`/farms/${id}/reject`);
       await load();
     } catch (error) {
-      setFarmActionError(getApiErrorMessage(error, t('farmActionFailed')));
+      setFarmActionError(getDetailedApiErrorMessage(error, t('farmActionFailed'), {
+        title: 'Farm rejection could not be saved.',
+        action: 'Confirm the farm still exists and your admin account has permission, then try again.',
+      }));
     } finally {
       setRejectingId(null);
+    }
+  }
+
+  async function undoFarmReview(id) {
+    setUndoingFarmId(id);
+    setFarmActionError('');
+    try {
+      await api.patch(`/farms/${id}/undo-review`);
+      await load();
+    } catch (error) {
+      setFarmActionError(getDetailedApiErrorMessage(error, t('farmActionFailed'), {
+        title: 'Farm review undo could not be saved.',
+        action: 'Confirm the farm still exists and your admin account has permission, then try again.',
+      }));
+    } finally {
+      setUndoingFarmId(null);
     }
   }
 
@@ -133,7 +156,10 @@ export default function AdminUsers() {
       const { data } = await api.patch(`/users/${targetUser.id}`, { is_active: !targetUser.is_active });
       setUsers((current) => current.map((item) => (item.id === targetUser.id ? data : item)));
     } catch (error) {
-      setUserActionError(getApiErrorMessage(error, t('accountActionFailed')));
+      setUserActionError(getDetailedApiErrorMessage(error, t('accountActionFailed'), {
+        title: 'User account update could not be saved.',
+        action: 'Confirm the user exists, avoid disabling your own account, and retry with an admin account.',
+      }));
     } finally {
       setTogglingUserId(null);
     }
@@ -147,7 +173,10 @@ export default function AdminUsers() {
       const { data } = await api.patch(`/admin/flagged-reviews/${id}/${decision}`);
       setFlaggedReviews((current) => current.map((review) => (review.id === id ? data : review)));
     } catch (error) {
-      setReviewActionError(getApiErrorMessage(error, t('reviewActionFailed')));
+      setReviewActionError(getDetailedApiErrorMessage(error, t('reviewActionFailed'), {
+        title: 'Flagged review decision could not be saved.',
+        action: 'Confirm the flagged review still exists and retry with an admin account.',
+      }));
     } finally {
       setReviewDecision(null);
     }
@@ -194,6 +223,18 @@ export default function AdminUsers() {
     if (status === 'verified') return t('accepted');
     if (status === 'rejected') return t('rejected');
     return status || t('status');
+  }
+
+  function farmStatusClass(status) {
+    if (status === 'approved') return 'bg-leaf-50 text-leaf-800';
+    if (status === 'rejected') return 'bg-red-50 text-red-700';
+    return 'bg-amber-50 text-amber-800';
+  }
+
+  function farmStatusLabel(status) {
+    if (status === 'approved') return t('approved');
+    if (status === 'rejected') return t('rejected');
+    return t('pending');
   }
 
   const flaggedPageCount = Math.max(1, Math.ceil(flaggedReviews.length / FLAGGED_REVIEWS_PAGE_SIZE));
@@ -511,44 +552,70 @@ export default function AdminUsers() {
           <div className="surface rounded-lg p-4 sm:p-5">
             <h2 className="section-title flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-leaf-700" />
-              {t('pendingFarms')}
+              {t('farmApprovals')}
             </h2>
             {farmActionError ? <div className="danger-message mt-4">{farmActionError}</div> : null}
             {farms.length === 0 ? (
               <div className="mt-4">
-                <EmptyState title={t('noPendingApprovals')} body={t('pendingFarmsBody')} />
+                <EmptyState title={t('noFarmApprovals')} body={t('farmApprovalsBody')} />
               </div>
             ) : (
               <div className="mt-4 space-y-3">
-                {farms.map((farm) => (
-                  <div key={farm.id} className="rounded-lg border border-stone-200 p-3">
-                    <p className="font-semibold text-stone-900">{farm.name}</p>
-                    <p className="mt-1 text-xs font-semibold text-stone-600">
-                      {t('owner')}: {farm.owner_name || farm.owner_email || `User #${farm.user_id}`}
-                    </p>
-                    <p className="text-sm text-stone-500">{farm.municipality}, {farm.province}</p>
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <button
-                        className="btn-primary w-full sm:w-auto"
-                        onClick={() => approveFarm(farm.id)}
-                        disabled={approvingId !== null || rejectingId !== null}
-                        type="button"
-                      >
-                        {approvingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                        {t('approve')}
-                      </button>
-                      <button
-                        className="btn-secondary w-full border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 sm:w-auto"
-                        onClick={() => rejectFarm(farm.id)}
-                        disabled={approvingId !== null || rejectingId !== null}
-                        type="button"
-                      >
-                        {rejectingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                        {t('rejectFarm')}
-                      </button>
+                {farms.map((farm) => {
+                  const isPending = farm.status === 'pending';
+                  const actionInProgress = approvingId !== null || rejectingId !== null || undoingFarmId !== null;
+
+                  return (
+                    <div key={farm.id} className="rounded-lg border border-stone-200 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words font-semibold text-stone-900">{farm.name}</p>
+                          <p className="mt-1 text-xs font-semibold text-stone-600">
+                            {t('owner')}: {farm.owner_name || farm.owner_email || `User #${farm.user_id}`}
+                          </p>
+                          <p className="text-sm text-stone-500">{[farm.municipality, farm.province].filter(Boolean).join(', ') || '-'}</p>
+                        </div>
+                        <span className={`status-pill shrink-0 ${farmStatusClass(farm.status)}`}>
+                          {farmStatusLabel(farm.status)}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        {isPending ? (
+                          <>
+                            <button
+                              className="btn-primary w-full sm:w-auto"
+                              onClick={() => approveFarm(farm.id)}
+                              disabled={actionInProgress}
+                              type="button"
+                            >
+                              {approvingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                              {t('approve')}
+                            </button>
+                            <button
+                              className="btn-secondary w-full border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 sm:w-auto"
+                              onClick={() => rejectFarm(farm.id)}
+                              disabled={actionInProgress}
+                              type="button"
+                            >
+                              {rejectingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                              {t('rejectFarm')}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn-secondary w-full sm:w-auto"
+                            onClick={() => undoFarmReview(farm.id)}
+                            disabled={actionInProgress}
+                            type="button"
+                          >
+                            {undoingFarmId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                            {t('undoDecision')}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

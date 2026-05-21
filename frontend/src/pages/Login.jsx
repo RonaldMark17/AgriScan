@@ -5,7 +5,7 @@ import { loginHeroImage } from '../assets/visuals/index.js';
 import LanguageToggle from '../components/shared/LanguageToggle.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 import { getCurrentDeviceName, getFallbackDeviceName } from '../utils/deviceName.js';
 
 export default function Login() {
@@ -80,7 +80,10 @@ export default function Login() {
         navigate('/mfa/setup', { state: { setupToken: result.setup_token, user: result.user, rememberMe: payload.remember_me, deviceName } });
       }
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Login failed. Please check your credentials.'));
+      setError(getDetailedApiErrorMessage(requestError, 'Login failed. Please check your credentials.', {
+        title: 'Login could not be completed.',
+        action: 'Check your email, password, account status, and MFA requirement, then try again.',
+      }));
     } finally {
       setLoading(false);
     }

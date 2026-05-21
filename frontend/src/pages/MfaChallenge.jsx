@@ -2,7 +2,7 @@ import { KeyRound, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 import { getCurrentDeviceName } from '../utils/deviceName.js';
 
 export default function MfaChallenge() {
@@ -25,7 +25,10 @@ export default function MfaChallenge() {
       await verifyMfa({ mfa_token: mfaToken, code, device_name: deviceName, remember_me: rememberMe });
       navigate('/', { replace: true });
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Invalid MFA code.'));
+      setError(getDetailedApiErrorMessage(requestError, 'Invalid MFA code.', {
+        title: 'MFA verification failed.',
+        action: 'Enter the latest authenticator code or a valid recovery code, then try again.',
+      }));
     } finally {
       setLoading(false);
     }

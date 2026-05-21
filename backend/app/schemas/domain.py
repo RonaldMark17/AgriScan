@@ -44,6 +44,17 @@ class FarmCreate(BaseModel):
     boundary_geojson: dict[str, Any] | None = None
 
 
+class FarmUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    barangay: str | None = Field(default=None, max_length=120)
+    municipality: str | None = Field(default=None, max_length=120)
+    province: str | None = Field(default=None, max_length=120)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    area_hectares: float | None = Field(default=None, ge=0)
+    boundary_geojson: dict[str, Any] | None = None
+
+
 class FarmRead(FarmCreate):
     id: int
     user_id: int

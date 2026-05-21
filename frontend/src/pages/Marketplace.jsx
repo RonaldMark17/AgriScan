@@ -20,7 +20,7 @@ import { api } from '../api/client.js';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 
 const categories = ['All Crops', 'Vegetables', 'Grains', 'Fruits', 'Root Crops'];
 const sortModes = ['Suitability', 'Crop Name', 'Planting Window'];
@@ -541,7 +541,10 @@ export default function Marketplace() {
       const response = await api.post('/predictions/soil-scan', payload);
       setResult(response.data);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, t('couldNotRefreshCropRecommendations')));
+      setError(getDetailedApiErrorMessage(requestError, t('couldNotRefreshCropRecommendations'), {
+        title: 'Crop recommendations could not be refreshed.',
+        action: 'Confirm your farm access and connection, then retry the recommendation refresh.',
+      }));
     } finally {
       setLoading(false);
     }

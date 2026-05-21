@@ -30,7 +30,7 @@ import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
 import { reverseGeocodeLocation } from '../utils/openStreetMap.js';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { buildDetailedAlert, getApiErrorMessage } from '../utils/apiErrors.js';
 
 const initialForm = {
   soil_type: 'Loam',
@@ -70,6 +70,55 @@ const nutrientLevels = [
   ['medium', 'Medium'],
   ['high', 'High'],
 ];
+
+function soilScanRequestErrorMessage(error, fallback = 'Soil scan failed.') {
+  const apiMessage = getApiErrorMessage(error, '');
+  const status = error?.response?.status;
+
+  if (status === 401) {
+    return buildDetailedAlert(
+      'Manual Scan was blocked.',
+      'Your login session is missing, expired, or no longer valid.',
+      'Sign in again, then return to Manual Scan and submit the soil readings.'
+    );
+  }
+
+  if (status === 403) {
+    return buildDetailedAlert(
+      'Your account is not allowed to create Manual Scan recommendations.',
+      apiMessage || 'Your current account does not have the required farm access.',
+      manualScanPermissionAction(apiMessage)
+    );
+  }
+
+  if (status >= 400 && status < 500) {
+    return buildDetailedAlert(
+      'Manual Scan could not create a recommendation.',
+      apiMessage || fallback,
+      'Check the soil readings, farm access, and account permissions, then try again.'
+    );
+  }
+
+  return buildDetailedAlert(
+    'Manual Scan could not create a recommendation.',
+    apiMessage || fallback,
+    'Check your connection and retry. If you are offline, AgriScan will use saved device rules.'
+  );
+}
+
+function manualScanPermissionAction(apiMessage = '') {
+  const reason = apiMessage.toLowerCase();
+  if (reason.includes('farm') && reason.includes('register')) {
+    return 'Open Farms, register your farm details, save the farm record, then return to Manual Scan. If admin review is required, wait for approval before relying on official records.';
+  }
+  if (reason.includes('mfa')) {
+    return 'Complete MFA verification, then retry the Manual Scan.';
+  }
+  if (reason.includes('insufficient')) {
+    return 'Ask an administrator to grant the correct role or permission for Manual Scan.';
+  }
+  return 'Use a farmer account with farm access, or ask an administrator to update your account permissions.';
+}
 const categories = ['All Crops', 'Vegetables', 'Grains', 'Fruits', 'Root Crops', 'Field Crops'];
 const sortModes = ['Suitability', 'Crop Name', 'Planting Window'];
 const soilInputLimits = {
@@ -1185,7 +1234,7 @@ function RecommendationFeedback({ result, status, onFeedback, t }) {
           <p className="mt-1 text-xs sm:text-sm leading-6 text-stone-500">
             {disabled ? t('feedbackNeedsSavedPrediction') : t('feedbackImprovesRecommendations')}
           </p>
-          {status && <p className="mt-2 text-sm font-semibold text-leaf-700">{status}</p>}
+          {status && <p className="mt-2 whitespace-pre-line text-sm font-semibold text-leaf-700">{status}</p>}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row w-full lg:w-auto shrink-0">
           <button
@@ -1220,6 +1269,7 @@ export default function Scan() {
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [offlineLoading, setOfflineLoading] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All Crops');
   const [sortMode, setSortMode] = useState('Suitability');
   const [selectedCrop, setSelectedCrop] = useState(null);
@@ -1414,16 +1464,28 @@ export default function Scan() {
     localStorage.setItem('agriscan_soil_scans', JSON.stringify(next));
   }
 
-  async function runRecommendation(payload) {
-    setError('');
-    if (!navigator.onLine) {
-      setOnline(false);
+  async function createOfflineRecommendation(payload) {
+    setOfflineLoading(true);
+    setAudioStatus(t('offlineSoilLoading'));
+
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
       const scan = { ...buildOfflineCropRecommendation(payload, t), id: makeHistoryId(), created_at: new Date().toISOString(), inputs: payload };
       setResult(scan);
       setFeedbackStatus('');
       saveHistory(scan);
       setAudioStatus(t('offlineCropRecommendationReady'));
       return scan;
+    } finally {
+      setOfflineLoading(false);
+    }
+  }
+
+  async function runRecommendation(payload) {
+    setError('');
+    if (!navigator.onLine) {
+      setOnline(false);
+      return createOfflineRecommendation(payload);
     }
 
     setLoading(true);
@@ -1439,14 +1501,9 @@ export default function Scan() {
     } catch (requestError) {
       if (!navigator.onLine || requestError?.code === 'ERR_NETWORK') {
         setOnline(navigator.onLine);
-        const scan = { ...buildOfflineCropRecommendation(payload, t), id: makeHistoryId(), created_at: new Date().toISOString(), inputs: payload };
-        setResult(scan);
-        setFeedbackStatus('');
-        saveHistory(scan);
-        setAudioStatus(t('offlineCropRecommendationReady'));
-        return scan;
+        return createOfflineRecommendation(payload);
       }
-      setError(getApiErrorMessage(requestError, t('soilScanFailed')));
+      setError(soilScanRequestErrorMessage(requestError, t('soilScanFailed')));
       return null;
     } finally {
       setLoading(false);
@@ -1456,7 +1513,11 @@ export default function Scan() {
   async function submit(event) {
     event.preventDefault();
     if (!canSubmit) {
-      setError(inputErrors[0] || t('enterValidSoilReadings'));
+      setError(buildDetailedAlert(
+        'Manual Scan needs valid soil readings.',
+        inputErrors[0] || t('enterValidSoilReadings'),
+        'Correct the highlighted soil value, then submit the recommendation again.'
+      ));
       return;
     }
     await runRecommendation(buildPayload());
@@ -1489,7 +1550,11 @@ export default function Scan() {
       await api.post(`/predictions/${result.prediction_id}/feedback`, payload);
       setFeedbackStatus(t('feedbackSaved'));
     } catch (feedbackError) {
-      setFeedbackStatus(getApiErrorMessage(feedbackError, t('feedbackSaveFailed')));
+      setFeedbackStatus(buildDetailedAlert(
+        'Recommendation feedback could not be saved.',
+        getApiErrorMessage(feedbackError, t('feedbackSaveFailed')),
+        'Make sure this recommendation was saved online, then retry the feedback.'
+      ));
     }
   }
 
@@ -1518,6 +1583,8 @@ export default function Scan() {
   const recommendationIntro = result?.soil_summary
     ? `Based on ${result.soil_summary.toLowerCase()}`
     : t('basedOnLatestSoilScan');
+  const recommendationBusy = loading || offlineLoading;
+  const recommendationLoadingText = offlineLoading ? t('offlineSoilLoading') : t('checkingSoil');
 
   return (
     <div className="page-stack flex flex-col gap-6 sm:gap-8 w-full">
@@ -1750,17 +1817,27 @@ export default function Scan() {
               </div>
             )}
 
-            {error && <div className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700 w-full">{error}</div>}
+            {error && <div className="w-full whitespace-pre-line rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
 
-            {!online && !error && (
+            {offlineLoading ? (
+              <div className="offline-loading-card w-full" role="status" aria-live="polite">
+                <span className="offline-loading-pulse" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold">{t('offlineSoilLoading')}</p>
+                  <p className="mt-1 text-xs leading-5">{t('offlineLoadingBody')}</p>
+                </div>
+              </div>
+            ) : null}
+
+            {!online && !offlineLoading && !error && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900 w-full">
                 {t('cropRecommendationOfflineMode')}
               </div>
             )}
 
-            <button className="btn-primary h-12 w-full text-base justify-center font-bold" disabled={!canSubmit || loading}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Sprout className="h-5 w-5 mr-2" />}
-              {loading ? t('checkingSoil') : t('recommendBestCrop')}
+            <button className="btn-primary h-12 w-full text-base justify-center font-bold" disabled={!canSubmit || recommendationBusy}>
+              {recommendationBusy ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Sprout className="h-5 w-5 mr-2" />}
+              {recommendationBusy ? recommendationLoadingText : t('recommendBestCrop')}
             </button>
           </div>
         </form>
@@ -1789,9 +1866,9 @@ export default function Scan() {
                 )}
               </div>
               <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 w-full lg:w-auto shrink-0">
-                <button className="btn-secondary h-10 w-full sm:w-auto px-4 text-sm justify-center" onClick={() => runRecommendation(buildPayload())} type="button" disabled={!canSubmit || loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Crosshair className="h-4 w-4 mr-2" />}
-                  {loading ? t('refreshing') : t('refreshRecommendation')}
+                <button className="btn-secondary h-10 w-full sm:w-auto px-4 text-sm justify-center" onClick={() => runRecommendation(buildPayload())} type="button" disabled={!canSubmit || recommendationBusy}>
+                  {recommendationBusy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Crosshair className="h-4 w-4 mr-2" />}
+                  {recommendationBusy ? (offlineLoading ? t('offlineSoilLoading') : t('refreshing')) : t('refreshRecommendation')}
                 </button>
                 <button className="btn-secondary h-10 w-full sm:w-auto px-4 text-sm justify-center" onClick={cycleSortMode} type="button">
                   <Filter className="h-4 w-4 mr-2" />

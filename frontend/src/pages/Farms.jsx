@@ -1,4 +1,4 @@
-import { Crosshair, Loader2, MapPinned, Plus } from 'lucide-react';
+import { Crosshair, Loader2, MapPinned, Pencil, Plus, Trash2, X } from 'lucide-react';
 import * as L from 'leaflet';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client.js';
@@ -7,12 +7,12 @@ import PageHeader from '../components/shared/PageHeader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useFarmAccess } from '../context/FarmAccessContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { buildDetailedAlert, getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 import { reverseGeocodeLocation } from '../utils/openStreetMap.js';
 
 const DEFAULT_CENTER = { lat: 12.8797, lng: 121.774 };
 const FARM_AJAX_REFRESH_MS = 30000;
-const FARM_NOTIFICATION_TYPES = new Set(['farm_pending', 'farm_approved', 'farm_rejected']);
+const FARM_NOTIFICATION_TYPES = new Set(['farm_pending', 'farm_updated', 'farm_deleted', 'farm_approved', 'farm_rejected', 'farm_review_undone']);
 const EMPTY_FORM = {
   name: '',
   barangay: '',
@@ -22,6 +22,18 @@ const EMPTY_FORM = {
   longitude: '',
   area_hectares: '',
 };
+
+function farmToForm(farm) {
+  return {
+    name: farm?.name || '',
+    barangay: farm?.barangay || '',
+    municipality: farm?.municipality || '',
+    province: farm?.province || '',
+    latitude: farm?.latitude ?? '',
+    longitude: farm?.longitude ?? '',
+    area_hectares: farm?.area_hectares ?? '',
+  };
+}
 
 function parseCoordinate(value) {
   const parsed = Number(value);
@@ -120,9 +132,9 @@ function farmSignature(farm) {
   ]);
 }
 
-function hasDuplicateFarm(farms, payload) {
+function hasDuplicateFarm(farms, payload, excludeFarmId = null) {
   const nextSignature = farmSignature(payload);
-  return farms.some((farm) => farmSignature(farm) === nextSignature);
+  return farms.some((farm) => farm.id !== excludeFarmId && farmSignature(farm) === nextSignature);
 }
 
 function getPolygonPath(boundaryGeojson) {
@@ -181,6 +193,9 @@ export default function Farms() {
   const [farms, setFarms] = useState([]);
   const [selectedFarmId, setSelectedFarmId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingFarmId, setEditingFarmId] = useState(null);
+  const [savingFarm, setSavingFarm] = useState(false);
+  const [deletingFarmId, setDeletingFarmId] = useState(null);
   const [error, setError] = useState('');
   const [gpsLocating, setGpsLocating] = useState(false);
   const [mapState, setMapState] = useState({
@@ -204,6 +219,7 @@ export default function Farms() {
     () => farms.find((farm) => farm.id === selectedFarmId) || null,
     [farms, selectedFarmId]
   );
+  const isEditingFarm = editingFarmId !== null;
   const hasDraftCoordinates = useMemo(() => hasCoordinates(form), [form]);
   const hasBoundaryPreview = Boolean(draftBoundaryGeoJson);
 
@@ -486,9 +502,45 @@ export default function Farms() {
     return undefined;
   }, [draftBoundaryGeoJson, farms, form.latitude, form.longitude, isAdmin, selectedFarm, selectedFarmId, t]);
 
+  function resetFarmForm() {
+    setForm(EMPTY_FORM);
+    setEditingFarmId(null);
+    setError('');
+  }
+
+  function startEditingFarm(farm) {
+    setError('');
+    setSelectedFarmId(farm.id);
+    setEditingFarmId(farm.id);
+    setForm(farmToForm(farm));
+  }
+
+  async function deleteFarm(farm) {
+    if (!window.confirm(t('deleteFarmConfirm'))) return;
+
+    setDeletingFarmId(farm.id);
+    setError('');
+    try {
+      await api.delete(`/farms/${farm.id}`);
+      if (editingFarmId === farm.id) {
+        resetFarmForm();
+      }
+      await loadFarms();
+      await refreshFarmAccess();
+    } catch (requestError) {
+      setError(getDetailedApiErrorMessage(requestError, t('couldNotDeleteFarm'), {
+        title: 'Farm could not be deleted.',
+        action: 'Make sure you own this farm and that related records can be safely removed, then try again.',
+      }));
+    } finally {
+      setDeletingFarmId(null);
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     setError('');
+    setSavingFarm(true);
 
     try {
       const payload = {
@@ -499,17 +551,28 @@ export default function Farms() {
         boundary_geojson: draftBoundaryGeoJson,
       };
 
-      if (hasDuplicateFarm(farms, payload)) {
-        setError(t('duplicateFarm'));
+      if (hasDuplicateFarm(farms, payload, editingFarmId)) {
+        setError(buildDetailedAlert(
+          'Farm could not be saved.',
+          t('duplicateFarm'),
+          'Change the farm name, location details, GPS coordinates, or area so this record is unique.'
+        ));
         return;
       }
 
-      const { data: createdFarm } = await api.post('/farms', payload);
-      setForm(EMPTY_FORM);
-      await loadFarms(createdFarm.id);
+      const { data: savedFarm } = isEditingFarm
+        ? await api.patch(`/farms/${editingFarmId}`, payload)
+        : await api.post('/farms', payload);
+      resetFarmForm();
+      await loadFarms(savedFarm.id);
       await refreshFarmAccess();
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, t('couldNotSaveFarm')));
+      setError(getDetailedApiErrorMessage(requestError, t('couldNotSaveFarm'), {
+        title: isEditingFarm ? 'Farm update could not be saved.' : 'Farm registration could not be saved.',
+        action: 'Review the farm name, address, GPS coordinates, area, and ownership details, then submit again.',
+      }));
+    } finally {
+      setSavingFarm(false);
     }
   }
 
@@ -531,10 +594,10 @@ export default function Farms() {
           <div className="manual-scan-form-title">
             <div className="flex min-w-0 flex-1 items-start gap-3">
               <span className="manual-scan-form-icon">
-                <Plus className="h-5 w-5" />
+                {isEditingFarm ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
               </span>
               <div className="min-w-0">
-                <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('registerFarm')}</h2>
+                <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{isEditingFarm ? t('editFarm') : t('registerFarm')}</h2>
                 <p className="mt-1 text-sm leading-6 text-stone-500">{t('farmRegistryBody')}</p>
               </div>
             </div>
@@ -555,7 +618,7 @@ export default function Farms() {
           <div className="manual-scan-form-body">
             <section className="manual-field-section">
               <div className="manual-section-heading">
-                <h3>{t('registerFarm')}</h3>
+                <h3>{isEditingFarm ? t('editFarm') : t('registerFarm')}</h3>
                 <p>{t('farmRegistryBody')}</p>
               </div>
 
@@ -628,7 +691,16 @@ export default function Farms() {
               {gpsLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
               {gpsLocating ? t('locating') : t('useGpsLocation')}
             </button>
-            <button className="btn-primary">{t('saveFarm')}</button>
+            {isEditingFarm ? (
+              <button type="button" className="btn-secondary" onClick={resetFarmForm} disabled={savingFarm}>
+                <X className="h-4 w-4" />
+                {t('cancel')}
+              </button>
+            ) : null}
+            <button className="btn-primary" disabled={savingFarm}>
+              {savingFarm ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {isEditingFarm ? t('updateFarm') : t('saveFarm')}
+            </button>
           </div>
         </form>
 
@@ -687,9 +759,8 @@ export default function Farms() {
               {farms.map((farm) => {
                 const isSelected = farm.id === selectedFarmId;
                 return (
-                  <button
+                  <article
                     key={farm.id}
-                    type="button"
                     className={`surface rounded-lg p-4 text-left transition ${
                       isSelected ? 'border-leaf-300 bg-leaf-50/70' : 'hover:-translate-y-0.5 hover:border-leaf-200 hover:bg-leaf-50/40'
                     }`}
@@ -707,6 +778,33 @@ export default function Farms() {
                       </div>
                       <span className="shrink-0 rounded-full bg-leaf-100 px-2 py-1 text-xs font-bold uppercase text-leaf-800">{farm.status}</span>
                     </div>
+                    {!isAdmin || farm.user_id === user?.id ? (
+                      <div className="mt-4 flex flex-col gap-2 min-[420px]:flex-row">
+                        <button
+                          type="button"
+                          className="btn-secondary min-h-9 flex-1 px-3 py-1.5 text-xs"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            startEditingFarm(farm);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          {t('editFarm')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary min-h-9 flex-1 border-red-200 px-3 py-1.5 text-xs text-red-700 hover:border-red-300 hover:bg-red-50"
+                          disabled={deletingFarmId !== null}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void deleteFarm(farm);
+                          }}
+                        >
+                          {deletingFarmId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          {t('deleteFarm')}
+                        </button>
+                      </div>
+                    ) : null}
                     <dl className="mt-4 grid gap-2 text-sm min-[420px]:grid-cols-2">
                       <div>
                         <dt className="text-stone-500">{t('area')}</dt>
@@ -724,7 +822,7 @@ export default function Farms() {
                           ? t('boundaryEstimated')
                           : t('addGpsAreaBoundary')}
                     </p>
-                  </button>
+                  </article>
                 );
               })}
             </div>

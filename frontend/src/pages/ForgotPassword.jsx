@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import LanguageToggle from '../components/shared/LanguageToggle.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 
 export default function ForgotPassword() {
   const { t } = useI18n();
@@ -26,7 +26,10 @@ export default function ForgotPassword() {
       setCodeSent(true);
       setStatus(data?.message || t('passwordResetCodeSent'));
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, t('passwordResetRequestFailed')));
+      setError(getDetailedApiErrorMessage(requestError, t('passwordResetRequestFailed'), {
+        title: 'Password reset code could not be sent.',
+        action: 'Check the email address and try again. If the account exists, use the latest reset code sent to that email.',
+      }));
     } finally {
       setLoading(false);
     }
@@ -50,7 +53,10 @@ export default function ForgotPassword() {
       setStatus(data?.message || t('passwordResetComplete'));
       window.setTimeout(() => navigate('/login', { replace: true }), 1200);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, t('passwordResetFailed')));
+      setError(getDetailedApiErrorMessage(requestError, t('passwordResetFailed'), {
+        title: 'Password could not be reset.',
+        action: 'Use the latest valid reset code, confirm the new passwords match, then try again.',
+      }));
     } finally {
       setLoading(false);
     }

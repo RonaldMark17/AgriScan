@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 
 export default function MfaSetup() {
   const location = useLocation();
@@ -23,7 +23,10 @@ export default function MfaSetup() {
       .then(({ data }) => {
         if (active) setSetup(data);
       })
-      .catch((requestError) => setError(getApiErrorMessage(requestError, 'Could not start MFA setup.')));
+      .catch((requestError) => setError(getDetailedApiErrorMessage(requestError, 'Could not start MFA setup.', {
+        title: 'MFA setup could not start.',
+        action: 'Return to login and start MFA setup again with a fresh session.',
+      })));
     return () => {
       active = false;
     };
@@ -46,7 +49,10 @@ export default function MfaSetup() {
         });
       }
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Invalid setup code.'));
+      setError(getDetailedApiErrorMessage(requestError, 'Invalid setup code.', {
+        title: 'MFA setup verification failed.',
+        action: 'Enter the current authenticator code from the QR setup, then try again.',
+      }));
     } finally {
       setVerifying(false);
     }

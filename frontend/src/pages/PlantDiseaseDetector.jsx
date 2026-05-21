@@ -19,7 +19,7 @@ import { diseaseDetectorImage } from '../assets/visuals/index.js';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import visualMemoryRuntime from '../data/visualMemoryRuntime.json';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { buildDetailedAlert, getApiErrorMessage } from '../utils/apiErrors.js';
 
 const HISTORY_STORAGE_KEY = 'agriscan_disease_scans';
 const MAX_IMAGE_UPLOAD_MB = 10;
@@ -27,6 +27,7 @@ const MAX_IMAGE_UPLOAD_BYTES = MAX_IMAGE_UPLOAD_MB * 1024 * 1024;
 const TRANSPORT_IMAGE_TARGET_BYTES = 900 * 1024;
 const TRANSPORT_IMAGE_MAX_DIMENSION = 1600;
 const CUSTOM_CROP_OPTION = '__other_crop__';
+const OFFLINE_LOADING_CUE_MS = 450;
 const INVALID_CROP_IMAGE_MESSAGE =
   'Upload a real close-up crop photo with one leaf, fruit, stem, or plant part as the main subject. Screenshots, posters, game images, and background foliage cannot be diagnosed.';
 class CropTypeMismatchError extends Error {
@@ -34,6 +35,10 @@ class CropTypeMismatchError extends Error {
     super(message);
     this.name = 'CropTypeMismatchError';
   }
+}
+
+function waitForOfflineLoadingCue() {
+  return new Promise((resolve) => window.setTimeout(resolve, OFFLINE_LOADING_CUE_MS));
 }
 
 const supportedCropFocus = [
@@ -678,15 +683,75 @@ function shouldUseBrowserFallback(error) {
 function scanRequestErrorMessage(error, fallback = 'Disease detection failed.') {
   const apiMessage = getApiErrorMessage(error, '');
   const status = error?.response?.status;
-  if (status === 401) return 'Your session expired. Please sign in again, then scan the image.';
-  if (status === 403) return 'Your account is not allowed to create disease scans.';
-  if (status === 413) return `Image exceeds the ${MAX_IMAGE_UPLOAD_MB} MB upload limit.`;
-  if (status === 415) return apiMessage || 'Only JPG, PNG, and WebP images are supported.';
-  if (status >= 400 && status < 500) return apiMessage || 'AgriScan could not process this image. Try a JPG, PNG, or WebP crop photo.';
-  if (error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')) {
-    return 'The backend model took too long to respond, so AgriScan used browser analysis for this scan.';
+  if (status === 401) {
+    return buildDetailedAlert(
+      'Disease scan was blocked.',
+      'Your login session is missing, expired, or no longer valid.',
+      'Sign in again, then return to Disease Detector and scan the image.'
+    );
   }
-  return apiMessage || fallback;
+  if (status === 403) {
+    return diseaseScanPermissionMessage(apiMessage);
+  }
+  if (status === 413) {
+    return buildDetailedAlert(
+      'Image upload was blocked.',
+      `The selected image exceeds the ${MAX_IMAGE_UPLOAD_MB} MB upload limit.`,
+      'Choose a smaller JPG, PNG, or WebP crop photo, or compress the image before scanning.'
+    );
+  }
+  if (status === 415) {
+    return buildDetailedAlert(
+      'Image upload was blocked.',
+      apiMessage || 'The selected file type is not supported.',
+      'Use a JPG, PNG, or WebP image of the crop.'
+    );
+  }
+  if (status >= 400 && status < 500) {
+    return buildDetailedAlert(
+      'AgriScan could not process this disease scan.',
+      apiMessage || 'The request was rejected before disease analysis could be saved.',
+      'Check the crop photo, selected crop type, file size, and farm ownership, then try again.'
+    );
+  }
+  if (error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')) {
+    return buildDetailedAlert(
+      'Online disease model timed out.',
+      'The backend model took too long to respond.',
+      'AgriScan used browser analysis for this scan. You can retry when the network or ML service is stable.'
+    );
+  }
+  return buildDetailedAlert(
+    'Disease detection failed.',
+    apiMessage || fallback,
+    'Check your connection and try again. If the problem continues, use offline device analysis or contact support.'
+  );
+}
+
+function diseaseScanPermissionMessage(apiMessage) {
+  const reason = apiMessage || 'Your current account is not permitted to create disease scans.';
+  const normalizedReason = reason.toLowerCase();
+  let action = 'Use a farmer account with farm access, or ask an administrator to update your account permissions.';
+
+  if (normalizedReason.includes('farm') && normalizedReason.includes('register')) {
+    action = 'Open Farms, register your farm details, save the farm record, then return to Disease Detector. If your office requires review, wait for admin approval before relying on official records.';
+  } else if (normalizedReason.includes('own farm') || normalizedReason.includes('your own farms')) {
+    action = 'Select a farm owned by your account, or ask the farm owner/admin to correct the farm assignment.';
+  } else if (normalizedReason.includes('mfa')) {
+    action = 'Complete MFA verification, then retry the disease scan.';
+  } else if (normalizedReason.includes('insufficient')) {
+    action = 'Ask an administrator to grant the correct role or permission for disease scanning.';
+  }
+
+  return buildDetailedAlert('Your account is not allowed to create disease scans.', reason, action);
+}
+
+function cropImageAlert(reason) {
+  return buildDetailedAlert(
+    'Crop image could not be analyzed.',
+    reason || INVALID_CROP_IMAGE_MESSAGE,
+    'Upload a clear close-up photo where one crop leaf, fruit, stem, or plant part is the main subject.'
+  );
 }
 
 function isLocalVisualAnalysisMode(mode) {
@@ -2991,7 +3056,11 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
       }
       setFeedbackMessage(feedback.verification_reason || t('correctionSavedForReview'));
     } catch (feedbackRequestError) {
-      setFeedbackError(getApiErrorMessage(feedbackRequestError, t('correctionSaveFailed')));
+      setFeedbackError(buildDetailedAlert(
+        'Correction feedback could not be saved.',
+        getApiErrorMessage(feedbackRequestError, t('correctionSaveFailed')),
+        'Confirm this is your scan, check the correction details, then submit the feedback again.'
+      ));
     } finally {
       setFeedbackSubmitting(false);
     }
@@ -3376,7 +3445,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                   </form>
                 )}
                 {feedbackMessage && <p className="mt-3 rounded-lg bg-leaf-50 p-3 text-sm font-semibold text-leaf-700">{feedbackMessage}</p>}
-                {feedbackError && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700">{feedbackError}</p>}
+                {feedbackError && <p className="mt-3 whitespace-pre-line rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700">{feedbackError}</p>}
               </article>
             ) : null}
           </div>
@@ -3486,6 +3555,7 @@ export default function PlantDiseaseDetector() {
   const [history, setHistory] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [offlineAnalysisActive, setOfflineAnalysisActive] = useState(false);
   const [error, setError] = useState('');
   const [selectedCrop, setSelectedCrop] = useState('');
   const [customCrop, setCustomCrop] = useState('');
@@ -3504,6 +3574,9 @@ export default function PlantDiseaseDetector() {
       : detectorConnection.backendOnline === true
         ? 'online'
         : 'checking';
+  const scanButtonText = loading
+    ? (offlineAnalysisActive ? t('offlineImageLoading') : t('analyzingCropImage'))
+    : t('analyzeCropImage');
 
   useEffect(() => {
     let active = true;
@@ -3624,11 +3697,11 @@ export default function PlantDiseaseDetector() {
   function updateImage(nextFile) {
     if (!nextFile) return;
     if (!nextFile.type.startsWith('image/')) {
-      setError('Please upload a valid crop image file.');
+      setError(cropImageAlert('The selected file is not an image.'));
       return;
     }
     if (nextFile.size > MAX_IMAGE_UPLOAD_BYTES) {
-      setError(`Image exceeds the ${MAX_IMAGE_UPLOAD_MB} MB upload limit.`);
+      setError(scanRequestErrorMessage({ response: { status: 413 } }));
       setResult(null);
       clearImage();
       return;
@@ -3682,6 +3755,7 @@ export default function PlantDiseaseDetector() {
     if (!canSubmit) return;
 
     setLoading(true);
+    setOfflineAnalysisActive(!window.navigator.onLine || detectorMode === 'offline');
     setError('');
     setResult(null);
 
@@ -3693,7 +3767,12 @@ export default function PlantDiseaseDetector() {
     } catch (validationError) {
       if (validationError?.name === 'CropTypeMismatchError') {
         setResult(null);
-        setError(validationError.message);
+        setError(buildDetailedAlert(
+          'Crop selection does not match the image.',
+          validationError.message,
+          'Choose the crop that appears in the photo, or upload a photo that matches the selected crop.'
+        ));
+        setOfflineAnalysisActive(false);
         setLoading(false);
         return;
       }
@@ -3703,9 +3782,13 @@ export default function PlantDiseaseDetector() {
     try {
       const backendReady = await detectOnlineMode();
       const useOfflineAnalysis = !window.navigator.onLine || !backendReady;
+      if (useOfflineAnalysis) {
+        setOfflineAnalysisActive(true);
+        await waitForOfflineLoadingCue();
+      }
       if (useOfflineAnalysis && preflightValidationError) {
         setResult(null);
-        setError(preflightValidationError?.message || INVALID_CROP_IMAGE_MESSAGE);
+        setError(cropImageAlert(preflightValidationError?.message || INVALID_CROP_IMAGE_MESSAGE));
         return;
       }
       const uploadImageFile = useOfflineAnalysis ? imageFile : await prepareImageForUpload(imageFile);
@@ -3772,7 +3855,7 @@ export default function PlantDiseaseDetector() {
         /crop|leaf|plant|animal|vehicle|object/i.test(apiMessage || '');
       if (invalidCropImage) {
         setResult(null);
-        setError(apiMessage || INVALID_CROP_IMAGE_MESSAGE);
+        setError(cropImageAlert(apiMessage || INVALID_CROP_IMAGE_MESSAGE));
         return;
       }
       if (!shouldUseBrowserFallback(requestError)) {
@@ -3781,6 +3864,8 @@ export default function PlantDiseaseDetector() {
       }
 
       try {
+        setOfflineAnalysisActive(true);
+        await waitForOfflineLoadingCue();
         const offlineResult = await analyzeImageOffline(imageFile, cropInput);
         const nextResult = normalizeHistoryScan({
           ...offlineResult,
@@ -3793,10 +3878,15 @@ export default function PlantDiseaseDetector() {
         setError(scanRequestErrorMessage(requestError, 'Network or ML service was unavailable, so AgriScan used browser visual analysis.'));
       } catch (offlineError) {
         setResult(null);
-        setError(offlineError?.message || getApiErrorMessage(requestError, 'Disease detection failed.'));
+        setError(buildDetailedAlert(
+          'Disease detection failed.',
+          offlineError?.message || getApiErrorMessage(requestError, 'Disease detection failed.'),
+          'Try a clearer crop photo, check your selected crop type, or retry when the connection is stable.'
+        ));
       }
     } finally {
       setLoading(false);
+      setOfflineAnalysisActive(false);
     }
   }
 
@@ -3952,11 +4042,21 @@ export default function PlantDiseaseDetector() {
               </div>
             </div>
 
-            {error && <div className="mt-4 rounded-lg bg-red-50 p-3 text-xs font-medium text-red-700 sm:mt-5 sm:text-sm">{error}</div>}
+            {error && <div className="mt-4 whitespace-pre-line rounded-lg bg-red-50 p-3 text-xs font-medium text-red-700 sm:mt-5 sm:text-sm">{error}</div>}
+
+            {offlineAnalysisActive && (
+              <div className="offline-loading-card mt-4" role="status" aria-live="polite">
+                <span className="offline-loading-pulse" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold">{t('offlineImageLoading')}</p>
+                  <p className="mt-1 text-xs leading-5">{t('offlineLoadingBody')}</p>
+                </div>
+              </div>
+            )}
 
             <button className="btn-primary mt-4 h-11 w-full text-sm font-bold sm:mt-6 sm:h-12 sm:text-base" disabled={!canSubmit || loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              {loading ? t('analyzingCropImage') : t('analyzeCropImage')}
+              {scanButtonText}
             </button>
           </form>
         </div>

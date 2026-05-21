@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import LanguageToggle from '../components/shared/LanguageToggle.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 
 export default function Register() {
   const { register } = useAuth();
@@ -62,7 +62,10 @@ export default function Register() {
       setMessage(t('accountCreated'));
       window.setTimeout(() => navigate('/login'), 900);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, t('registrationFailed')));
+      setError(getDetailedApiErrorMessage(requestError, t('registrationFailed'), {
+        title: 'Registration could not be completed.',
+        action: 'Review your account details, make sure the email is not already registered, then try again.',
+      }));
     } finally {
       setLoading(false);
     }

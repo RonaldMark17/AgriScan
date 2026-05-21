@@ -7,7 +7,7 @@ import PageHeader from '../components/shared/PageHeader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
-import { getApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 import {
   ensureWebPushNotificationsEnabled,
   getWebPushSubscriptionState,
@@ -173,7 +173,10 @@ export default function SecuritySettings() {
       setSyncStatus(stamp);
       setSettingsStatus(t('manualSyncComplete'));
     } catch (error) {
-      setSettingsStatus(getApiErrorMessage(error, 'Sync failed.'));
+      setSettingsStatus(getDetailedApiErrorMessage(error, 'Sync failed.', {
+        title: 'Manual sync failed.',
+        action: 'Check your connection and account session, then run sync again.',
+      }));
     }
   }
 
@@ -196,7 +199,10 @@ export default function SecuritySettings() {
         setPushServerReady(false);
         setPushStatus(pushServerConfigStatus());
       } else {
-        setPushStatus(getApiErrorMessage(error, t('pushFailed')));
+        setPushStatus(getDetailedApiErrorMessage(error, t('pushFailed'), {
+          title: 'Push notifications could not be enabled.',
+          action: 'Check browser notification permission, server push setup, and your network, then try again.',
+        }));
       }
     } finally {
       setPushLoading(false);
@@ -242,7 +248,10 @@ export default function SecuritySettings() {
       'auth.token_refreshed': 'Session refreshed',
       'farm.approved': 'Farm approved',
       'farm.created': 'Farm registered',
+      'farm.deleted': 'Farm deleted',
       'farm.rejected': 'Farm rejected',
+      'farm.review_undone': 'Farm review undone',
+      'farm.updated': 'Farm updated',
       'marketplace.created': 'Marketplace listing created',
       'marketplace.status_updated': 'Marketplace status updated',
       'prediction.created': 'Prediction created',

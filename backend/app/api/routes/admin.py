@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_roles
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models import AuditLog, Farm, Role, Scan, ScanFeedback, User
+from app.models import AuditLog, Farm, FarmStatus, Role, Scan, ScanFeedback, User
 from app.schemas.domain import AdminActivityLogRead, AdminFlaggedReviewRead, AuditLogRead, FarmRead
 from app.services.audit import write_audit_log
 from app.services.feedback_learning import accept_scan_feedback, reject_scan_feedback, undo_scan_feedback_decision
@@ -305,6 +305,25 @@ async def pending_farms(_: User = Depends(require_roles("admin")), db: AsyncSess
         .join(User, User.id == Farm.user_id)
         .where(Farm.status == "pending")
         .order_by(Farm.created_at.desc())
+        .limit(200)
+    )
+    farms = []
+    for farm, owner in result.all():
+        setattr(farm, "owner_name", owner.full_name)
+        setattr(farm, "owner_email", owner.email)
+        farms.append(farm)
+    return farms
+
+
+@router.get("/farm-approvals", response_model=list[FarmRead])
+async def farm_approvals(_: User = Depends(require_roles("admin")), db: AsyncSession = Depends(get_db)) -> list[Farm]:
+    result = await db.execute(
+        select(Farm, User)
+        .join(User, User.id == Farm.user_id)
+        .order_by(
+            case((Farm.status == FarmStatus.pending.value, 0), else_=1),
+            Farm.created_at.desc(),
+        )
         .limit(200)
     )
     farms = []

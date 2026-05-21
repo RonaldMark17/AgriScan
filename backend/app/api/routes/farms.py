@@ -3,14 +3,14 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_roles
 from app.core.database import get_db
-from app.models import Crop, Farm, FarmStatus, Role, User
+from app.models import Crop, Farm, FarmStatus, MarketplaceItem, Prediction, Role, Scan, User
 from app.schemas.common import MessageResponse
-from app.schemas.domain import CropCreate, CropRead, FarmCreate, FarmRead
+from app.schemas.domain import CropCreate, CropRead, FarmCreate, FarmRead, FarmUpdate
 from app.services.audit import write_audit_log
 from app.services.push_notifications import create_notification, dispatch_push_to_user
 
@@ -46,6 +46,16 @@ def _farm_data(payload: FarmCreate) -> dict[str, Any]:
     return data
 
 
+def _farm_update_data(payload: FarmUpdate) -> dict[str, Any]:
+    data = payload.model_dump(exclude_unset=True)
+    for field in TEXT_FIELDS:
+        if field in data:
+            data[field] = _clean_text(data.get(field))
+    if data.get("name") is None:
+        data.pop("name", None)
+    return data
+
+
 def _farm_signature(values: dict[str, Any] | Farm) -> tuple[Any, ...]:
     def read(field: str) -> Any:
         return values[field] if isinstance(values, dict) else getattr(values, field)
@@ -62,10 +72,18 @@ def _farm_signature(values: dict[str, Any] | Farm) -> tuple[Any, ...]:
     )
 
 
-async def _find_duplicate_farm(db: AsyncSession, user_id: int, farm_data: dict[str, Any]) -> Farm | None:
+async def _find_duplicate_farm(
+    db: AsyncSession,
+    user_id: int,
+    farm_data: dict[str, Any],
+    *,
+    exclude_farm_id: int | None = None,
+) -> Farm | None:
     expected_signature = _farm_signature(farm_data)
     result = await db.execute(select(Farm).where(Farm.user_id == user_id))
     for farm in result.scalars().all():
+        if exclude_farm_id is not None and farm.id == exclude_farm_id:
+            continue
         if _farm_signature(farm) == expected_signature:
             return farm
     return None
@@ -81,35 +99,38 @@ def _farm_location_summary(farm: Farm) -> str:
     return ", ".join(part for part in [farm.barangay, farm.municipality, farm.province] if part)
 
 
-async def _create_admin_farm_registration_notifications(
-    db: AsyncSession,
-    *,
-    farm: Farm,
-    farmer: User,
-) -> list[dict[str, Any]]:
+async def _active_admins(db: AsyncSession) -> list[User]:
     result = await db.execute(
         select(User)
         .join(Role, Role.id == User.role_id)
         .where(Role.name == "admin", User.is_active.is_(True))
     )
-    admins = list(result.scalars().all())
+    return list(result.scalars().all())
+
+
+async def _create_admin_farm_notifications(
+    db: AsyncSession,
+    *,
+    farm: Farm,
+    farmer: User,
+    title: str,
+    body: str,
+    notification_type: str,
+    url: str = "/admin/users",
+    extra_payload: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    admins = await _active_admins(db)
     if not admins:
         return []
-
-    farm_name = farm.name or "a new farm"
-    location = _farm_location_summary(farm)
-    title = "New farm registration"
-    body = f"{farmer.full_name} registered {farm_name} for approval."
-    if location:
-        body = f"{farmer.full_name} registered {farm_name} in {location}. Review it for approval."
 
     pushes: list[dict[str, Any]] = []
     notification_payload = {
         "farm_id": farm.id,
         "farmer_user_id": farmer.id,
         "farmer_name": farmer.full_name,
-        "farm_status": FarmStatus.pending.value,
-        "url": "/admin/users",
+        "farm_status": farm.status,
+        "url": url,
+        **(extra_payload or {}),
     }
     for admin in admins:
         notification = await create_notification(
@@ -129,12 +150,103 @@ async def _create_admin_farm_registration_notifications(
                 "payload": {
                     **notification_payload,
                     "notification_id": notification.id,
-                    "type": "farm_pending",
-                    "tag": f"farm-pending-{farm.id}",
+                    "type": notification_type,
+                    "tag": f"{notification_type}-{farm.id}",
                 },
             }
         )
     return pushes
+
+
+async def _create_admin_farm_registration_notifications(
+    db: AsyncSession,
+    *,
+    farm: Farm,
+    farmer: User,
+) -> list[dict[str, Any]]:
+    farm_name = farm.name or "a new farm"
+    location = _farm_location_summary(farm)
+    body = f"{farmer.full_name} registered {farm_name} for approval."
+    if location:
+        body = f"{farmer.full_name} registered {farm_name} in {location}. Review it for approval."
+    return await _create_admin_farm_notifications(
+        db,
+        farm=farm,
+        farmer=farmer,
+        title="New farm registration",
+        body=body,
+        notification_type="farm_pending",
+    )
+
+
+async def _create_admin_farm_update_notifications(
+    db: AsyncSession,
+    *,
+    farm: Farm,
+    farmer: User,
+) -> list[dict[str, Any]]:
+    return await _create_admin_farm_notifications(
+        db,
+        farm=farm,
+        farmer=farmer,
+        title="Farm registration updated",
+        body=f"{farmer.full_name} updated {farm.name}. Review the farm record again.",
+        notification_type="farm_updated",
+    )
+
+
+async def _create_admin_farm_delete_notifications(
+    db: AsyncSession,
+    *,
+    farm: Farm,
+    farmer: User,
+) -> list[dict[str, Any]]:
+    return await _create_admin_farm_notifications(
+        db,
+        farm=farm,
+        farmer=farmer,
+        title="Farm registration deleted",
+        body=f"{farmer.full_name} deleted {farm.name}.",
+        notification_type="farm_deleted",
+        extra_payload={"farm_name": farm.name},
+    )
+
+
+async def _create_farmer_farm_review_notification(
+    db: AsyncSession,
+    *,
+    farm: Farm,
+    reviewer: User,
+    title: str,
+    body: str,
+    notification_type: str,
+) -> dict[str, Any]:
+    notification_payload = {
+        "farm_id": farm.id,
+        "farm_status": farm.status,
+        "url": "/farms",
+        "reviewed_by_user_id": reviewer.id,
+    }
+    notification = await create_notification(
+        db,
+        user_id=farm.user_id,
+        title=title,
+        body=body,
+        notification_type=notification_type,
+        payload=notification_payload,
+    )
+    return {
+        "user_id": farm.user_id,
+        "title": notification.title,
+        "body": notification.body,
+        "url": "/farms",
+        "payload": {
+            **notification_payload,
+            "notification_id": notification.id,
+            "type": notification_type,
+            "tag": f"{notification_type}-{farm.id}",
+        },
+    }
 
 
 async def _dispatch_farm_notification_safely(db: AsyncSession, **push: Any) -> None:
@@ -193,6 +305,76 @@ async def create_farm(
     await db.commit()
     await db.refresh(farm)
     for push in admin_registration_pushes:
+        await _dispatch_farm_notification_safely(db, **push)
+    return farm
+
+
+@router.patch("/{farm_id}", response_model=FarmRead)
+async def update_farm(
+    farm_id: int,
+    payload: FarmUpdate,
+    request: Request,
+    current_user: User = Depends(require_roles("farmer", "admin")),
+    db: AsyncSession = Depends(get_db),
+) -> Farm:
+    result = await db.execute(select(Farm).where(Farm.id == farm_id))
+    farm = result.scalar_one_or_none()
+    if farm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found.")
+    if current_user.role.name == "farmer" and farm.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only update your own farms.")
+
+    update_data = _farm_update_data(payload)
+    if not update_data:
+        return farm
+
+    next_farm_data = {
+        "name": farm.name,
+        "barangay": farm.barangay,
+        "municipality": farm.municipality,
+        "province": farm.province,
+        "latitude": farm.latitude,
+        "longitude": farm.longitude,
+        "area_hectares": farm.area_hectares,
+        "boundary_geojson": farm.boundary_geojson,
+        **update_data,
+    }
+    duplicate = await _find_duplicate_farm(
+        db,
+        farm.user_id,
+        next_farm_data,
+        exclude_farm_id=farm.id,
+    )
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A farm with the same details already exists.",
+        )
+
+    previous_status = farm.status
+    for key, value in update_data.items():
+        setattr(farm, key, value)
+    admin_update_pushes: list[dict[str, Any]] = []
+    if current_user.role.name == "farmer":
+        farm.status = FarmStatus.pending.value
+        admin_update_pushes = await _create_admin_farm_update_notifications(
+            db,
+            farm=farm,
+            farmer=current_user,
+        )
+
+    await write_audit_log(
+        db,
+        request,
+        "farm.updated",
+        actor=current_user,
+        resource_type="farm",
+        resource_id=farm.id,
+        metadata={"previous_status": previous_status, "new_status": farm.status},
+    )
+    await db.commit()
+    await db.refresh(farm)
+    for push in admin_update_pushes:
         await _dispatch_farm_notification_safely(db, **push)
     return farm
 
@@ -295,6 +477,46 @@ async def reject_farm(
     return farm
 
 
+@router.patch("/{farm_id}/undo-review", response_model=FarmRead)
+async def undo_farm_review(
+    farm_id: int,
+    request: Request,
+    current_user: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> Farm:
+    result = await db.execute(select(Farm).where(Farm.id == farm_id))
+    farm = result.scalar_one_or_none()
+    if farm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found.")
+
+    previous_status = farm.status
+    if previous_status == FarmStatus.pending.value:
+        return farm
+
+    farm.status = FarmStatus.pending.value
+    undo_notification = await _create_farmer_farm_review_notification(
+        db,
+        farm=farm,
+        reviewer=current_user,
+        title="Farm review reopened",
+        body=f"Your farm {farm.name} is back under review. The agriculture office will approve or reject it again.",
+        notification_type="farm_review_undone",
+    )
+    await write_audit_log(
+        db,
+        request,
+        "farm.review_undone",
+        actor=current_user,
+        resource_type="farm",
+        resource_id=farm.id,
+        metadata={"previous_status": previous_status, "new_status": farm.status},
+    )
+    await db.commit()
+    await db.refresh(farm)
+    await _dispatch_farm_notification_safely(db, **undo_notification)
+    return farm
+
+
 @router.post("/{farm_id}/crops", response_model=CropRead, status_code=status.HTTP_201_CREATED)
 async def create_crop(
     farm_id: int,
@@ -343,13 +565,39 @@ async def delete_farm(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    result = await db.execute(select(Farm).where(Farm.id == farm_id))
-    farm = result.scalar_one_or_none()
-    if farm is None:
+    result = await db.execute(select(Farm, User).join(User, User.id == Farm.user_id).where(Farm.id == farm_id))
+    record = result.one_or_none()
+    if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found.")
+    farm, owner = record
     if current_user.role.name != "admin" and farm.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot delete this farm.")
+    admin_delete_pushes: list[dict[str, Any]] = []
+    farmer_delete_push: dict[str, Any] | None = None
+    if current_user.role.name == "farmer":
+        admin_delete_pushes = await _create_admin_farm_delete_notifications(
+            db,
+            farm=farm,
+            farmer=current_user,
+        )
+    elif owner.id != current_user.id:
+        farmer_delete_push = await _create_farmer_farm_review_notification(
+            db,
+            farm=farm,
+            reviewer=current_user,
+            title="Farm registration removed",
+            body=f"Your farm {farm.name} was removed by the agriculture office.",
+            notification_type="farm_deleted",
+        )
+    await db.execute(update(Scan).where(Scan.farm_id == farm.id).values(farm_id=None, crop_id=None))
+    await db.execute(update(Prediction).where(Prediction.farm_id == farm.id).values(farm_id=None, crop_id=None))
+    await db.execute(update(MarketplaceItem).where(MarketplaceItem.farm_id == farm.id).values(farm_id=None))
+    await db.execute(delete(Crop).where(Crop.farm_id == farm.id))
     await db.delete(farm)
     await write_audit_log(db, request, "farm.deleted", actor=current_user, resource_type="farm", resource_id=farm_id)
     await db.commit()
+    for push in admin_delete_pushes:
+        await _dispatch_farm_notification_safely(db, **push)
+    if farmer_delete_push is not None:
+        await _dispatch_farm_notification_safely(db, **farmer_delete_push)
     return MessageResponse(message="Farm deleted.")

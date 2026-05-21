@@ -31,10 +31,13 @@ function notificationTarget(notification) {
     case 'disease_scan':
       return '/disease-detector';
     case 'farm_pending':
+    case 'farm_updated':
+    case 'farm_deleted':
     case 'flagged_crop':
       return '/admin/users';
     case 'farm_approved':
     case 'farm_rejected':
+    case 'farm_review_undone':
       return '/farms';
     default:
       return '/reports';

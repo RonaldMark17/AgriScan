@@ -1,9 +1,111 @@
-import { BarChart3, Download, FileText, Loader2, RefreshCw, Sprout } from 'lucide-react';
+import { BarChart3, CalendarClock, CheckCircle2, Download, FileText, Loader2, RefreshCw, ShieldCheck, Sprout } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, getApiBaseUrl } from '../api/client.js';
 import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
 import StatCard from '../components/shared/StatCard.jsx';
+
+function ReportRecommendation({ report, diseaseBreakdown }) {
+  const topDisease = diseaseBreakdown.find((row) => !/healthy/i.test(String(row.disease || ''))) || diseaseBreakdown[0] || null;
+  const topDiseaseName = String(topDisease?.disease || 'No disease trend yet');
+  const totalDiseaseScans = diseaseBreakdown.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const recommendation =
+    report?.recommendation || 'Scan more crops and register farm locations to generate richer analytics.';
+  const hasScanData = totalDiseaseScans > 0;
+  const hasActionableDisease = Boolean(topDisease && !/healthy/i.test(topDiseaseName));
+  const focusTitle = topDisease ? topDiseaseName : 'No disease trend yet';
+  const focusHelper = topDisease
+    ? 'Highest repeated detection in this report.'
+    : 'Disease patterns will appear after crop scans are submitted.';
+  const nextActions = hasActionableDisease
+    ? [
+        `Inspect fields with repeated ${topDiseaseName.toLowerCase()} detections first.`,
+        'Compare the trend with recent Disease Detector results before treatment.',
+        'Export the PDF and share it with the farm owner or agriculture office.',
+      ]
+    : [
+        'Register accurate farm locations before the next reporting cycle.',
+        'Run Disease Detector when symptoms appear in the field.',
+        'Use Manual Scan to add soil context for better recommendations.',
+      ];
+
+  return (
+    <aside className="surface overflow-hidden rounded-lg min-[1440px]:sticky sticky-panel min-[1440px]:self-start">
+      <div className="border-b border-stone-100 p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
+              {hasScanData ? <ShieldCheck className="h-6 w-6" /> : <Sprout className="h-6 w-6" />}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Monthly insight</p>
+              <h3 className="mt-1 break-words text-2xl font-bold text-stone-950">Recommendation</h3>
+            </div>
+          </div>
+          <span className={`status-pill shrink-0 ${hasScanData ? 'bg-leaf-50 text-leaf-800' : 'bg-amber-50 text-amber-800'}`}>
+            {hasScanData ? 'Ready' : 'Needs scans'}
+          </span>
+        </div>
+
+        <p className="mt-5 text-sm leading-6 text-stone-600 sm:text-base">
+          {recommendation}
+        </p>
+      </div>
+
+      <div className="grid gap-4 p-5 sm:p-6">
+        <article className="rounded-lg border border-leaf-100 bg-leaf-50 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Focus signal</p>
+              <h4 className="mt-2 break-words text-lg font-bold text-leaf-950">{focusTitle}</h4>
+              <p className="mt-1 text-sm leading-6 text-leaf-800">{focusHelper}</p>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-sm font-bold text-leaf-800">
+              {topDisease ? topDisease.count : 0}
+            </span>
+          </div>
+        </article>
+
+        <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-stone-700">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Report coverage</p>
+              <p className="mt-2 text-lg font-bold text-stone-950">
+                {totalDiseaseScans} disease scans across {diseaseBreakdown.length} groups
+              </p>
+              <p className="mt-1 text-sm leading-6 text-stone-500">
+                {report?.user_farm_count ?? 0} of {report?.farm_count ?? 0} registered farms are tied to this account.
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article className="rounded-lg border border-stone-200 bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
+              <CalendarClock className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Next actions</p>
+              <h4 className="mt-1 text-lg font-bold text-stone-950">What to do next</h4>
+            </div>
+          </div>
+          <ul className="mt-4 space-y-3 text-sm leading-6 text-stone-600">
+            {nextActions.map((action) => (
+              <li key={action} className="flex gap-3">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-leaf-700" />
+                <span>{action}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
+      </div>
+    </aside>
+  );
+}
 
 export default function Reports() {
   const [report, setReport] = useState(null);
@@ -137,12 +239,7 @@ export default function Reports() {
           ) : null}
         </section>
 
-        <aside className="surface rounded-lg p-4 sm:p-5 min-[1440px]:sticky sticky-panel min-[1440px]:self-start">
-          <h3 className="section-title">Recommendation</h3>
-          <p className="mt-2 text-sm leading-6 text-stone-600">
-            {report?.recommendation || 'Scan more crops and register farm locations to generate richer analytics.'}
-          </p>
-        </aside>
+        <ReportRecommendation report={report} diseaseBreakdown={diseaseBreakdown} />
       </div>
     </div>
   );
