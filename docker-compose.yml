@@ -1,7 +1,8 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: ./backend/Dockerfile
     container_name: agriscan-backend
     restart: unless-stopped
     env_file:
@@ -9,7 +10,7 @@ services:
     environment:
       DATABASE_URL: sqlite+aiosqlite:///./data/agriscan.sqlite3
       AUTO_CREATE_TABLES: "true"
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost}
       CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-http://agriscann.duckdns.org,https://agriscann.duckdns.org}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,agriscann.duckdns.org}
     ports:
@@ -18,18 +19,6 @@ services:
       - backend_data:/app/data
       - backend_uploads:/app/uploads
       - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro
-
-  frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-/api/v1}"
-    container_name: agriscan-frontend
-    restart: unless-stopped
-    ports:
-      - "5173:80"
-    depends_on:
-      - backend
 
   seed:
     build:
