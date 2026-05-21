@@ -125,6 +125,8 @@ Use Python 3.12 for ML dependencies. If no model is present, AgriScan uses a det
 
 ## Production Notes
 
+For EC2 and systemd deployments, see [docs/EC2_DEPLOYMENT.md](docs/EC2_DEPLOYMENT.md) and [deploy/systemd/agriscan.service.example](deploy/systemd/agriscan.service.example).
+
 Set real secrets and API keys before deployment:
 
 - `SECRET_KEY`

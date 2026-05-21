@@ -59,6 +59,54 @@ def get_frontend_source_root() -> Path:
     return settings.frontend_source_path.resolve()
 
 
+def get_frontend_source_dist_root() -> Path:
+    return (get_frontend_source_root() / "dist").resolve()
+
+
+def frontend_index_path(dist_root: Path) -> Path:
+    return dist_root / "index.html"
+
+
+def frontend_bundle_exists(dist_root: Path) -> bool:
+    return frontend_index_path(dist_root).is_file()
+
+
+def get_frontend_candidate_roots() -> list[Path]:
+    candidate_roots = [get_frontend_dist_root()]
+    source_dist_root = get_frontend_source_dist_root()
+    if source_dist_root not in candidate_roots:
+        candidate_roots.append(source_dist_root)
+    return candidate_roots
+
+
+def resolve_frontend_dist_root() -> Path:
+    candidate_roots = get_frontend_candidate_roots()
+    primary_root = candidate_roots[0]
+
+    if frontend_bundle_exists(primary_root):
+        return primary_root
+
+    for fallback_root in candidate_roots[1:]:
+        if frontend_bundle_exists(fallback_root):
+            logger.warning(
+                "Frontend backend bundle missing at %s; serving fallback build from %s instead.",
+                primary_root,
+                fallback_root,
+            )
+            return fallback_root
+
+    return primary_root
+
+
+def frontend_bundle_error_detail() -> str:
+    checked_paths = ", ".join(str(frontend_index_path(root)) for root in get_frontend_candidate_roots())
+    return (
+        "Frontend index.html not found. "
+        f"Checked: {checked_paths}. "
+        "Run `npm run build:backend` from the frontend folder, or verify FRONTEND_DIST_DIR."
+    )
+
+
 def iter_frontend_source_files(source_root: Path):
     seen: set[Path] = set()
     for pattern in FRONTEND_SOURCE_PATTERNS:
@@ -126,17 +174,40 @@ def build_frontend_bundle(source_root: Path) -> None:
 
 
 async def ensure_frontend_dev_bundle(dist_root: Path) -> None:
-    if settings.environment == "production" or not settings.frontend_auto_build:
+    if not settings.frontend_auto_build:
         return
 
     source_root = get_frontend_source_root()
-    if not frontend_bundle_is_stale(source_root, dist_root):
+    if not source_root.is_dir():
         return
 
-    async with FRONTEND_BUILD_LOCK:
-        if not frontend_bundle_is_stale(source_root, dist_root):
+    source_dist_root = get_frontend_source_dist_root()
+    primary_bundle_missing = not frontend_bundle_exists(dist_root)
+    fallback_bundle_exists = source_dist_root != dist_root and frontend_bundle_exists(source_dist_root)
+
+    if settings.environment == "production":
+        if not primary_bundle_missing or fallback_bundle_exists:
             return
-        logger.info("Frontend source files changed; rebuilding backend static bundle from %s.", source_root)
+    else:
+        if not primary_bundle_missing and not frontend_bundle_is_stale(source_root, dist_root):
+            return
+
+    async with FRONTEND_BUILD_LOCK:
+        primary_bundle_missing = not frontend_bundle_exists(dist_root)
+        fallback_bundle_exists = source_dist_root != dist_root and frontend_bundle_exists(source_dist_root)
+
+        if settings.environment == "production":
+            if not primary_bundle_missing or fallback_bundle_exists:
+                return
+            logger.warning(
+                "Frontend backend bundle missing at %s; rebuilding backend static bundle from %s.",
+                dist_root,
+                source_root,
+            )
+        else:
+            if not primary_bundle_missing and not frontend_bundle_is_stale(source_root, dist_root):
+                return
+            logger.info("Frontend source files changed; rebuilding backend static bundle from %s.", source_root)
         try:
             await asyncio.to_thread(build_frontend_bundle, source_root)
         except Exception as exc:
@@ -144,8 +215,9 @@ async def ensure_frontend_dev_bundle(dist_root: Path) -> None:
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    "Frontend auto-build failed while serving localhost:8000. "
-                    "Run `npm run build:backend` from the frontend folder, or start the Vite dev server on localhost:5173."
+                    "Frontend auto-build failed. "
+                    "Run `npm run build:backend` from the frontend folder, "
+                    "or verify Node.js/npm are installed on the server."
                 ),
             ) from exc
 
@@ -307,17 +379,16 @@ async def notification_stream(websocket: WebSocket) -> None:
 
 @app.get("/{full_path:path}", include_in_schema=False)
 async def serve_frontend(full_path: str):
-    dist_root = get_frontend_dist_root()
+    primary_dist_root = get_frontend_dist_root()
     clean_path = full_path.strip("/")
     path_suffix = Path(clean_path).suffix
     if not clean_path or not path_suffix:
-        await ensure_frontend_dev_bundle(dist_root)
+        await ensure_frontend_dev_bundle(primary_dist_root)
+
+    dist_root = resolve_frontend_dist_root()
 
     if not dist_root.is_dir():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Frontend build not found at {dist_root}. Run `npm run build:backend` from the frontend folder.",
-        )
+        raise HTTPException(status_code=500, detail=frontend_bundle_error_detail())
 
     first_segment = clean_path.split("/", 1)[0]
     if first_segment in FRONTEND_RESERVED_PATHS:
@@ -344,7 +415,7 @@ async def serve_frontend(full_path: str):
                 return frontend_file_response(dist_root, fallback_candidate)
             raise HTTPException(status_code=404, detail="Not found")
 
-    index_path = dist_root / "index.html"
+    index_path = frontend_index_path(dist_root)
     if not index_path.is_file():
-        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+        raise HTTPException(status_code=500, detail=frontend_bundle_error_detail())
     return frontend_file_response(dist_root, index_path)
