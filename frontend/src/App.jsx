@@ -4,6 +4,7 @@ import AppShell from './components/layout/AppShell.jsx';
 import ProtectedRoute from './router/ProtectedRoute.jsx';
 import FarmRequiredRoute from './router/FarmRequiredRoute.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
+import AdminRequiredRoute from './router/AdminRequiredRoute.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Farms from './pages/Farms.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
@@ -46,7 +47,9 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/farms" element={<Farms />} />
             <Route path="/settings/security" element={<SecuritySettings />} />
-            <Route path="/admin/users" element={<AdminUsers />} />
+            <Route element={<AdminRequiredRoute />}>
+              <Route path="/admin/users" element={<AdminUsers />} />
+            </Route>
             <Route element={<FarmRequiredRoute />}>
               <Route index element={<Dashboard />} />
               <Route path="/scan" element={<Scan />} />
