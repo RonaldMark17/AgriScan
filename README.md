@@ -95,8 +95,11 @@ Set `MYSQL_DATABASE_URL` in `backend/.env` or pass `--source-url` if the old MyS
 - Login attempt limiter
 - Forgot password via email OTP
 - Device login history and new login alerts
+- Account suspension, appeal, and reactivation workflow with reasoned admin actions
 - Audit logs for security-sensitive actions
 - Security headers, CORS restrictions, ORM-backed SQL injection protection, upload validation
+
+See [Account Suspension and Review Workflow](docs/ACCOUNT_SUSPENSION_WORKFLOW.md) for the transparency, accountability, and appeal process.
 
 ## PWA Features
 

@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarClock,
   CloudSun,
   Crosshair,
   Droplets,
@@ -15,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api/client.js';
+import PageHeader from '../components/shared/PageHeader.jsx';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
@@ -42,17 +44,19 @@ const fallback = {
 };
 
 function MetricCard({ icon: Icon, label, value, unit, status, tone = 'green', helper, to }) {
-  const toneClass = tone === 'amber' ? 'text-amber-500' : tone === 'lime' ? 'text-lime-500' : 'text-leaf-600';
+  const toneClass = tone === 'amber' ? 'text-amber-600 bg-amber-50 border-amber-100' : tone === 'lime' ? 'text-lime-700 bg-lime-50 border-lime-100' : 'text-leaf-700 bg-leaf-50 border-leaf-100';
   const Component = to ? Link : 'section';
 
   return (
     <Component
       to={to}
-      className={`surface rounded-lg p-4 sm:p-5 ${to ? 'block transition hover:border-leaf-200 hover:bg-leaf-50/40' : ''}`}
+      className={`dashboard-metric-card surface rounded-lg p-4 sm:p-5 ${to ? 'block transition hover:border-leaf-200 hover:bg-leaf-50/40' : ''}`}
     >
       <div className="flex items-center justify-between gap-3">
-        <Icon className={`h-6 w-6 ${toneClass}`} />
-        <span className="rounded-full border border-stone-200 px-3 py-1 text-xs font-bold text-stone-600">{status}</span>
+        <span className={`grid h-11 w-11 place-items-center rounded-lg border ${toneClass}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="status-pill border border-stone-200 bg-white text-stone-600">{status}</span>
       </div>
       <p className="mt-5 text-sm font-semibold text-stone-500 sm:mt-6">{label}</p>
       <div className="mt-1 flex min-w-0 items-end gap-1">
@@ -62,6 +66,34 @@ function MetricCard({ icon: Icon, label, value, unit, status, tone = 'green', he
       <p className="mt-4 text-sm text-stone-500">{helper}</p>
     </Component>
   );
+}
+
+function formatTimelineTime(value) {
+  if (!value) return 'Recently';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Recently';
+  return parsed.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function buildActivityTimeline(summary, soilScans, t) {
+  const diseaseItems = (summary.recent_scans || []).slice(0, 3).map((scan, index) => ({
+    key: `disease-${scan.id || index}`,
+    title: scan.disease_name || scan.result || t('diseaseDetector'),
+    meta: scan.crop_label || scan.crop || t('cropDiseaseAlert'),
+    time: scan.created_at,
+    tone: 'leaf',
+  }));
+  const soilItems = soilScans.slice(0, 3).map((scan, index) => ({
+    key: `soil-${scan.id || scan.created_at || index}`,
+    title: t('manualScan'),
+    meta: scan?.inputs?.province || scan?.province || t('soilRecommendationForm'),
+    time: scan.created_at,
+    tone: 'amber',
+  }));
+
+  return [...diseaseItems, ...soilItems]
+    .sort((first, second) => new Date(second.time || 0).getTime() - new Date(first.time || 0).getTime())
+    .slice(0, 5);
 }
 
 function mergeSummary(data) {
@@ -459,20 +491,21 @@ export default function Dashboard() {
   const featuredAlertBody = translateAlertBody(featuredAlert?.body, t);
   const featuredAlertAction =
     featuredAlert?.action_label === 'Open Disease Detector' ? t('openDiseaseDetector') : featuredAlert?.action_label;
+  const activityTimeline = useMemo(() => buildActivityTimeline(summary, soilScans, t), [soilScans, summary, t]);
 
   return (
     <div className="page-stack">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="eyebrow">{t('overview')}</p>
-          <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">{t('dashboardGreeting', { name: firstName })}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">{t('dashboardSubtitle')}</p>
-        </div>
-        <Link to="/scan" className="btn-primary h-11 w-full px-5 text-sm sm:w-auto">
-          <ScanLine className="h-5 w-5" />
-          {t('newManualScan')}
-        </Link>
-      </div>
+      <PageHeader
+        eyebrow={t('overview')}
+        title={t('dashboardGreeting', { name: firstName })}
+        body={t('dashboardSubtitle')}
+        actions={
+          <Link to="/scan" className="btn-primary h-11 w-full px-5 text-sm sm:w-auto">
+            <ScanLine className="h-5 w-5" />
+            {t('newManualScan')}
+          </Link>
+        }
+      />
 
       <section className={`flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${alertToneClasses.wrapper}`}>
         <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
@@ -545,6 +578,42 @@ export default function Dashboard() {
                   <p className="text-lg font-bold text-stone-900">{t('noPhScanHistoryTitle')}</p>
                   <p className="mt-2 text-sm text-stone-500">{t('noPhScanHistoryBody')}</p>
                 </div>
+              </div>
+            )}
+          </section>
+
+          <section className="surface dashboard-timeline rounded-lg p-5 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="section-title flex items-center gap-2">
+                  <CalendarClock className="h-5 w-5 text-leaf-700" />
+                  Field activity timeline
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-stone-500">Recent scans and field events from your workspace.</p>
+              </div>
+              <Link to="/reports" className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+                {t('reports')}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            {activityTimeline.length > 0 ? (
+              <div className="mt-5 space-y-3">
+                {activityTimeline.map((item) => (
+                  <article key={item.key} className="timeline-item">
+                    <span className={`timeline-dot ${item.tone === 'amber' ? 'timeline-dot-amber' : 'timeline-dot-leaf'}`} />
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-bold text-stone-950">{item.title}</p>
+                      <p className="mt-1 break-words text-xs leading-5 text-stone-500">{item.meta}</p>
+                    </div>
+                    <time className="shrink-0 text-xs font-semibold text-stone-400">{formatTimelineTime(item.time)}</time>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state mt-5">
+                <CalendarClock className="mx-auto h-8 w-8 text-stone-400" />
+                <p className="mt-2 text-sm font-bold text-stone-950">No field activity yet</p>
+                <p className="mt-1 text-sm text-stone-500">Run a scan or register farm data to start the timeline.</p>
               </div>
             )}
           </section>

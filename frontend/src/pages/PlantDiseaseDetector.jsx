@@ -3255,9 +3255,9 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
         </div>
 
         <div className="border-t border-stone-200 bg-stone-50/70 p-4 sm:p-5 lg:self-start lg:border-l lg:border-t-0 lg:bg-stone-50/40">
-          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{t('previewAndAnalysis')}</p>
-            <div className="mt-4 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+            <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
               {displayPreviewUrl ? (
                 <div className="relative w-full overflow-hidden bg-stone-950" style={{ aspectRatio: previewAspectRatio }}>
                   <img
@@ -3445,7 +3445,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                   </form>
                 )}
                 {feedbackMessage && <p className="mt-3 rounded-lg bg-leaf-50 p-3 text-sm font-semibold text-leaf-700">{feedbackMessage}</p>}
-                {feedbackError && <p className="mt-3 whitespace-pre-line rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700">{feedbackError}</p>}
+                {feedbackError && <p className="danger-message mt-3">{feedbackError}</p>}
               </article>
             ) : null}
           </div>
@@ -4042,7 +4042,7 @@ export default function PlantDiseaseDetector() {
               </div>
             </div>
 
-            {error && <div className="mt-4 whitespace-pre-line rounded-lg bg-red-50 p-3 text-xs font-medium text-red-700 sm:mt-5 sm:text-sm">{error}</div>}
+            {error && <div className="danger-message mt-4 text-xs sm:mt-5 sm:text-sm">{error}</div>}
 
             {offlineAnalysisActive && (
               <div className="offline-loading-card mt-4" role="status" aria-live="polite">

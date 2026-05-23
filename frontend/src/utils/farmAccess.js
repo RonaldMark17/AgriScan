@@ -10,6 +10,7 @@ export function isFarmerUser(user) {
 export function routeRequiresRegisteredFarm(pathname = '') {
   return (
     pathname === '/' ||
+    pathname.startsWith('/crop-management') ||
     pathname.startsWith('/scan') ||
     pathname.startsWith('/disease-detector') ||
     pathname.startsWith('/reports') ||

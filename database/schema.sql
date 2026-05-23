@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS users (
   hashed_password VARCHAR(255) NOT NULL,
   role_id INTEGER NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT 1,
+  account_status VARCHAR(32) NOT NULL DEFAULT 'active',
+  account_status_until DATETIME,
   is_verified BOOLEAN NOT NULL DEFAULT 0,
   failed_login_attempts INTEGER NOT NULL DEFAULT 0,
   locked_until DATETIME,
@@ -34,6 +36,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS ix_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS ix_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS ix_users_role_id ON users(role_id);
+CREATE INDEX IF NOT EXISTS ix_users_account_status ON users(account_status);
 
 CREATE TABLE IF NOT EXISTS farms (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,6 +203,91 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE INDEX IF NOT EXISTS ix_audit_logs_actor ON audit_logs(actor_user_id);
 CREATE INDEX IF NOT EXISTS ix_audit_logs_action ON audit_logs(action);
+
+CREATE TABLE IF NOT EXISTS suspension_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  admin_user_id INTEGER,
+  action VARCHAR(80) NOT NULL,
+  previous_status VARCHAR(32),
+  new_status VARCHAR(32) NOT NULL,
+  reason VARCHAR(240) NOT NULL,
+  description TEXT,
+  starts_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ends_at DATETIME,
+  is_active BOOLEAN NOT NULL DEFAULT 1,
+  metadata JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_suspension_logs_user_id ON suspension_logs(user_id);
+CREATE INDEX IF NOT EXISTS ix_suspension_logs_admin ON suspension_logs(admin_user_id);
+CREATE INDEX IF NOT EXISTS ix_suspension_logs_status ON suspension_logs(new_status);
+CREATE INDEX IF NOT EXISTS ix_suspension_logs_active ON suspension_logs(is_active);
+
+CREATE TABLE IF NOT EXISTS appeal_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  suspension_log_id INTEGER,
+  explanation TEXT NOT NULL,
+  supporting_message TEXT,
+  updated_information TEXT,
+  status VARCHAR(32) NOT NULL DEFAULT 'pending',
+  admin_user_id INTEGER,
+  decision_reason TEXT,
+  decided_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (suspension_log_id) REFERENCES suspension_logs(id) ON DELETE SET NULL,
+  FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_appeal_requests_user_id ON appeal_requests(user_id);
+CREATE INDEX IF NOT EXISTS ix_appeal_requests_status ON appeal_requests(status);
+CREATE INDEX IF NOT EXISTS ix_appeal_requests_created_at ON appeal_requests(created_at);
+
+CREATE TABLE IF NOT EXISTS security_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  email VARCHAR(255),
+  event_type VARCHAR(120) NOT NULL,
+  severity VARCHAR(32) NOT NULL DEFAULT 'info',
+  ip_address VARCHAR(80),
+  user_agent VARCHAR(500),
+  device_name VARCHAR(160),
+  metadata JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_security_events_user_id ON security_events(user_id);
+CREATE INDEX IF NOT EXISTS ix_security_events_email ON security_events(email);
+CREATE INDEX IF NOT EXISTS ix_security_events_type ON security_events(event_type);
+CREATE INDEX IF NOT EXISTS ix_security_events_severity ON security_events(severity);
+CREATE INDEX IF NOT EXISTS ix_security_events_created_at ON security_events(created_at);
+
+CREATE TABLE IF NOT EXISTS admin_actions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_user_id INTEGER,
+  affected_user_id INTEGER,
+  action VARCHAR(120) NOT NULL,
+  reason VARCHAR(240),
+  description TEXT,
+  ip_address VARCHAR(80),
+  user_agent VARCHAR(500),
+  metadata JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (affected_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_admin_actions_admin ON admin_actions(admin_user_id);
+CREATE INDEX IF NOT EXISTS ix_admin_actions_affected ON admin_actions(affected_user_id);
+CREATE INDEX IF NOT EXISTS ix_admin_actions_action ON admin_actions(action);
+CREATE INDEX IF NOT EXISTS ix_admin_actions_created_at ON admin_actions(created_at);
 
 CREATE TABLE IF NOT EXISTS mfa_settings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

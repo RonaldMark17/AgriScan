@@ -1,17 +1,39 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import case, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_roles
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models import AuditLog, Farm, FarmStatus, Role, Scan, ScanFeedback, User
-from app.schemas.domain import AdminActivityLogRead, AdminFlaggedReviewRead, AuditLogRead, FarmRead
+from app.models import (
+    AppealRequest,
+    AppealStatus,
+    AuditLog,
+    Farm,
+    FarmStatus,
+    Role,
+    Scan,
+    ScanFeedback,
+    SecurityEvent,
+    User,
+    UserAccountStatus,
+)
+from app.schemas.domain import (
+    AdminActivityLogRead,
+    AdminFlaggedReviewRead,
+    AppealDecision,
+    AppealRequestRead,
+    AuditLogRead,
+    FarmRead,
+)
+from app.services.account_security import apply_account_status_change, record_admin_action
 from app.services.audit import write_audit_log
 from app.services.feedback_learning import accept_scan_feedback, reject_scan_feedback, undo_scan_feedback_decision
 from app.services.firebase_storage import upload_exists_in_firebase
+from app.services.push_notifications import create_notification
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 settings = get_settings()
@@ -124,6 +146,178 @@ async def _load_duplicate_flagged_reviews(db: AsyncSession, feedback: ScanFeedba
 async def audit_logs(_: User = Depends(require_roles("admin")), db: AsyncSession = Depends(get_db)) -> list[AuditLog]:
     result = await db.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(300))
     return list(result.scalars().all())
+
+
+@router.get("/account-security-summary")
+async def account_security_summary(
+    _: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    suspended_result = await db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(User.account_status.in_([UserAccountStatus.suspended.value, UserAccountStatus.pending_review.value]))
+    )
+    disabled_result = await db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(or_(User.account_status == UserAccountStatus.disabled.value, User.is_active.is_(False)))
+    )
+    appeals_result = await db.execute(
+        select(func.count()).select_from(AppealRequest).where(AppealRequest.status == AppealStatus.pending.value)
+    )
+    security_result = await db.execute(select(SecurityEvent).order_by(SecurityEvent.created_at.desc()).limit(8))
+    recent_events = [
+        {
+            "id": event.id,
+            "user_id": event.user_id,
+            "email": event.email,
+            "event_type": event.event_type,
+            "severity": event.severity,
+            "ip_address": event.ip_address,
+            "user_agent": event.user_agent,
+            "device_name": event.device_name,
+            "metadata_json": event.metadata_json,
+            "created_at": event.created_at,
+        }
+        for event in security_result.scalars().all()
+    ]
+    return {
+        "suspended_users": int(suspended_result.scalar_one() or 0),
+        "disabled_users": int(disabled_result.scalar_one() or 0),
+        "pending_appeals": int(appeals_result.scalar_one() or 0),
+        "recent_suspicious_activities": recent_events,
+    }
+
+
+def _appeal_payload(appeal: AppealRequest, user: User) -> dict:
+    return {
+        "id": appeal.id,
+        "user_id": appeal.user_id,
+        "suspension_log_id": appeal.suspension_log_id,
+        "explanation": appeal.explanation,
+        "supporting_message": appeal.supporting_message,
+        "updated_information": appeal.updated_information,
+        "status": appeal.status,
+        "admin_user_id": appeal.admin_user_id,
+        "decision_reason": appeal.decision_reason,
+        "decided_at": appeal.decided_at,
+        "created_at": appeal.created_at,
+        "updated_at": appeal.updated_at,
+        "user_name": user.full_name,
+        "user_email": user.email,
+    }
+
+
+async def _load_appeal(db: AsyncSession, appeal_id: int) -> tuple[AppealRequest, User]:
+    result = await db.execute(
+        select(AppealRequest, User)
+        .join(User, User.id == AppealRequest.user_id)
+        .where(AppealRequest.id == appeal_id)
+    )
+    record = result.one_or_none()
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appeal request not found.")
+    appeal, user = record
+    return appeal, user
+
+
+@router.get("/appeals", response_model=list[AppealRequestRead])
+async def account_appeals(
+    _: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    result = await db.execute(
+        select(AppealRequest, User)
+        .join(User, User.id == AppealRequest.user_id)
+        .order_by(
+            case((AppealRequest.status == AppealStatus.pending.value, 0), else_=1),
+            AppealRequest.created_at.desc(),
+        )
+        .limit(200)
+    )
+    return [_appeal_payload(appeal, user) for appeal, user in result.all()]
+
+
+@router.patch("/appeals/{appeal_id}/approve", response_model=AppealRequestRead)
+async def approve_appeal(
+    appeal_id: int,
+    payload: AppealDecision,
+    request: Request,
+    current_user: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    appeal, user = await _load_appeal(db, appeal_id)
+    if appeal.status != AppealStatus.pending.value:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This appeal has already been reviewed.")
+
+    appeal.status = AppealStatus.approved.value
+    appeal.admin_user_id = current_user.id
+    appeal.decision_reason = payload.reason
+    appeal.decided_at = datetime.now(UTC)
+    await apply_account_status_change(
+        db,
+        request,
+        target_user=user,
+        admin_user=current_user,
+        status_value=UserAccountStatus.active.value,
+        reason="Appeal approved",
+        description=payload.reason,
+        metadata={"appeal_id": appeal.id},
+    )
+    await db.commit()
+    await db.refresh(appeal)
+    await db.refresh(user)
+    return _appeal_payload(appeal, user)
+
+
+@router.patch("/appeals/{appeal_id}/reject", response_model=AppealRequestRead)
+async def reject_appeal(
+    appeal_id: int,
+    payload: AppealDecision,
+    request: Request,
+    current_user: User = Depends(require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    appeal, user = await _load_appeal(db, appeal_id)
+    if appeal.status != AppealStatus.pending.value:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This appeal has already been reviewed.")
+
+    appeal.status = AppealStatus.rejected.value
+    appeal.admin_user_id = current_user.id
+    appeal.decision_reason = payload.reason
+    appeal.decided_at = datetime.now(UTC)
+    await record_admin_action(
+        db,
+        request,
+        admin=current_user,
+        action="admin.appeal_rejected",
+        affected_user=user,
+        reason="Appeal rejected",
+        description=payload.reason,
+        metadata={"appeal_id": appeal.id},
+    )
+    await write_audit_log(
+        db,
+        request,
+        "admin.appeal_rejected",
+        actor=current_user,
+        resource_type="appeal_request",
+        resource_id=appeal.id,
+        metadata={"affected_user_id": user.id, "reason": payload.reason},
+    )
+    await create_notification(
+        db,
+        user_id=user.id,
+        title="Account appeal reviewed",
+        body="Your account review request was rejected. Please contact the administrator for more information.",
+        notification_type="appeal_rejected",
+        payload={"type": "appeal_rejected", "url": "/account/suspended", "appeal_id": appeal.id},
+    )
+    await db.commit()
+    await db.refresh(appeal)
+    await db.refresh(user)
+    return _appeal_payload(appeal, user)
 
 
 @router.get("/activity-logs", response_model=list[AdminActivityLogRead])

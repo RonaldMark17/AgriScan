@@ -90,7 +90,7 @@ export default function Login() {
   }
 
   return (
-    <main className="grid h-[100dvh] overflow-hidden bg-[#f7f8f6] px-3 py-3 text-stone-950 sm:px-4 sm:py-4 place-items-center">
+    <main className="auth-page grid h-[100dvh] overflow-hidden px-3 py-3 text-stone-950 sm:px-4 sm:py-4 place-items-center">
       <div className="auth-card grid h-full max-h-full w-full max-w-5xl overflow-hidden lg:grid-cols-[minmax(0,1fr)_410px]">
         <section className="relative hidden overflow-hidden bg-leaf-950 lg:block">
           <img

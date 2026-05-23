@@ -18,7 +18,8 @@ from app.core.config import get_settings
 from app.core.database import Base, AsyncSessionLocal, engine, run_schema_compatibility_migrations
 from app.core.middleware import SecurityHeadersMiddleware
 from app.core.security import decode_token
-from app.models import Role, User
+from app.models import Role, User, UserAccountStatus
+from app.services.account_security import effective_account_status
 from app.services.firebase_storage import restore_upload_from_firebase
 from app.services.realtime_alerts import realtime_alert_hub
 
@@ -365,6 +366,13 @@ async def notification_stream(websocket: WebSocket) -> None:
     except (KeyError, TypeError, ValueError):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is None or effective_account_status(user) != UserAccountStatus.active.value:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
 
     await realtime_alert_hub.connect(user_id, websocket)
     try:

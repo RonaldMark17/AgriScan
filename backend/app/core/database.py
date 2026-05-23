@@ -22,6 +22,8 @@ SQLITE_COMPATIBILITY_COLUMNS = {
     "users": {
         "phone": "phone VARCHAR(32)",
         "is_active": "is_active BOOLEAN NOT NULL DEFAULT 1",
+        "account_status": "account_status VARCHAR(32) NOT NULL DEFAULT 'active'",
+        "account_status_until": "account_status_until DATETIME",
         "is_verified": "is_verified BOOLEAN NOT NULL DEFAULT 0",
         "failed_login_attempts": "failed_login_attempts INTEGER NOT NULL DEFAULT 0",
         "locked_until": "locked_until DATETIME",

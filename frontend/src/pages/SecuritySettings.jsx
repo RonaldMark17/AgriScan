@@ -16,8 +16,6 @@ import {
 } from '../utils/browserNotifications.js';
 import { deviceNameFromUserAgent, isGenericDeviceName } from '../utils/deviceName.js';
 
-const ACTIVITY_LOG_PAGE_SIZE = 8;
-
 export default function SecuritySettings() {
   const { user } = useAuth();
   const { language, setLanguage, t } = useI18n();
@@ -36,9 +34,6 @@ export default function SecuritySettings() {
   const [settingsStatus, setSettingsStatus] = useState('');
   const [pushLoading, setPushLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [activityLogs, setActivityLogs] = useState([]);
-  const [activityLoading, setActivityLoading] = useState(false);
-  const [activityPage, setActivityPage] = useState(1);
   const [toggles, setToggles] = useState(() => ({
     autoSync: localStorage.getItem('agriscan_auto_sync') !== 'false',
   }));
@@ -62,19 +57,6 @@ export default function SecuritySettings() {
       setHistoryLoading(false);
     }
   }, []);
-
-  const fetchActivityLogs = useCallback(async () => {
-    if (!isAdmin) return;
-    setActivityLoading(true);
-    try {
-      const { data } = await api.get('/admin/activity-logs');
-      setActivityLogs(Array.isArray(data) ? data : []);
-    } catch {
-      setActivityLogs([]);
-    } finally {
-      setActivityLoading(false);
-    }
-  }, [isAdmin]);
 
   const checkPushStatus = useCallback(async () => {
     setPushChecking(true);
@@ -118,15 +100,6 @@ export default function SecuritySettings() {
   useEffect(() => {
     fetchDevices();
   }, [fetchDevices]);
-
-  useEffect(() => {
-    fetchActivityLogs();
-  }, [fetchActivityLogs]);
-
-  useEffect(() => {
-    const pageCount = Math.max(1, Math.ceil(activityLogs.length / ACTIVITY_LOG_PAGE_SIZE));
-    setActivityPage((current) => Math.min(Math.max(current, 1), pageCount));
-  }, [activityLogs.length]);
 
   useEffect(() => {
     checkPushStatus();
@@ -213,11 +186,6 @@ export default function SecuritySettings() {
   const pushStatusLabel = pushEnabled ? t('enabled') : pushChecking ? t('checking') : t('notEnabled');
   const syncStatusLabel = toggles.autoSync ? t('active') : t('notEnabled');
   const recentDevices = devices.slice(0, 5);
-  const activityPageCount = Math.max(1, Math.ceil(activityLogs.length / ACTIVITY_LOG_PAGE_SIZE));
-  const activityStartIndex = (activityPage - 1) * ACTIVITY_LOG_PAGE_SIZE;
-  const visibleActivityLogs = activityLogs.slice(activityStartIndex, activityStartIndex + ACTIVITY_LOG_PAGE_SIZE);
-  const activityShowingStart = activityLogs.length === 0 ? 0 : activityStartIndex + 1;
-  const activityShowingEnd = Math.min(activityStartIndex + ACTIVITY_LOG_PAGE_SIZE, activityLogs.length);
   const getDeviceDisplayName = useCallback(
     (device) => {
       if (device.device_name && !isGenericDeviceName(device.device_name)) {
@@ -227,50 +195,6 @@ export default function SecuritySettings() {
     },
     [t],
   );
-
-  function formatActivityAction(action) {
-    const labels = {
-      'admin.force_mfa': 'Admin required MFA',
-      'admin.user_disabled': 'Account disabled',
-      'admin.user_enabled': 'Account enabled',
-      'admin.user_updated': 'Account updated',
-      'auth.login_failed': 'Login failed',
-      'auth.login_success': 'Logged in',
-      'auth.mfa_enabled': 'MFA enabled',
-      'auth.mfa_failed': 'MFA failed',
-      'auth.mfa_success': 'MFA verified',
-      'auth.mfa_trusted_device': 'Trusted device used',
-      'auth.password_reset_completed': 'Password reset completed',
-      'auth.password_reset_requested': 'Password reset requested',
-      'auth.password_verified': 'Password verified',
-      'auth.recovery_codes_failed': 'Recovery code request failed',
-      'auth.recovery_codes_rotated': 'Recovery codes generated',
-      'auth.token_refreshed': 'Session refreshed',
-      'farm.approved': 'Farm approved',
-      'farm.created': 'Farm registered',
-      'farm.deleted': 'Farm deleted',
-      'farm.rejected': 'Farm rejected',
-      'farm.review_undone': 'Farm review undone',
-      'farm.updated': 'Farm updated',
-      'marketplace.created': 'Marketplace listing created',
-      'marketplace.status_updated': 'Marketplace status updated',
-      'prediction.created': 'Prediction created',
-      'prediction.soil_scan': 'Manual soil scan',
-      'scan.created': 'Disease scan created',
-      'scan.feedback.accepted': 'Flagged review accepted',
-      'scan.feedback.created': 'Flagged review submitted',
-      'scan.feedback.rejected': 'Flagged review rejected',
-      'scan.feedback.undone': 'Flagged review undone',
-      'user.registered': 'Account registered',
-    };
-    return labels[action] || String(action || '').replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-  }
-
-  function formatActivityResource(log) {
-    if (!log.resource_type && !log.resource_id) return '-';
-    if (!log.resource_id) return log.resource_type;
-    return `${log.resource_type || t('resource')} #${log.resource_id}`;
-  }
 
   return (
     <div className="page-stack w-full max-w-full overflow-hidden">
@@ -397,22 +321,6 @@ export default function SecuritySettings() {
             </SettingsSection>
           </div>
 
-          {isAdmin ? (
-            <ActivityLogPanel
-              activityLoading={activityLoading}
-              activityLogs={activityLogs}
-              activityPage={activityPage}
-              activityPageCount={activityPageCount}
-              activityShowingEnd={activityShowingEnd}
-              activityShowingStart={activityShowingStart}
-              fetchActivityLogs={fetchActivityLogs}
-              formatActivityAction={formatActivityAction}
-              formatActivityResource={formatActivityResource}
-              setActivityPage={setActivityPage}
-              t={t}
-              visibleActivityLogs={visibleActivityLogs}
-            />
-          ) : null}
         </div>
 
         <aside className="space-y-5 w-full lg:w-[340px] xl:w-[380px] shrink-0">

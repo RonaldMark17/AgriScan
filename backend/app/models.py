@@ -20,6 +20,19 @@ class MarketplaceStatus(str, Enum):
     sold = "sold"
 
 
+class UserAccountStatus(str, Enum):
+    active = "active"
+    suspended = "suspended"
+    disabled = "disabled"
+    pending_review = "pending_review"
+
+
+class AppealStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class Role(Base):
     __tablename__ = "roles"
 
@@ -41,6 +54,8 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    account_status: Mapped[str] = mapped_column(String(32), default=UserAccountStatus.active.value, index=True)
+    account_status_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -51,6 +66,14 @@ class User(Base):
     role: Mapped[Role] = relationship(back_populates="users")
     mfa_setting: Mapped["MFASetting | None"] = relationship(back_populates="user", uselist=False)
     farms: Mapped[list["Farm"]] = relationship(back_populates="owner")
+    suspension_logs: Mapped[list["SuspensionLog"]] = relationship(
+        back_populates="user",
+        foreign_keys="SuspensionLog.user_id",
+    )
+    appeal_requests: Mapped[list["AppealRequest"]] = relationship(
+        back_populates="user",
+        foreign_keys="AppealRequest.user_id",
+    )
 
 
 class Farm(Base):
@@ -209,6 +232,81 @@ class AuditLog(Base):
     user_agent: Mapped[str | None] = mapped_column(String(500))
     metadata_json: Mapped[dict | None] = mapped_column("metadata", JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SuspensionLog(Base):
+    __tablename__ = "suspension_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    admin_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    previous_status: Mapped[str | None] = mapped_column(String(32))
+    new_status: Mapped[str] = mapped_column(String(32), index=True)
+    reason: Mapped[str] = mapped_column(String(240))
+    description: Mapped[str | None] = mapped_column(Text)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates="suspension_logs", foreign_keys=[user_id])
+    admin: Mapped[User | None] = relationship(foreign_keys=[admin_user_id])
+
+
+class AppealRequest(Base):
+    __tablename__ = "appeal_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    suspension_log_id: Mapped[int | None] = mapped_column(ForeignKey("suspension_logs.id"), index=True)
+    explanation: Mapped[str] = mapped_column(Text)
+    supporting_message: Mapped[str | None] = mapped_column(Text)
+    updated_information: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default=AppealStatus.pending.value, index=True)
+    admin_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user: Mapped[User] = relationship(back_populates="appeal_requests", foreign_keys=[user_id])
+    suspension_log: Mapped[SuspensionLog | None] = relationship(foreign_keys=[suspension_log_id])
+    admin: Mapped[User | None] = relationship(foreign_keys=[admin_user_id])
+
+
+class SecurityEvent(Base):
+    __tablename__ = "security_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    email: Mapped[str | None] = mapped_column(String(255), index=True)
+    event_type: Mapped[str] = mapped_column(String(120), index=True)
+    severity: Mapped[str] = mapped_column(String(32), default="info", index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(80), index=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500))
+    device_name: Mapped[str | None] = mapped_column(String(160))
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class AdminAction(Base):
+    __tablename__ = "admin_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    admin_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    affected_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    action: Mapped[str] = mapped_column(String(120), index=True)
+    reason: Mapped[str | None] = mapped_column(String(240))
+    description: Mapped[str | None] = mapped_column(Text)
+    ip_address: Mapped[str | None] = mapped_column(String(80))
+    user_agent: Mapped[str | None] = mapped_column(String(500))
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    admin: Mapped[User | None] = relationship(foreign_keys=[admin_user_id])
+    affected_user: Mapped[User | None] = relationship(foreign_keys=[affected_user_id])
 
 
 class MFASetting(Base):

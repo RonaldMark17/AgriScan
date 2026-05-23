@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 
-from app.api.routes import admin, auth, dashboard, farms, marketplace, ml, notifications, predictions, reports, scans, system, users
+from app.api.routes import account, admin, auth, dashboard, farms, marketplace, ml, notifications, predictions, reports, scans, system, users
 
 api_router = APIRouter()
+api_router.include_router(account.router)
 api_router.include_router(auth.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(farms.router)

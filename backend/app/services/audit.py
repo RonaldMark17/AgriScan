@@ -1,8 +1,14 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_request_ip
 from app.models import AuditLog, User
+
+
+def get_request_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 async def write_audit_log(

@@ -19,6 +19,8 @@ class UserRead(BaseModel):
     full_name: str
     role: RoleRead
     is_active: bool
+    account_status: str = "active"
+    account_status_until: datetime | None = None
     is_verified: bool
     created_at: datetime
     last_login_at: datetime | None
@@ -31,6 +33,82 @@ class UserUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
     is_active: bool | None = None
     role: str | None = Field(default=None, pattern="^(admin|farmer)$")
+
+
+class AccountStatusUpdate(BaseModel):
+    account_status: str = Field(pattern="^(active|suspended|disabled|pending_review)$")
+    reason: str = Field(min_length=3, max_length=240)
+    description: str = Field(min_length=3, max_length=2000)
+    account_status_until: datetime | None = None
+
+
+class AppealRequestCreate(BaseModel):
+    explanation: str = Field(min_length=10, max_length=2000)
+    supporting_message: str | None = Field(default=None, max_length=2000)
+    updated_information: str | None = Field(default=None, max_length=2000)
+
+
+class AppealDecision(BaseModel):
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+class SuspensionLogRead(BaseModel):
+    id: int
+    user_id: int
+    admin_user_id: int | None
+    action: str
+    previous_status: str | None
+    new_status: str
+    reason: str
+    description: str | None
+    starts_at: datetime
+    ends_at: datetime | None
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AppealRequestRead(BaseModel):
+    id: int
+    user_id: int
+    suspension_log_id: int | None
+    explanation: str
+    supporting_message: str | None
+    updated_information: str | None
+    status: str
+    admin_user_id: int | None
+    decision_reason: str | None
+    decided_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    user_name: str | None = None
+    user_email: EmailStr | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AccountStatusRead(BaseModel):
+    account_status: str
+    account_status_until: datetime | None = None
+    message: str
+    suspension: SuspensionLogRead | None = None
+    pending_appeal: AppealRequestRead | None = None
+
+
+class SecurityEventRead(BaseModel):
+    id: int
+    user_id: int | None
+    email: EmailStr | None
+    event_type: str
+    severity: str
+    ip_address: str | None
+    user_agent: str | None
+    device_name: str | None
+    metadata_json: dict[str, Any] | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class FarmCreate(BaseModel):

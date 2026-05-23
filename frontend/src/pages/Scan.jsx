@@ -946,9 +946,9 @@ function GuideSection({ accent = 'leaf', icon: Icon, title, children }) {
   };
 
   return (
-    <section className="crop-guide-section rounded-[1.35rem] border border-stone-200 bg-white p-4 sm:p-5">
+    <section className="crop-guide-section rounded-lg border border-stone-200 bg-white p-4 sm:p-5">
       <div className="flex items-start gap-3">
-        <div className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl ${accentClasses[accent] || accentClasses.leaf}`}>
+        <div className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg ${accentClasses[accent] || accentClasses.leaf}`}>
           <Icon className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
@@ -968,7 +968,7 @@ function CropGuideMetric({ label, value, tone = 'stone' }) {
   };
 
   return (
-    <div className={`rounded-2xl border px-4 py-3 ${toneClasses[tone] || toneClasses.stone}`}>
+    <div className={`rounded-lg border px-4 py-3 ${toneClasses[tone] || toneClasses.stone}`}>
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{label}</p>
       <div className="mt-2 text-sm font-semibold leading-6 text-stone-900">
         {typeof value === 'string' ? <TranslatedText text={value} /> : value}
@@ -984,7 +984,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
     <div className="crop-guide-overlay fixed inset-0 z-[140] overflow-hidden overscroll-none bg-stone-950/78 px-3 py-4 backdrop-blur-sm sm:px-6 sm:py-8" onClick={onClose}>
       <div className="flex h-full items-center justify-center">
         <div
-          className="crop-guide-dialog surface flex max-h-[85vh] w-[92vw] max-w-[760px] flex-col overflow-hidden rounded-[1.5rem] border border-white/80 bg-white ring-1 ring-stone-950/5 sm:max-h-[82vh] sm:w-[94vw]"
+          className="crop-guide-dialog surface flex max-h-[85vh] w-[92vw] max-w-[760px] flex-col overflow-hidden rounded-lg border border-white/80 bg-white ring-1 ring-stone-950/5 sm:max-h-[82vh] sm:w-[94vw]"
           onClick={(event) => event.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -1000,7 +1000,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
               </p>
             </div>
             <button
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-leaf-50 text-leaf-800 transition hover:border-leaf-200 hover:bg-white hover:text-leaf-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 active:scale-[0.98]"
+              className="btn-icon h-12 w-12 bg-leaf-50 text-leaf-800 hover:border-leaf-200 hover:bg-white hover:text-leaf-900"
               type="button"
               onClick={onClose}
               aria-label={t('closeCropGuide')}
@@ -1011,7 +1011,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
           <div className="crop-guide-body min-h-0 flex-1 overflow-y-auto overscroll-contain bg-gradient-to-b from-stone-50 via-stone-50/70 to-white px-4 py-4 sm:px-6 sm:py-6">
             <div className="space-y-4 sm:space-y-5">
-              <section className="crop-guide-hero rounded-[1.35rem] border border-leaf-200 bg-gradient-to-br from-leaf-50 via-white to-[#ecfdf3] p-5 sm:p-6">
+              <section className="crop-guide-hero rounded-lg border border-leaf-200 bg-gradient-to-br from-leaf-50 via-white to-[#ecfdf3] p-5 sm:p-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-2 rounded-full bg-leaf-700 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-sm">
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1041,7 +1041,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
               <GuideSection accent="sky" icon={Sun} title={t('soilWeatherSuitability')}>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4">
+                  <div className="rounded-lg border border-sky-100 bg-sky-50 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">{t('liveWeatherContext')}</p>
                     {weatherSummary ? (
                       <TranslatedText as="p" className="mt-2 text-sm leading-7 text-stone-700" text={weatherSummary} />
@@ -1049,7 +1049,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
                       <p className="mt-2 text-sm leading-7 text-stone-700">{t('refreshWeatherContext')}</p>
                     )}
                   </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-stone-500">{t('plantingWindow')}</p>
                     <TranslatedText as="p" className="mt-2 text-sm leading-7 text-stone-700" text={crop.window} />
                   </div>
@@ -1068,7 +1068,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 
               <GuideSection accent="stone" icon={TrendingUp} title={t('scoreBreakdown')}>
                 <div className="space-y-3">
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-stone-500">{t('overallSuitability')}</p>
@@ -1085,7 +1085,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
                   {crop.scoreBreakdown?.length > 0 ? (
                     <div className="space-y-2">
                       {crop.scoreBreakdown.map((item, index) => (
-                        <div key={`${item.label}-${index}`} className="flex items-start justify-between gap-4 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                        <div key={`${item.label}-${index}`} className="flex items-start justify-between gap-4 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-bold text-stone-900">{item.label}</p>
                             {item.detail && <TranslatedText as="p" className="mt-1 text-xs leading-6 text-stone-500" text={item.detail} />}
@@ -1144,7 +1144,7 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
 function CropCard({ crop, onGuide, weatherSummary, t }) {
   return (
     <article
-      className={`surface flex h-full flex-col overflow-hidden rounded-[1rem] border w-full transition-shadow ${
+      className={`surface flex h-full flex-col overflow-hidden rounded-lg border w-full transition-shadow ${
         crop.isBestMatch
           ? 'crop-card-best-match border-leaf-300 bg-gradient-to-br from-leaf-50 via-white to-white ring-1 ring-leaf-100'
           : 'border-stone-200 bg-white'
@@ -1166,7 +1166,7 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
 
         <div className="flex flex-col gap-4 min-[440px]:flex-row min-[440px]:items-start min-[440px]:justify-between w-full">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4 flex-1">
-            <div className={`grid h-10 w-10 sm:h-12 sm:w-12 shrink-0 place-items-center rounded-xl ${crop.isBestMatch ? 'bg-leaf-100 text-leaf-700' : 'bg-leaf-50 text-leaf-600'}`}>
+            <div className={`grid h-10 w-10 sm:h-12 sm:w-12 shrink-0 place-items-center rounded-lg ${crop.isBestMatch ? 'bg-leaf-100 text-leaf-700' : 'bg-leaf-50 text-leaf-600'}`}>
               <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div className="min-w-0 flex-1">
@@ -1203,7 +1203,7 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
           <TranslatedText as="span" className="min-w-0 break-words min-[460px]:text-right" text={crop.window} />
         </div>
 
-        <div className={`mt-4 sm:mt-5 rounded-xl p-3 sm:p-4 w-full ${crop.isBestMatch ? 'bg-leaf-50/80' : 'bg-leaf-50/60'}`}>
+        <div className={`mt-4 sm:mt-5 rounded-lg p-3 sm:p-4 w-full ${crop.isBestMatch ? 'bg-leaf-50/80' : 'bg-leaf-50/60'}`}>
           <TranslatedText as="p" className="text-xs sm:text-sm leading-6 text-stone-700 line-clamp-3 sm:line-clamp-none" text={crop.guide} />
         </div>
       </div>
@@ -1817,7 +1817,7 @@ export default function Scan() {
               </div>
             )}
 
-            {error && <div className="w-full whitespace-pre-line rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
+            {error && <div className="danger-message w-full">{error}</div>}
 
             {offlineLoading ? (
               <div className="offline-loading-card w-full" role="status" aria-live="polite">

@@ -1,70 +1,80 @@
-import { CheckCircle2, ChevronLeft, ChevronRight, Flag, Loader2, RefreshCw, RotateCcw, Search, ShieldCheck, UserRoundCheck, XCircle } from 'lucide-react';
+import {
+  Ban,
+  CheckCircle2,
+  Clock3,
+  Loader2,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  UserCog,
+  UsersRound,
+  XCircle,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
-import EmptyState from '../components/shared/EmptyState.jsx';
 import PageHeader from '../components/shared/PageHeader.jsx';
+import StatCard from '../components/shared/StatCard.jsx';
+import {
+  ConfirmModal,
+  DataTable,
+  FormSection,
+  SearchFilterBar,
+  StatusBadge,
+  formatDateTime,
+  labelize,
+} from '../components/shared/platform.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useI18n } from '../context/I18nContext.jsx';
 import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 
-const FLAGGED_REVIEWS_PAGE_SIZE = 4;
-const REVIEW_STATUS_ORDER = {
-  pending: 0,
-  verified: 1,
-  rejected: 1,
+const EMPTY_ACTION_FORM = {
+  role: 'farmer',
+  account_status: 'active',
+  reason: '',
+  description: '',
+  account_status_until: '',
 };
-const ADMIN_AJAX_REFRESH_MS = 30000;
-const FLAGGED_REVIEW_SORT_MODES = ['priority', 'newest', 'oldest'];
 
-function sortFlaggedReviews(reviews, mode = 'priority') {
-  return [...reviews].sort((first, second) => {
-    if (mode === 'newest') {
-      return new Date(second.created_at).getTime() - new Date(first.created_at).getTime();
-    }
+function accountStatusValue(user) {
+  return user.account_status || (user.is_active ? 'active' : 'disabled');
+}
 
-    if (mode === 'oldest') {
-      return new Date(first.created_at).getTime() - new Date(second.created_at).getTime();
-    }
-
-    const firstOrder = REVIEW_STATUS_ORDER[first.verification_status] ?? 2;
-    const secondOrder = REVIEW_STATUS_ORDER[second.verification_status] ?? 2;
-    if (firstOrder !== secondOrder) return firstOrder - secondOrder;
-    return new Date(second.created_at).getTime() - new Date(first.created_at).getTime();
-  });
+function roleName(user) {
+  return typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
 }
 
 export default function AdminUsers() {
   const { user: currentUser } = useAuth();
-  const { t } = useI18n();
   const [users, setUsers] = useState([]);
-  const [farms, setFarms] = useState([]);
-  const [flaggedReviews, setFlaggedReviews] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [approvingId, setApprovingId] = useState(null);
-  const [rejectingId, setRejectingId] = useState(null);
-  const [undoingFarmId, setUndoingFarmId] = useState(null);
-  const [farmActionError, setFarmActionError] = useState('');
-  const [togglingUserId, setTogglingUserId] = useState(null);
-  const [userActionError, setUserActionError] = useState('');
-  const [reviewDecision, setReviewDecision] = useState(null);
-  const [reviewActionError, setReviewActionError] = useState('');
-  const [flaggedPage, setFlaggedPage] = useState(1);
-  const [userSearch, setUserSearch] = useState('');
-  const [flaggedSortMode, setFlaggedSortMode] = useState('priority');
+  const [appeals, setAppeals] = useState([]);
+  const [securitySummary, setSecuritySummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [appealAction, setAppealAction] = useState(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [actionUser, setActionUser] = useState(null);
+  const [actionForm, setActionForm] = useState(EMPTY_ACTION_FORM);
 
-  const load = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const [usersResponse, farmsResponse, flaggedReviewsResponse] = await Promise.all([
+      const [usersResponse, appealsResponse, securityResponse] = await Promise.all([
         api.get('/users'),
-        api.get('/admin/farm-approvals'),
-        api.get('/admin/flagged-reviews'),
+        api.get('/admin/appeals'),
+        api.get('/admin/account-security-summary'),
       ]);
-      setUsers(usersResponse.data);
-      setFarms(farmsResponse.data);
-      setFlaggedReviews(flaggedReviewsResponse.data);
+      setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
+      setAppeals(Array.isArray(appealsResponse.data) ? appealsResponse.data : []);
+      setSecuritySummary(securityResponse.data);
+    } catch (requestError) {
+      setError(getDetailedApiErrorMessage(requestError, 'User management data could not be loaded.'));
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
   }, []);
 
@@ -72,556 +82,364 @@ export default function AdminUsers() {
     load().catch(() => {});
   }, [load]);
 
-  useEffect(() => {
-    function refreshSilently() {
-      if (document.visibilityState === 'hidden') return;
-      void load({ silent: true }).catch(() => {});
-    }
-
-    function handleAdminNotification(event) {
-      const notification = event.detail?.notification;
-      const notificationType = notification?.payload?.type || notification?.type;
-      if (!['farm_pending', 'farm_updated', 'farm_deleted', 'farm_approved', 'farm_rejected', 'farm_review_undone', 'flagged_crop'].includes(notificationType)) return;
-      refreshSilently();
-    }
-
-    const intervalId = window.setInterval(refreshSilently, ADMIN_AJAX_REFRESH_MS);
-    window.addEventListener('focus', refreshSilently);
-    window.addEventListener('agriscan:notification', handleAdminNotification);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener('focus', refreshSilently);
-      window.removeEventListener('agriscan:notification', handleAdminNotification);
-    };
-  }, [load]);
-
-  useEffect(() => {
-    const pageCount = Math.max(1, Math.ceil(flaggedReviews.length / FLAGGED_REVIEWS_PAGE_SIZE));
-    setFlaggedPage((current) => Math.min(Math.max(current, 1), pageCount));
-  }, [flaggedReviews.length]);
-
-  async function approveFarm(id) {
-    setApprovingId(id);
-    setFarmActionError('');
-    try {
-      await api.patch(`/farms/${id}/approve`);
-      await load();
-    } catch (error) {
-      setFarmActionError(getDetailedApiErrorMessage(error, t('farmActionFailed'), {
-        title: 'Farm approval could not be saved.',
-        action: 'Confirm the farm still exists and your admin account has permission, then try again.',
-      }));
-    } finally {
-      setApprovingId(null);
-    }
-  }
-
-  async function rejectFarm(id) {
-    setRejectingId(id);
-    setFarmActionError('');
-    try {
-      await api.patch(`/farms/${id}/reject`);
-      await load();
-    } catch (error) {
-      setFarmActionError(getDetailedApiErrorMessage(error, t('farmActionFailed'), {
-        title: 'Farm rejection could not be saved.',
-        action: 'Confirm the farm still exists and your admin account has permission, then try again.',
-      }));
-    } finally {
-      setRejectingId(null);
-    }
-  }
-
-  async function undoFarmReview(id) {
-    setUndoingFarmId(id);
-    setFarmActionError('');
-    try {
-      await api.patch(`/farms/${id}/undo-review`);
-      await load();
-    } catch (error) {
-      setFarmActionError(getDetailedApiErrorMessage(error, t('farmActionFailed'), {
-        title: 'Farm review undo could not be saved.',
-        action: 'Confirm the farm still exists and your admin account has permission, then try again.',
-      }));
-    } finally {
-      setUndoingFarmId(null);
-    }
-  }
-
-  async function toggleUserActive(targetUser) {
-    setTogglingUserId(targetUser.id);
-    setUserActionError('');
-    try {
-      const { data } = await api.patch(`/users/${targetUser.id}`, { is_active: !targetUser.is_active });
-      setUsers((current) => current.map((item) => (item.id === targetUser.id ? data : item)));
-    } catch (error) {
-      setUserActionError(getDetailedApiErrorMessage(error, t('accountActionFailed'), {
-        title: 'User account update could not be saved.',
-        action: 'Confirm the user exists, avoid disabling your own account, and retry with an admin account.',
-      }));
-    } finally {
-      setTogglingUserId(null);
-    }
-  }
-
-  async function decideFlaggedReview(id, decision) {
-    const decisionKey = `${decision}-${id}`;
-    setReviewDecision(decisionKey);
-    setReviewActionError('');
-    try {
-      const { data } = await api.patch(`/admin/flagged-reviews/${id}/${decision}`);
-      setFlaggedReviews((current) => current.map((review) => (review.id === id ? data : review)));
-    } catch (error) {
-      setReviewActionError(getDetailedApiErrorMessage(error, t('reviewActionFailed'), {
-        title: 'Flagged review decision could not be saved.',
-        action: 'Confirm the flagged review still exists and retry with an admin account.',
-      }));
-    } finally {
-      setReviewDecision(null);
-    }
-  }
-
-  function translateFlaggedReviewSortMode(mode) {
-    if (mode === 'newest') return t('reviewSortNewest');
-    if (mode === 'oldest') return t('reviewSortOldest');
-    return t('reviewSortPriority');
-  }
-
   const filteredUsers = useMemo(() => {
-    const normalizedQuery = userSearch.trim().toLowerCase();
-    if (!normalizedQuery) return users;
-
+    const normalizedSearch = search.trim().toLowerCase();
     return users.filter((user) => {
-      const searchableParts = [
-        user.full_name,
-        user.email,
-        user.role?.name,
-        user.is_active ? t('active') : t('disabled'),
-      ]
+      const status = accountStatusValue(user);
+      const role = roleName(user);
+      if (statusFilter !== 'all' && status !== statusFilter) return false;
+      if (roleFilter !== 'all' && role !== roleFilter) return false;
+      if (!normalizedSearch) return true;
+      return [user.full_name, user.email, role, status]
         .filter(Boolean)
-        .map((value) => String(value).toLowerCase());
-
-      return searchableParts.some((value) => value.includes(normalizedQuery));
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
     });
-  }, [userSearch, users, t]);
+  }, [roleFilter, search, statusFilter, users]);
 
-  const orderedFlaggedReviews = useMemo(
-    () => sortFlaggedReviews(flaggedReviews, flaggedSortMode),
-    [flaggedReviews, flaggedSortMode]
-  );
+  const pendingAppeals = appeals.filter((appeal) => appeal.status === 'pending');
+  const activeUsers = users.filter((user) => accountStatusValue(user) === 'active' && user.is_active !== false);
+  const restrictedUsers = users.filter((user) => ['suspended', 'disabled', 'pending_review'].includes(accountStatusValue(user)));
 
-  function reviewStatusClass(status) {
-    if (status === 'verified') return 'bg-leaf-50 text-leaf-800';
-    if (status === 'pending') return 'bg-amber-50 text-amber-800';
-    if (status === 'rejected') return 'bg-red-50 text-red-700';
-    return 'bg-stone-100 text-stone-700';
+  function openActionModal(targetUser) {
+    setActionUser(targetUser);
+    setActionForm({
+      role: roleName(targetUser),
+      account_status: accountStatusValue(targetUser),
+      reason: '',
+      description: '',
+      account_status_until: '',
+    });
+    setError('');
+    setSuccess('');
   }
 
-  function reviewStatusLabel(status) {
-    if (status === 'pending') return t('pending');
-    if (status === 'verified') return t('accepted');
-    if (status === 'rejected') return t('rejected');
-    return status || t('status');
+  async function submitUserAction() {
+    if (!actionUser) return;
+    const nextStatus = actionForm.account_status;
+    const currentStatus = accountStatusValue(actionUser);
+    const nextRole = actionForm.role;
+    const currentRole = roleName(actionUser);
+    const statusChanged = nextStatus !== currentStatus;
+    const roleChanged = nextRole !== currentRole;
+
+    if (!statusChanged && !roleChanged) {
+      setActionUser(null);
+      return;
+    }
+
+    if (statusChanged && (!actionForm.reason.trim() || !actionForm.description.trim())) {
+      setError('A reason and description are required before changing account status.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      if (roleChanged) {
+        await api.patch(`/users/${actionUser.id}`, { role: nextRole });
+      }
+      if (statusChanged) {
+        await api.patch(`/users/${actionUser.id}/account-status`, {
+          account_status: nextStatus,
+          reason: actionForm.reason,
+          description: actionForm.description,
+          account_status_until:
+            nextStatus === 'suspended' && actionForm.account_status_until
+              ? new Date(actionForm.account_status_until).toISOString()
+              : null,
+        });
+      }
+      setSuccess('User account updated. The action is recorded in audit logs.');
+      setActionUser(null);
+      await load();
+    } catch (requestError) {
+      setError(getDetailedApiErrorMessage(requestError, 'User account update could not be saved.', {
+        title: 'User account update could not be saved.',
+        action: 'Confirm the account still exists, avoid restricting yourself, and include a clear reason for status changes.',
+      }));
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function farmStatusClass(status) {
-    if (status === 'approved') return 'bg-leaf-50 text-leaf-800';
-    if (status === 'rejected') return 'bg-red-50 text-red-700';
-    return 'bg-amber-50 text-amber-800';
+  async function decideAppeal(id, decision) {
+    setAppealAction(`${decision}-${id}`);
+    setError('');
+    setSuccess('');
+    try {
+      const reason = decision === 'approve'
+        ? 'Appeal approved after administrator review.'
+        : 'Appeal rejected because the account restriction remains unresolved.';
+      await api.patch(`/admin/appeals/${id}/${decision}`, { reason });
+      setSuccess(`Appeal ${decision === 'approve' ? 'approved' : 'rejected'}. Audit records were updated.`);
+      await load();
+    } catch (requestError) {
+      setError(getDetailedApiErrorMessage(requestError, 'Appeal decision could not be saved.'));
+    } finally {
+      setAppealAction(null);
+    }
   }
 
-  function farmStatusLabel(status) {
-    if (status === 'approved') return t('approved');
-    if (status === 'rejected') return t('rejected');
-    return t('pending');
-  }
-
-  const flaggedPageCount = Math.max(1, Math.ceil(flaggedReviews.length / FLAGGED_REVIEWS_PAGE_SIZE));
-  const flaggedStartIndex = (flaggedPage - 1) * FLAGGED_REVIEWS_PAGE_SIZE;
-  const visibleFlaggedReviews = orderedFlaggedReviews.slice(flaggedStartIndex, flaggedStartIndex + FLAGGED_REVIEWS_PAGE_SIZE);
-  const flaggedShowingStart = flaggedReviews.length === 0 ? 0 : flaggedStartIndex + 1;
-  const flaggedShowingEnd = Math.min(flaggedStartIndex + FLAGGED_REVIEWS_PAGE_SIZE, flaggedReviews.length);
+  const columns = [
+    {
+      key: 'identity',
+      header: 'User',
+      render: (user) => (
+        <div>
+          <p className="break-words font-bold text-stone-950">{user.full_name}</p>
+          <p className="break-all text-xs text-stone-500">{user.email}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (user) => <StatusBadge status="draft">{labelize(roleName(user))}</StatusBadge>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (user) => <StatusBadge status={accountStatusValue(user)}>{labelize(accountStatusValue(user))}</StatusBadge>,
+    },
+    {
+      key: 'last_login_at',
+      header: 'Last login',
+      render: (user) => formatDateTime(user.last_login_at),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      className: 'text-right',
+      render: (user) => (
+        <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" type="button" onClick={() => openActionModal(user)}>
+          <UserCog className="h-4 w-4" />
+          Manage
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow={t('administration')}
-        title={t('usersAndApprovals')}
-        body={t('usersAndApprovalsBody')}
+        eyebrow="Administration"
+        title="User Management"
+        body="Manage farmer and admin accounts, role assignments, statuses, suspension workflow, and appeal review without crop or farm operations mixed in."
         actions={
-          <button className="btn-secondary" onClick={() => load()} disabled={loading}>
+          <button className="btn-secondary" type="button" onClick={load} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            {t('refresh')}
+            Refresh
           </button>
         }
       />
-      <div className="content-sidebar-layout">
-        <div className="space-y-5">
-          <section className="surface rounded-lg p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="section-title flex items-center gap-2">
-                  <UserRoundCheck className="h-5 w-5 text-leaf-700" />
-                  {t('userManagement')}
-                </h2>
-              </div>
-              <label className="relative w-full sm:max-w-xs">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                <input
-                  className="field min-h-10 pl-10"
-                  type="search"
-                  value={userSearch}
-                  onChange={(event) => setUserSearch(event.target.value)}
-                  placeholder={t('searchUsersPlaceholder')}
-                  aria-label={t('searchUsers')}
-                />
-              </label>
-            </div>
-            {userActionError ? <div className="danger-message mt-4">{userActionError}</div> : null}
-            <div className="table-shell mt-4 overflow-x-auto">
-              <table className="user-table-mobile w-full text-left text-sm">
-                <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase text-stone-500">
-                  <tr>
-                    <th className="px-3 py-3 sm:px-4">{t('name')}</th>
-                    <th className="hidden sm:table-cell px-4 py-3">{t('role')}</th>
-                    <th className="hidden md:table-cell px-4 py-3">{t('status')}</th>
-                    <th className="hidden lg:table-cell px-4 py-3">{t('lastLogin')}</th>
-                    <th className="px-3 py-3 sm:px-4 text-right">{t('actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100">
-                  {filteredUsers.map((user) => {
-                    const isCurrentUser = user.id === currentUser?.id;
-                    const toggleLabel = user.is_active ? t('disableAccount') : t('enableAccount');
-                    return (
-                      <tr key={user.id} className="transition hover:bg-stone-50/70">
-                        <td className="px-3 py-3 align-top sm:px-4">
-                          <div className="flex flex-col gap-1">
-                            <p className="break-words font-semibold text-stone-900">{user.full_name}</p>
-                            <p className="break-all text-xs text-stone-500">{user.email}</p>
-                            <div className="flex flex-wrap gap-2 sm:hidden">
-                              <span className="status-pill bg-stone-100 text-stone-700 w-fit text-xs">{user.role.name}</span>
-                              <span className={`status-pill w-fit text-xs ${user.is_active ? 'bg-leaf-50 text-leaf-800' : 'bg-red-50 text-red-700'}`}>
-                                {user.is_active ? t('active') : t('disabled')}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="hidden sm:table-cell px-4 py-3 align-top">
-                          <span className="status-pill bg-stone-100 text-stone-700">{user.role.name}</span>
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 align-top">
-                          <span className={`status-pill ${user.is_active ? 'bg-leaf-50 text-leaf-800' : 'bg-red-50 text-red-700'}`}>
-                            {user.is_active ? t('active') : t('disabled')}
-                          </span>
-                        </td>
-                        <td className="hidden lg:table-cell break-words px-4 py-3 align-top text-stone-600">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '-'}</td>
-                        <td className="user-row-actions px-3 py-3 text-right align-top sm:px-4">
-                          <button
-                            className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-2 py-1.5 text-xs font-bold transition focus-ring disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 ${
-                              user.is_active
-                                ? 'border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50'
-                                : 'border-leaf-200 bg-leaf-50 text-leaf-800 hover:border-leaf-300 hover:bg-leaf-100'
-                            }`}
-                            type="button"
-                            onClick={() => toggleUserActive(user)}
-                            disabled={togglingUserId !== null || isCurrentUser}
-                            title={isCurrentUser ? t('cannotDisableOwnAccount') : toggleLabel}
-                          >
-                            {togglingUserId === user.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : user.is_active ? (
-                              <XCircle className="h-3.5 w-3.5" />
-                            ) : (
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            )}
-                            <span className="hidden sm:inline">{toggleLabel}</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {filteredUsers.length === 0 ? (
-                <div className="p-4">
-                  <EmptyState
-                    title={t('noUsersFound')}
-                    body={users.length === 0 ? t('usersAppearAfterRegistration') : t('searchUsersEmptyBody')}
-                  />
-                </div>
-              ) : null}
-            </div>
-          </section>
 
-          <section className="surface rounded-lg p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="section-title flex items-center gap-2">
-                  <Flag className="h-5 w-5 text-leaf-700" />
-                  {t('flaggedReviews')}
-                </h2>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <label className="flex items-center gap-2 text-sm font-semibold text-stone-600">
-                  <span>{t('sort')}</span>
-                  <select
-                    className="field min-h-10 w-full sm:w-[180px]"
-                    value={flaggedSortMode}
-                    onChange={(event) => {
-                      setFlaggedSortMode(event.target.value);
-                      setFlaggedPage(1);
-                    }}
-                    aria-label={t('sortFlaggedReviews')}
-                  >
-                    {FLAGGED_REVIEW_SORT_MODES.map((mode) => (
-                      <option key={mode} value={mode}>
-                        {translateFlaggedReviewSortMode(mode)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <span className="status-pill border border-stone-200 bg-white text-stone-700">
-                  {flaggedReviews.length} {t('total')}
-                </span>
-              </div>
-            </div>
-            {reviewActionError ? <div className="danger-message mt-4">{reviewActionError}</div> : null}
-            {flaggedReviews.length === 0 ? (
-              <div className="mt-4">
-                <EmptyState title={t('noFlaggedReviews')} body={t('flaggedReviewsBody')} />
-              </div>
-            ) : (
-              <>
-                <div className="flagged-review-board mt-4">
-                  <div className="flagged-review-header">
-                    <span>{t('review')}</span>
-                    <span>{t('originalResult')}</span>
-                    <span>{t('correctedResult')}</span>
-                    <span className="text-right">{t('decision')}</span>
-                  </div>
-                  <div className="flagged-review-list">
-                    {visibleFlaggedReviews.map((review) => {
-                      const isPending = review.verification_status === 'pending';
-                      const isDecided = !isPending;
-                      return (
-                        <article key={review.id} className="flagged-review-row">
-                          <div className="flagged-review-person">
-                            {review.image_url ? (
-                              <div className="flagged-review-image">
-                                <img
-                                  src={review.image_url}
-                                  alt={t('scanImage')}
-                                  className="h-full w-full object-cover"
-                                  onError={(event) => {
-                                    const wrapper = event.currentTarget.closest('.flagged-review-image');
-                                    if (wrapper) wrapper.style.display = 'none';
-                                  }}
-                                />
-                              </div>
-                            ) : null}
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-stone-900" title={review.user_name}>{review.user_name}</p>
-                              <p className="truncate text-xs text-stone-500" title={review.user_email}>{review.user_email}</p>
-                              <p className="mt-1 text-[11px] font-medium leading-4 text-stone-400">{new Date(review.created_at).toLocaleString()}</p>
-                              {review.duplicate_count > 1 ? (
-                                <span className="mt-2 inline-flex rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-bold text-stone-600">
-                                  {t('mergedDuplicates', { count: review.duplicate_count })}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
+      {error ? <div className="danger-message">{error}</div> : null}
+      {success ? <div className="success-message">{success}</div> : null}
 
-                          <div className="flagged-review-block">
-                            <p className="flagged-review-mobile-label">{t('originalResult')}</p>
-                            <p className="text-wrap-anywhere text-xs font-bold uppercase tracking-wide text-stone-400">
-                              {review.original_crop_label || '-'}
-                            </p>
-                            <p className="mt-1 text-wrap-anywhere font-semibold text-stone-900">{review.original_disease_name}</p>
-                          </div>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon={UsersRound} label="Total users" value={users.length} helper="All admin and farmer accounts." />
+        <StatCard icon={CheckCircle2} label="Active users" value={activeUsers.length} helper="Accounts with normal access." tone="sky" />
+        <StatCard icon={ShieldAlert} label="Restricted users" value={securitySummary?.suspended_users ?? restrictedUsers.length} helper="Suspended, disabled, or pending review." tone="amber" />
+        <StatCard icon={Clock3} label="Pending appeals" value={securitySummary?.pending_appeals ?? pendingAppeals.length} helper="Requests needing admin decision." tone="soil" />
+      </section>
 
-                          <div className="flagged-review-block">
-                            <p className="flagged-review-mobile-label">{t('correctedResult')}</p>
-                            <p className="text-wrap-anywhere text-xs font-bold uppercase tracking-wide text-stone-400">
-                              {review.corrected_crop_label}
-                            </p>
-                            <p className="mt-1 text-wrap-anywhere font-semibold text-stone-900">{review.corrected_disease_name}</p>
-                            {review.user_note ? (
-                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">
-                                {t('note')}: {review.user_note}
-                              </p>
-                            ) : null}
-                            {review.verification_reason ? (
-                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">
-                                {t('verificationReason')}: {review.verification_reason}
-                              </p>
-                            ) : null}
-                          </div>
+      <section className="space-y-3">
+        <SearchFilterBar
+          search={search}
+          onSearchChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          searchPlaceholder="Search by name, email, role, or status"
+          filters={[
+            {
+              id: 'status',
+              label: 'Status',
+              value: statusFilter,
+              onChange: (value) => {
+                setStatusFilter(value);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All statuses' },
+                { value: 'active', label: 'Active' },
+                { value: 'suspended', label: 'Suspended' },
+                { value: 'disabled', label: 'Disabled' },
+                { value: 'pending_review', label: 'Pending Review' },
+              ],
+            },
+            {
+              id: 'role',
+              label: 'Role',
+              value: roleFilter,
+              onChange: (value) => {
+                setRoleFilter(value);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All roles' },
+                { value: 'admin', label: 'Admin' },
+                { value: 'farmer', label: 'Farmer' },
+              ],
+            },
+          ]}
+        />
+        <DataTable
+          columns={columns}
+          rows={filteredUsers}
+          getRowKey={(user) => user.id}
+          loading={loading}
+          page={page}
+          pageSize={10}
+          onPageChange={setPage}
+          emptyTitle="No users found"
+          emptyBody="Try a different search term or filter."
+        />
+      </section>
 
-                          <div className="flagged-review-actions">
-                            <span className={`status-pill ${reviewStatusClass(review.verification_status)}`}>
-                              {reviewStatusLabel(review.verification_status)}
-                            </span>
-                            {isPending ? (
-                              <div className="flagged-review-action-buttons">
-                                <button
-                                  className="btn-primary min-h-9 px-3 py-1.5 text-xs"
-                                  type="button"
-                                  onClick={() => decideFlaggedReview(review.id, 'accept')}
-                                  disabled={reviewDecision !== null}
-                                >
-                                  {reviewDecision === `accept-${review.id}` ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <CheckCircle2 className="h-4 w-4" />
-                                  )}
-                                  {t('acceptReview')}
-                                </button>
-                                <button
-                                  className="btn-secondary min-h-9 border-red-200 px-3 py-1.5 text-xs text-red-700 hover:border-red-300 hover:bg-red-50"
-                                  type="button"
-                                  onClick={() => decideFlaggedReview(review.id, 'reject')}
-                                  disabled={reviewDecision !== null}
-                                >
-                                  {reviewDecision === `reject-${review.id}` ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <XCircle className="h-4 w-4" />
-                                  )}
-                                  {t('rejectReview')}
-                                </button>
-                              </div>
-                            ) : null}
-                            {isDecided ? (
-                              <button
-                                className="btn-secondary min-h-9 w-full px-3 py-1.5 text-xs"
-                                type="button"
-                                onClick={() => decideFlaggedReview(review.id, 'undo')}
-                                disabled={reviewDecision !== null}
-                              >
-                                {reviewDecision === `undo-${review.id}` ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <RotateCcw className="h-4 w-4" />
-                                )}
-                                {t('undoDecision')}
-                              </button>
-                            ) : null}
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-col gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm font-semibold text-stone-600">
-                    {t('paginationSummary', { start: flaggedShowingStart, end: flaggedShowingEnd, total: flaggedReviews.length })}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-                      type="button"
-                      onClick={() => setFlaggedPage((current) => Math.max(1, current - 1))}
-                      disabled={flaggedPage <= 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      {t('previous')}
-                    </button>
-                    <span className="status-pill border border-stone-200 bg-white text-stone-700">
-                      {t('pageOf', { page: flaggedPage, total: flaggedPageCount })}
-                    </span>
-                    <button
-                      className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-                      type="button"
-                      onClick={() => setFlaggedPage((current) => Math.min(flaggedPageCount, current + 1))}
-                      disabled={flaggedPage >= flaggedPageCount}
-                    >
-                      {t('next')}
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </section>
-
-        </div>
-
-        <section className="space-y-5">
-          <div className="surface rounded-lg p-4 sm:p-5">
+      <section className="surface rounded-lg p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
             <h2 className="section-title flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-leaf-700" />
-              {t('farmApprovals')}
+              Suspension appeals
             </h2>
-            {farmActionError ? <div className="danger-message mt-4">{farmActionError}</div> : null}
-            {farms.length === 0 ? (
-              <div className="mt-4">
-                <EmptyState title={t('noFarmApprovals')} body={t('farmApprovalsBody')} />
-              </div>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {farms.map((farm) => {
-                  const isPending = farm.status === 'pending';
-                  const actionInProgress = approvingId !== null || rejectingId !== null || undoingFarmId !== null;
-
-                  return (
-                    <div key={farm.id} className="rounded-lg border border-stone-200 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="break-words font-semibold text-stone-900">{farm.name}</p>
-                          <p className="mt-1 text-xs font-semibold text-stone-600">
-                            {t('owner')}: {farm.owner_name || farm.owner_email || `User #${farm.user_id}`}
-                          </p>
-                          <p className="text-sm text-stone-500">{[farm.municipality, farm.province].filter(Boolean).join(', ') || '-'}</p>
-                        </div>
-                        <span className={`status-pill shrink-0 ${farmStatusClass(farm.status)}`}>
-                          {farmStatusLabel(farm.status)}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                        {isPending ? (
-                          <>
-                            <button
-                              className="btn-primary w-full sm:w-auto"
-                              onClick={() => approveFarm(farm.id)}
-                              disabled={actionInProgress}
-                              type="button"
-                            >
-                              {approvingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                              {t('approve')}
-                            </button>
-                            <button
-                              className="btn-secondary w-full border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 sm:w-auto"
-                              onClick={() => rejectFarm(farm.id)}
-                              disabled={actionInProgress}
-                              type="button"
-                            >
-                              {rejectingId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                              {t('rejectFarm')}
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            className="btn-secondary w-full sm:w-auto"
-                            onClick={() => undoFarmReview(farm.id)}
-                            disabled={actionInProgress}
-                            type="button"
-                          >
-                            {undoingFarmId === farm.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                            {t('undoDecision')}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <p className="mt-1 text-sm leading-6 text-stone-600">
+              Review farmer appeal requests and reactivate accounts only when the restriction is resolved.
+            </p>
           </div>
+          <StatusBadge status={pendingAppeals.length ? 'pending' : 'active'}>{pendingAppeals.length} pending</StatusBadge>
+        </div>
 
-        </section>
-      </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {pendingAppeals.map((appeal) => (
+            <article key={appeal.id} className="rounded-lg border border-stone-200 bg-white p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="break-words font-bold text-stone-950">{appeal.user_name || `User #${appeal.user_id}`}</p>
+                  <p className="break-all text-xs text-stone-500">{appeal.user_email || '-'}</p>
+                  <p className="mt-2 text-xs font-semibold text-stone-400">{formatDateTime(appeal.created_at)}</p>
+                </div>
+                <StatusBadge status="pending">Pending Review</StatusBadge>
+              </div>
+              <p className="mt-3 line-clamp-4 text-sm leading-6 text-stone-600">{appeal.explanation}</p>
+              {appeal.updated_information ? (
+                <p className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs leading-5 text-stone-600">
+                  {appeal.updated_information}
+                </p>
+              ) : null}
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button
+                  className="btn-primary w-full sm:w-auto"
+                  type="button"
+                  disabled={appealAction !== null}
+                  onClick={() => decideAppeal(appeal.id, 'approve')}
+                >
+                  {appealAction === `approve-${appeal.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Approve
+                </button>
+                <button
+                  className="btn-danger w-full sm:w-auto"
+                  type="button"
+                  disabled={appealAction !== null}
+                  onClick={() => decideAppeal(appeal.id, 'reject')}
+                >
+                  {appealAction === `reject-${appeal.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                  Reject
+                </button>
+              </div>
+            </article>
+          ))}
+          {!pendingAppeals.length && !loading ? (
+            <div className="lg:col-span-2">
+              <div className="empty-state">
+                <ShieldCheck className="mx-auto h-8 w-8 text-stone-400" />
+                <p className="mt-2 text-sm font-bold text-stone-950">No pending appeals</p>
+                <p className="mt-1 text-sm text-stone-500">Review requests from suspended farmers will appear here.</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <ConfirmModal
+        open={Boolean(actionUser)}
+        title={actionUser ? `Manage ${actionUser.full_name}` : 'Manage user'}
+        body="Status changes require a reason and description. Suspend, disable, reactivate, and role updates are attributable admin actions."
+        confirmLabel="Save changes"
+        cancelLabel="Cancel"
+        danger={actionForm.account_status !== 'active'}
+        loading={saving}
+        onCancel={() => setActionUser(null)}
+        onConfirm={submitUserAction}
+      >
+        <FormSection title="Account action" body={`Action timestamp: ${new Date().toLocaleString()}`}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-bold text-stone-700">
+              Role
+              <select
+                className="field mt-2"
+                value={actionForm.role}
+                onChange={(event) => setActionForm((current) => ({ ...current, role: event.target.value }))}
+              >
+                <option value="farmer">Farmer</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+            <label className="block text-sm font-bold text-stone-700">
+              Account status
+              <select
+                className="field mt-2"
+                value={actionForm.account_status}
+                onChange={(event) => setActionForm((current) => ({ ...current, account_status: event.target.value }))}
+                disabled={actionUser?.id === currentUser?.id}
+              >
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+                <option value="disabled">Disabled</option>
+                <option value="pending_review">Pending Review</option>
+              </select>
+            </label>
+          </div>
+          {actionUser?.id === currentUser?.id ? (
+            <div className="state-message mt-3">
+              You cannot restrict your own active admin session from this workflow.
+            </div>
+          ) : null}
+          <label className="mt-3 block text-sm font-bold text-stone-700">
+            Temporary suspension until
+            <input
+              className="field mt-2"
+              type="datetime-local"
+              value={actionForm.account_status_until}
+              onChange={(event) => setActionForm((current) => ({ ...current, account_status_until: event.target.value }))}
+              disabled={actionForm.account_status !== 'suspended'}
+            />
+          </label>
+          <label className="mt-3 block text-sm font-bold text-stone-700">
+            Reason
+            <input
+              className="field mt-2"
+              value={actionForm.reason}
+              onChange={(event) => setActionForm((current) => ({ ...current, reason: event.target.value }))}
+              placeholder="Suspicious login pattern, fake information, spam activity..."
+            />
+          </label>
+          <label className="mt-3 block text-sm font-bold text-stone-700">
+            Description
+            <textarea
+              className="field mt-2 min-h-28 resize-y"
+              value={actionForm.description}
+              onChange={(event) => setActionForm((current) => ({ ...current, description: event.target.value }))}
+              placeholder="Describe the evidence, audit trail, or reason for reactivation."
+            />
+          </label>
+          <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+            Admin accountability note: status changes are written to audit logs, and restricted farmers can submit an appeal from the suspension notice page.
+          </div>
+        </FormSection>
+      </ConfirmModal>
     </div>
   );
 }

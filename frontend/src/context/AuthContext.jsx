@@ -86,6 +86,11 @@ function hasActiveRememberedSession() {
   return Boolean(localStorage.getItem(REFRESH_KEY) && rememberUntil && rememberUntil > Date.now());
 }
 
+function restrictionDetail(error) {
+  const detail = error?.response?.data?.detail;
+  return detail && typeof detail === 'object' && detail.code === 'ACCOUNT_RESTRICTED' ? detail : null;
+}
+
 export function AuthProvider({ children }) {
   const [accessToken, setTokenState] = useState(() => localStorage.getItem(ACCESS_KEY));
   const [refreshToken, setRefreshTokenState] = useState(() => localStorage.getItem(REFRESH_KEY));
@@ -294,6 +299,21 @@ export function AuthProvider({ children }) {
       (response) => response,
       async (error) => {
         const original = error.config;
+        const restrictedAccount = restrictionDetail(error);
+        if (error.response?.status === 403 && restrictedAccount) {
+          const storedUser = loadJson(USER_KEY) || user || {};
+          const nextUser = {
+            ...storedUser,
+            account_status: restrictedAccount.account_status,
+            account_status_message: restrictedAccount.message,
+          };
+          localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+          setUser(nextUser);
+          if (typeof window !== 'undefined' && window.location.pathname !== '/account/suspended') {
+            window.location.replace('/account/suspended');
+          }
+          return Promise.reject(error);
+        }
         if (error.response?.status === 401 && refreshToken && !original?._retry && !original?.url?.includes('/auth/')) {
           original._retry = true;
           try {
@@ -318,7 +338,7 @@ export function AuthProvider({ children }) {
       api.interceptors.request.eject(requestId);
       api.interceptors.response.eject(responseId);
     };
-  }, [clearSession, refreshSession, refreshToken]);
+  }, [clearSession, refreshSession, refreshToken, user]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {

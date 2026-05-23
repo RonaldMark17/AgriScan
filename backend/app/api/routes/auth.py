@@ -20,7 +20,16 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
-from app.models import DeviceLoginHistory, LoginAttempt, MFASetting, PasswordResetOTP, RefreshToken, Role, User
+from app.models import (
+    DeviceLoginHistory,
+    LoginAttempt,
+    MFASetting,
+    PasswordResetOTP,
+    RefreshToken,
+    Role,
+    User,
+    UserAccountStatus,
+)
 from app.schemas.auth import (
     ForgotPasswordRequest,
     LoginRequest,
@@ -41,6 +50,12 @@ from app.schemas.auth import (
 )
 from app.schemas.common import MessageResponse
 from app.schemas.domain import UserRead
+from app.services.account_security import (
+    AUTO_SUSPEND_FAILED_LOGIN_THRESHOLD,
+    auto_suspend_after_failed_logins,
+    effective_account_status,
+    record_security_event,
+)
 from app.services.audit import write_audit_log
 from app.services.email import send_new_login_alert, send_password_reset_otp
 from app.services.mfa import (
@@ -67,6 +82,9 @@ def _user_payload(user: User) -> dict:
         "full_name": user.full_name,
         "phone": user.phone,
         "role": user.role.name,
+        "account_status": effective_account_status(user),
+        "account_status_until": user.account_status_until.isoformat() if user.account_status_until else None,
+        "is_active": user.is_active,
         "mfa_enabled": bool(user.mfa_setting and user.mfa_setting.enabled),
     }
 
@@ -196,7 +214,7 @@ async def _resolve_setup_user(
         select(User).options(selectinload(User.role), selectinload(User.mfa_setting)).where(User.id == int(decoded["sub"]))
     )
     user = result.scalar_one_or_none()
-    if user is None or not user.is_active:
+    if user is None or effective_account_status(user) == UserAccountStatus.disabled.value:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Inactive or missing user.")
     return user
 
@@ -235,6 +253,16 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     limiter_key = f"{payload.email.lower()}:{ip_address}"
     limit = login_limiter.check(limiter_key)
     if not limit.allowed:
+        await record_security_event(
+            db,
+            request,
+            event_type="rate_limited_login",
+            severity="high",
+            email=payload.email.lower(),
+            device_name=resolved_device_name,
+            metadata={"retry_after_seconds": limit.retry_after_seconds},
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many login attempts. Try again in {limit.retry_after_seconds} seconds.",
@@ -243,14 +271,28 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
         select(User).options(selectinload(User.role), selectinload(User.mfa_setting)).where(User.email == payload.email.lower())
     )
     user = result.scalar_one_or_none()
-    success = bool(user and user.is_active and verify_password(payload.password, user.hashed_password))
+    user_agent = request.headers.get("user-agent")
+    previous_devices: list[DeviceLoginHistory] = []
+    if user:
+        previous_device_result = await db.execute(
+            select(DeviceLoginHistory)
+            .where(DeviceLoginHistory.user_id == user.id, DeviceLoginHistory.success.is_(True))
+            .order_by(desc(DeviceLoginHistory.created_at))
+            .limit(10)
+        )
+        previous_devices = list(previous_device_result.scalars().all())
+    success = bool(
+        user
+        and effective_account_status(user) != UserAccountStatus.disabled.value
+        and verify_password(payload.password, user.hashed_password)
+    )
 
     db.add(LoginAttempt(email=payload.email.lower(), ip_address=ip_address, success=success))
     db.add(
         DeviceLoginHistory(
             user_id=user.id if user else None,
             ip_address=ip_address,
-            user_agent=request.headers.get("user-agent"),
+            user_agent=user_agent,
             device_name=resolved_device_name,
             success=success,
         )
@@ -260,6 +302,29 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
         login_limiter.record_failure(limiter_key)
         if user:
             user.failed_login_attempts += 1
+        failed_attempts = user.failed_login_attempts if user else 1
+        await record_security_event(
+            db,
+            request,
+            event_type="login_failed",
+            severity="high" if failed_attempts >= 5 else "medium" if failed_attempts >= 3 else "info",
+            user=user,
+            email=payload.email.lower(),
+            device_name=resolved_device_name,
+            metadata={"failed_login_attempts": failed_attempts},
+        )
+        if user and failed_attempts >= 3:
+            await record_security_event(
+                db,
+                request,
+                event_type="multiple_failed_logins",
+                severity="critical" if failed_attempts >= AUTO_SUSPEND_FAILED_LOGIN_THRESHOLD else "high",
+                user=user,
+                email=payload.email.lower(),
+                device_name=resolved_device_name,
+                metadata={"failed_login_attempts": failed_attempts},
+            )
+            await auto_suspend_after_failed_logins(db, request, user=user, device_name=resolved_device_name)
         await write_audit_log(db, request, "auth.login_failed", actor=user, resource_type="user", resource_id=user.id if user else None)
         await db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
@@ -268,6 +333,24 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     user.failed_login_attempts = 0
     user.last_login_at = datetime.now(UTC)
     await write_audit_log(db, request, "auth.password_verified", actor=user, resource_type="user", resource_id=user.id)
+    if previous_devices:
+        known_device = any(
+            (user_agent and device.user_agent == user_agent)
+            or (resolved_device_name and device.device_name == resolved_device_name)
+            or (ip_address and device.ip_address == ip_address)
+            for device in previous_devices
+        )
+        if not known_device:
+            await record_security_event(
+                db,
+                request,
+                event_type="new_device_login",
+                severity="medium",
+                user=user,
+                email=user.email,
+                device_name=resolved_device_name,
+                metadata={"known_device_count": len(previous_devices)},
+            )
 
     mfa_enabled = bool(user.mfa_setting and user.mfa_setting.enabled)
     role_requires_mfa = user.role.requires_mfa or (settings.require_admin_mfa and user.role.name == "admin")
@@ -354,7 +437,7 @@ async def refresh_token(payload: RefreshRequest, request: Request, response: Res
         select(User).options(selectinload(User.role), selectinload(User.mfa_setting)).where(User.id == int(decoded["sub"]))
     )
     user = user_result.scalar_one_or_none()
-    if user is None or not user.is_active:
+    if user is None or effective_account_status(user) == UserAccountStatus.disabled.value:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Inactive or missing user.")
 
     stored.revoked_at = datetime.now(UTC)

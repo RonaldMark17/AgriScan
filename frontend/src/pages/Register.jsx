@@ -106,49 +106,80 @@ export default function Register() {
             {message && <div className="success-message">{message}</div>}
             {error && <div className="danger-message">{error}</div>}
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <label className="block sm:col-span-2">
-                <span className="text-sm font-semibold text-stone-700">{t('fullName')}</span>
-                <input className="field mt-2" required value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-stone-700">{t('email')}</span>
-                <input className="field mt-2" type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-stone-700">{t('phone')}</span>
-                <input className="field mt-2" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-stone-700">{t('password')}</span>
-                <input
-                  className="field mt-2"
-                  type="password"
-                  required
-                  value={form.password}
-                  onChange={(event) => setForm({ ...form, password: event.target.value })}
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-stone-700">{t('confirmPassword')}</span>
-                <input
-                  className="field mt-2"
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                />
-              </label>
+            <div className="mt-5 space-y-4">
+              <section className="rounded-lg border border-stone-200 bg-white p-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Personal information</p>
+                  <p className="mt-1 text-sm leading-6 text-stone-600">Use the legal name and contact details tied to the farm account.</p>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block sm:col-span-2">
+                    <span className="text-sm font-semibold text-stone-700">{t('fullName')}</span>
+                    <input className="field mt-2" required value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-stone-700">{t('email')}</span>
+                    <input className="field mt-2" type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-stone-700">{t('phone')}</span>
+                    <input className="field mt-2" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+                  </label>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-leaf-100 bg-leaf-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Farmer details</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-leaf-100 bg-white p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('role')}</p>
+                    <p className="mt-1 text-sm font-bold text-stone-950">{t('farmer')}</p>
+                  </div>
+                  <div className="rounded-lg border border-leaf-100 bg-white p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Farm profile</p>
+                    <p className="mt-1 text-sm font-semibold text-stone-700">Register farm boundaries after sign in.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-stone-200 bg-white p-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Account credentials</p>
+                  <p className="mt-1 text-sm leading-6 text-stone-600">{t('strongPasswordRequired')}</p>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-sm font-semibold text-stone-700">{t('password')}</span>
+                    <input
+                      className="field mt-2"
+                      type="password"
+                      required
+                      value={form.password}
+                      onChange={(event) => setForm({ ...form, password: event.target.value })}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-stone-700">{t('confirmPassword')}</span>
+                    <input
+                      className="field mt-2"
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                    />
+                  </label>
+                </div>
+              </section>
             </div>
 
-            <section className="mt-5 rounded-xl border border-stone-200 bg-stone-50 p-4">
+            <section className="mt-5 rounded-lg border border-stone-200 bg-stone-50 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">{t('termsAndConditions')}</h2>
                   <p className="mt-2 text-sm leading-6 text-stone-600">{t('termsSummary')}</p>
                 </div>
                 <button
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-leaf-700 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300"
+                  className="btn-secondary h-10 shrink-0 px-4 text-sm"
                   type="button"
                   onClick={() => setIsTermsModalOpen(true)}
                 >
@@ -216,7 +247,7 @@ function TermsModal({ isOpen, onAccept, onClose, t }) {
     <div className="crop-guide-overlay fixed inset-0 z-[140] overflow-hidden overscroll-none bg-stone-950/78 px-3 py-4 backdrop-blur-sm sm:px-6 sm:py-8" onClick={onClose}>
       <div className="flex h-full items-center justify-center">
         <div
-          className="crop-guide-dialog surface flex max-h-[85vh] w-[92vw] max-w-[680px] flex-col overflow-hidden rounded-[1.5rem] border border-white/80 bg-white ring-1 ring-stone-950/5 sm:max-h-[82vh] sm:w-[94vw]"
+          className="crop-guide-dialog surface flex max-h-[85vh] w-[92vw] max-w-[680px] flex-col overflow-hidden rounded-lg border border-white/80 bg-white ring-1 ring-stone-950/5 sm:max-h-[82vh] sm:w-[94vw]"
           onClick={(event) => event.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -234,7 +265,7 @@ function TermsModal({ isOpen, onAccept, onClose, t }) {
               </p>
             </div>
             <button
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-leaf-50 text-leaf-800 transition hover:border-leaf-200 hover:bg-white hover:text-leaf-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300 active:scale-[0.98]"
+              className="btn-icon h-12 w-12 bg-leaf-50 text-leaf-800 hover:border-leaf-200 hover:bg-white hover:text-leaf-900"
               type="button"
               onClick={onClose}
               aria-label={t('closeTermsModal')}
@@ -244,7 +275,7 @@ function TermsModal({ isOpen, onAccept, onClose, t }) {
           </div>
 
           <div className="crop-guide-body min-h-0 flex-1 overflow-y-auto overscroll-contain bg-gradient-to-b from-stone-50 via-stone-50/70 to-white px-4 py-4 sm:px-6 sm:py-6">
-            <section className="rounded-[1.35rem] border border-leaf-200 bg-gradient-to-br from-leaf-50 via-white to-[#ecfdf3] p-5 sm:p-6">
+            <section className="rounded-lg border border-leaf-200 bg-gradient-to-br from-leaf-50 via-white to-[#ecfdf3] p-5 sm:p-6">
               <ul className="list-disc space-y-3 pl-5 text-sm leading-7 text-stone-700 sm:text-[15px]">
                 <li>{t('termsPointAccurateInfo')}</li>
                 <li>{t('termsPointResponsibleUse')}</li>

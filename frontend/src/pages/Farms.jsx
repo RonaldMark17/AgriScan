@@ -1,4 +1,4 @@
-import { Crosshair, Loader2, MapPinned, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Crosshair, Loader2, MapPinned, Pencil, Plus, RotateCcw, Trash2, X, XCircle } from 'lucide-react';
 import * as L from 'leaflet';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client.js';
@@ -55,6 +55,18 @@ function formatFarmLocation(farm, t) {
 
 function formatFarmOwner(farm) {
   return farm.owner_name || farm.owner_email || (farm.user_id ? `User #${farm.user_id}` : '-');
+}
+
+function farmStatusClass(status) {
+  if (status === 'approved') return 'bg-leaf-50 text-leaf-800';
+  if (status === 'rejected') return 'bg-red-50 text-red-700';
+  return 'bg-amber-50 text-amber-800';
+}
+
+function farmStatusLabel(status) {
+  if (status === 'approved') return 'Approved';
+  if (status === 'rejected') return 'Rejected';
+  return 'Pending';
 }
 
 function escapeHtml(value = '') {
@@ -196,6 +208,8 @@ export default function Farms() {
   const [editingFarmId, setEditingFarmId] = useState(null);
   const [savingFarm, setSavingFarm] = useState(false);
   const [deletingFarmId, setDeletingFarmId] = useState(null);
+  const [farmReviewAction, setFarmReviewAction] = useState(null);
+  const [farmReviewError, setFarmReviewError] = useState('');
   const [error, setError] = useState('');
   const [gpsLocating, setGpsLocating] = useState(false);
   const [mapState, setMapState] = useState({
@@ -537,6 +551,23 @@ export default function Farms() {
     }
   }
 
+  async function reviewFarm(farm, action) {
+    setFarmReviewAction(`${action}-${farm.id}`);
+    setFarmReviewError('');
+    try {
+      const endpoint = action === 'approve' ? 'approve' : action === 'reject' ? 'reject' : 'undo-review';
+      await api.patch(`/farms/${farm.id}/${endpoint}`);
+      await loadFarms(farm.id);
+    } catch (requestError) {
+      setFarmReviewError(getDetailedApiErrorMessage(requestError, t('farmActionFailed'), {
+        title: 'Farm review could not be saved.',
+        action: 'Confirm this farm still exists and retry with an administrator account.',
+      }));
+    } finally {
+      setFarmReviewAction(null);
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     setError('');
@@ -584,10 +615,91 @@ export default function Farms() {
         body={t('farmRegistryBody')}
       />
       {isFarmRegistrationRequired ? (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-900 shadow-[0_10px_24px_rgba(245,158,11,0.08)]">
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 text-amber-900 shadow-[0_10px_24px_rgba(245,158,11,0.08)]">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-amber-700">{t('firstFarmRequiredTitle')}</p>
           <p className="mt-2 text-sm leading-6 text-amber-900">{t('firstFarmRequiredBody')}</p>
         </div>
+      ) : null}
+      {isAdmin ? (
+        <section className="surface rounded-lg p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="section-title flex items-center gap-2">
+                <MapPinned className="h-5 w-5 text-leaf-700" />
+                Farmer farm reviews
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-stone-600">
+                Approve, reject, or reopen farmer farm registrations from the Farmers page.
+              </p>
+            </div>
+            <span className="status-pill bg-amber-50 text-amber-800">
+              {farms.filter((farm) => farm.status === 'pending').length} pending
+            </span>
+          </div>
+          {farmReviewError ? <div className="danger-message mt-4">{farmReviewError}</div> : null}
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {farms.slice(0, 6).map((farm) => {
+              const isPending = farm.status === 'pending';
+              return (
+                <article key={farm.id} className="rounded-lg border border-stone-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="break-words font-bold text-stone-950">{farm.name}</p>
+                      <p className="mt-1 text-sm text-stone-500">{formatFarmLocation(farm, t)}</p>
+                      <p className="mt-1 break-words text-xs font-semibold text-stone-600">
+                        {t('owner')}: {formatFarmOwner(farm)}
+                      </p>
+                    </div>
+                    <span className={`status-pill shrink-0 ${farmStatusClass(farm.status)}`}>
+                      {farmStatusLabel(farm.status)}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    {isPending ? (
+                      <>
+                        <button
+                          className="btn-primary w-full sm:w-auto"
+                          type="button"
+                          disabled={farmReviewAction !== null}
+                          onClick={() => reviewFarm(farm, 'approve')}
+                        >
+                          {farmReviewAction === `approve-${farm.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                          {t('approve')}
+                        </button>
+                        <button
+                          className="btn-danger w-full sm:w-auto"
+                          type="button"
+                          disabled={farmReviewAction !== null}
+                          onClick={() => reviewFarm(farm, 'reject')}
+                        >
+                          {farmReviewAction === `reject-${farm.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                          {t('rejectFarm')}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="btn-secondary w-full sm:w-auto"
+                        type="button"
+                        disabled={farmReviewAction !== null}
+                        onClick={() => reviewFarm(farm, 'undo')}
+                      >
+                        {farmReviewAction === `undo-${farm.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                        {t('undoDecision')}
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+            {farms.length === 0 ? (
+              <div className="empty-state lg:col-span-2">
+                <MapPinned className="mx-auto h-8 w-8 text-stone-400" />
+                <p className="mt-2 text-sm font-bold text-stone-950">{t('noFarmApprovals')}</p>
+                <p className="mt-1 text-sm text-stone-500">{t('farmApprovalsBody')}</p>
+              </div>
+            ) : null}
+          </div>
+        </section>
       ) : null}
       <div className="split-layout">
         <form className="manual-scan-form surface flex flex-col overflow-hidden rounded-lg xl:sticky sticky-panel xl:self-start" onSubmit={submit}>
@@ -793,7 +905,7 @@ export default function Farms() {
                         </button>
                         <button
                           type="button"
-                          className="btn-secondary min-h-9 flex-1 border-red-200 px-3 py-1.5 text-xs text-red-700 hover:border-red-300 hover:bg-red-50"
+                          className="btn-danger min-h-9 flex-1 px-3 py-1.5 text-xs"
                           disabled={deletingFarmId !== null}
                           onClick={(event) => {
                             event.stopPropagation();

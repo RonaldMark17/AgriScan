@@ -1,10 +1,9 @@
-import { Bell, CheckCheck, Leaf, Loader2, LogOut, Mic, Settings, UserRound, X } from 'lucide-react';
+import { Bell, CheckCheck, Leaf, Loader2, LogOut, Settings, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useI18n } from '../../context/I18nContext.jsx';
-import { useVoice } from '../../context/VoiceContext.jsx';
 import { notifyUnreadNotifications } from '../../utils/browserNotifications.js';
 import { connectRealtimeAlertStream } from '../../utils/realtimeAlerts.js';
 import LanguageToggle from '../shared/LanguageToggle.jsx';
@@ -33,14 +32,15 @@ function notificationTarget(notification) {
     case 'farm_pending':
     case 'farm_updated':
     case 'farm_deleted':
+      return '/farms';
     case 'flagged_crop':
-      return '/admin/users';
+      return '/crop-management';
     case 'farm_approved':
     case 'farm_rejected':
     case 'farm_review_undone':
       return '/farms';
     default:
-      return '/reports';
+      return '/notifications';
   }
 }
 
@@ -55,32 +55,26 @@ function dispatchNotificationEvents(notifications) {
   });
 }
 
-function voiceGuideKey(pathname) {
-  if (pathname === '/') return 'voiceGuideDashboard';
-  if (pathname.startsWith('/farms')) return 'voiceGuideFarms';
-  if (pathname.startsWith('/scan')) return 'voiceGuideManualScan';
-  if (pathname.startsWith('/disease-detector')) return 'voiceGuideDiseaseDetector';
-  if (pathname.startsWith('/reports')) return 'voiceGuideReports';
-  if (pathname.startsWith('/settings')) return 'voiceGuideSettings';
-  if (pathname.startsWith('/admin')) return 'voiceGuideAdmin';
-  return 'voiceGuideDefault';
-}
-
-function pageTitleKey(pathname) {
-  if (pathname === '/') return 'dashboard';
-  if (pathname.startsWith('/farms')) return 'farms';
-  if (pathname.startsWith('/scan')) return 'manualScan';
-  if (pathname.startsWith('/disease-detector')) return 'diseaseDetector';
-  if (pathname.startsWith('/reports')) return 'reports';
-  if (pathname.startsWith('/settings')) return 'security';
-  if (pathname.startsWith('/admin')) return 'users';
-  return 'dashboard';
+function pageMeta(pathname) {
+  if (pathname === '/') return { title: 'Dashboard', breadcrumb: 'Workspace / Dashboard' };
+  if (pathname.startsWith('/farms')) return { title: 'Farmers', breadcrumb: 'Workspace / Farmers' };
+  if (pathname.startsWith('/crop-management')) return { title: 'Crop Management', breadcrumb: 'Workspace / Crop Management' };
+  if (pathname.startsWith('/scan')) return { title: 'Manual Scan', breadcrumb: 'Crop Management / Manual Scan' };
+  if (pathname.startsWith('/disease-detector')) return { title: 'Disease Detector', breadcrumb: 'Crop Management / Disease Detector' };
+  if (pathname.startsWith('/reports')) return { title: 'Reports', breadcrumb: 'Workspace / Reports' };
+  if (pathname.startsWith('/notifications')) return { title: 'Notifications', breadcrumb: 'Workspace / Notifications' };
+  if (pathname.startsWith('/audit-logs')) return { title: 'Audit Logs', breadcrumb: 'Admin / Security Monitoring' };
+  if (pathname.startsWith('/analytics')) return { title: 'Analytics', breadcrumb: 'Admin / Analytics' };
+  if (pathname.startsWith('/settings')) return { title: 'Settings', breadcrumb: 'Workspace / Settings' };
+  if (pathname.startsWith('/profile')) return { title: 'Profile', breadcrumb: 'Workspace / Profile' };
+  if (pathname.startsWith('/admin/users')) return { title: 'User Management', breadcrumb: 'Admin / User Management' };
+  if (pathname.startsWith('/admin')) return { title: 'Administration', breadcrumb: 'Admin' };
+  return { title: 'Dashboard', breadcrumb: 'Workspace / Dashboard' };
 }
 
 export default function Topbar() {
   const { accessToken, logout, user } = useAuth();
   const { t } = useI18n();
-  const { speak, speechSupported, voiceAssistantEnabled } = useVoice();
   const location = useLocation();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
@@ -97,6 +91,7 @@ export default function Topbar() {
   const notificationsInitializedRef = useRef(false);
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
   const userDisplayName = user?.full_name || user?.email || 'AgriScan User';
+  const currentPage = useMemo(() => pageMeta(location.pathname), [location.pathname]);
   const unreadCount = useMemo(() => notifications.filter((item) => !item.is_read).length, [notifications]);
   const notificationSummary = useMemo(() => {
     if (unreadCount > 0) return t('unreadNotifications', { count: unreadCount });
@@ -261,21 +256,21 @@ export default function Topbar() {
 
   return (
     <>
-      <header className="topbar fixed inset-x-0 top-0 z-[70] border-b border-stone-200/90 bg-white">
+      <header className="topbar fixed inset-x-0 top-0 z-[70] border-b border-stone-200/90 bg-white/95 backdrop-blur">
         <div className="topbar-shell">
           <Link
             to="/"
             className="topbar-brand flex h-full min-w-0 flex-1 items-center gap-2 border-0 px-3 sm:gap-3 sm:px-5 lg:flex-none lg:px-5"
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-700 text-white">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-700 text-white ring-1 ring-leaf-600/20">
               <Leaf className="h-5 w-5 sm:h-6 sm:w-6" />
             </span>
-            <span className="truncate text-lg font-bold text-leaf-700 sm:text-xl">AgriScan</span>
+            <span className="truncate text-lg font-bold text-leaf-800 sm:text-xl">AgriScan</span>
           </Link>
 
           <div className="hidden min-w-0 flex-col justify-center px-3 sm:px-5 lg:flex lg:min-w-0 lg:px-5 xl:px-7">
-            <p className="hidden truncate text-base font-bold text-stone-950 lg:block">{t(pageTitleKey(location.pathname))}</p>
-            <p className="truncate text-sm font-semibold text-stone-600 sm:text-xs md:text-stone-500">{user?.full_name || user?.email || 'AgriScan User'}</p>
+            <p className="hidden truncate text-base font-bold text-stone-950 lg:block">{currentPage.title}</p>
+            <p className="truncate text-sm font-semibold text-stone-600 sm:text-xs md:text-stone-500">{currentPage.breadcrumb}</p>
           </div>
 
           <div className="topbar-actions flex shrink-0 items-center justify-end gap-1.5 border-0 px-3 sm:gap-2 sm:px-4 md:px-5 lg:min-w-0 lg:px-5 xl:px-7">
@@ -283,23 +278,18 @@ export default function Topbar() {
               <LanguageToggle />
             </div>
             <Link
-              to="/settings/security"
-              className="focus-ring hidden h-9 w-9 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-800 md:grid lg:h-10 lg:w-10"
-              onClick={(event) => {
-                if (!voiceAssistantEnabled || !speechSupported) return;
-                event.preventDefault();
-                speak(t(voiceGuideKey(location.pathname)), { kind: 'assistant' });
-              }}
-              title={voiceAssistantEnabled ? t('voiceActive') : t('voiceInactive')}
-              aria-label={voiceAssistantEnabled ? t('voiceActive') : t('voiceInactive')}
+              to="/settings"
+              className="focus-ring hidden h-10 w-10 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-800 md:grid"
+              title={t('settings')}
+              aria-label={t('settings')}
             >
-              <Mic className="h-4 w-4" />
+              <Settings className="h-4 w-4" />
             </Link>
             <div className="topbar-presence-cluster flex items-center gap-1 md:gap-1.5">
             <div className="relative" ref={notificationsRef}>
               <button
                 type="button"
-                className="topbar-icon-button focus-ring relative grid h-10 w-10 place-items-center rounded-xl border border-transparent bg-white text-stone-700 transition hover:border-stone-200 hover:bg-stone-50"
+                className="topbar-icon-button focus-ring relative grid h-10 w-10 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-800"
                 aria-label={t('notifications')}
                 aria-expanded={notificationsOpen}
                 onClick={() => {
@@ -333,11 +323,11 @@ export default function Topbar() {
                       </button>
                     ) : null}
                     <Link
-                      to="/reports"
+                      to="/notifications"
                       className="text-xs font-bold text-leaf-700"
                       onClick={() => setNotificationsOpen(false)}
                     >
-                      {t('reports')}
+                      View all
                     </Link>
                   </div>
                 </div>
@@ -390,7 +380,7 @@ export default function Topbar() {
           <div className="relative" ref={profileRef}>
             <button
               type="button"
-              className="topbar-avatar-button focus-ring relative grid h-10 w-10 place-items-center rounded-full bg-stone-100 text-stone-500 transition hover:bg-stone-200 md:h-10 md:w-10 lg:h-11 lg:w-11"
+              className="topbar-avatar-button focus-ring relative grid h-10 w-10 place-items-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-800 md:h-10 md:w-10 lg:h-11 lg:w-11"
               aria-label={t('settings')}
               aria-expanded={profileOpen}
               onClick={() => {
@@ -414,7 +404,15 @@ export default function Topbar() {
 
                 <div className="mt-2 space-y-1">
                   <Link
-                    to="/settings/security"
+                    to="/profile"
+                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
+                    onClick={() => setProfileOpen(false)}
+                  >
+                    <UserRound className="h-4 w-4" />
+                    Profile
+                  </Link>
+                  <Link
+                    to="/settings"
                     className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
                     onClick={() => setProfileOpen(false)}
                   >
@@ -436,13 +434,22 @@ export default function Topbar() {
               </div>
             ) : null}
           </div>
+          <button
+            type="button"
+            className="topbar-icon-button focus-ring hidden h-10 w-10 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 xl:grid"
+            aria-label={t('logout')}
+            title={t('logout')}
+            onClick={() => setConfirmLogoutOpen(true)}
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
           </div>
         </div>
         </div>
       </header>
       {confirmLogoutOpen ? (
         <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-y-auto bg-stone-950/45 p-4 sm:items-center">
-          <div className="surface w-full max-w-md flex-none rounded-lg bg-white p-6">
+          <div className="surface modal-panel w-full max-w-md flex-none rounded-lg bg-white p-6">
             <h2 className="text-xl font-bold text-stone-950">{t('logoutConfirmTitle')}</h2>
             <p className="mt-3 text-sm leading-6 text-stone-600">{t('logoutConfirmBody')}</p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -454,7 +461,7 @@ export default function Topbar() {
               >
                 {t('cancel')}
               </button>
-              <button type="button" className="btn-primary bg-red-600 hover:bg-red-700" onClick={handleLogout} disabled={loggingOut}>
+              <button type="button" className="btn-danger" onClick={handleLogout} disabled={loggingOut}>
                 {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
                 {loggingOut ? t('loading') : t('confirmLogout')}
               </button>
@@ -463,7 +470,7 @@ export default function Topbar() {
         </div>
       ) : null}
       {notificationToast ? (
-        <div className="fixed right-3 top-20 z-[90] w-[min(92vw,360px)] rounded-lg border border-stone-200 bg-white p-4 shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
+        <div className="surface fixed right-3 top-20 z-[90] w-[min(92vw,360px)] rounded-lg border border-stone-200 bg-white p-4">
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700">
               <Bell className="h-5 w-5" />
