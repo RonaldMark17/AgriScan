@@ -17,9 +17,10 @@ from app.services.realtime_alerts import realtime_alert_hub
 
 try:
     import firebase_admin
-    from firebase_admin import credentials, messaging
+    from firebase_admin import auth, credentials, messaging
 except ImportError:  # pragma: no cover - Firebase is configured only in push-enabled deployments.
     firebase_admin = None
+    auth = None
     credentials = None
     messaging = None
 
@@ -75,7 +76,7 @@ def firebase_push_configuration() -> FirebasePushConfiguration:
     client_config = _firebase_client_config()
     missing: list[str] = []
 
-    if firebase_admin is None or credentials is None or messaging is None:
+    if firebase_admin is None or auth is None or credentials is None or messaging is None:
         missing.append("firebase-admin")
 
     for env_name, config_key in {
@@ -113,6 +114,13 @@ def firebase_push_configuration() -> FirebasePushConfiguration:
 
 def firebase_push_enabled() -> bool:
     return firebase_push_configuration().enabled
+
+
+def verify_firebase_id_token(id_token: str) -> dict[str, Any]:
+    app = _firebase_app()
+    if app is None or auth is None:
+        raise ValueError("Firebase Admin is not configured.")
+    return auth.verify_id_token(id_token, app=app)
 
 
 @lru_cache

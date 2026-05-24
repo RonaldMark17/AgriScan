@@ -42,6 +42,7 @@ from app.schemas.auth import (
     MFASetupVerifyRequest,
     MFASetupVerifyResponse,
     PasswordResetRequest,
+    PhonePasswordResetRequest,
     RecoveryCodesResponse,
     RecoveryCodesRotateRequest,
     RefreshRequest,
@@ -59,6 +60,7 @@ from app.services.account_security import (
 )
 from app.services.audit import write_audit_log
 from app.services.email import send_new_login_alert, send_password_reset_otp
+from app.services.push_notifications import verify_firebase_id_token
 from app.services.mfa import (
     build_otpauth_url,
     create_totp_secret,
@@ -635,6 +637,43 @@ async def reset_password(payload: PasswordResetRequest, request: Request, db: As
     for token in token_result.scalars().all():
         token.revoked_at = datetime.now(UTC)
     await write_audit_log(db, request, "auth.password_reset_completed", actor=user, resource_type="user", resource_id=user.id)
+    await db.commit()
+    return MessageResponse(message="Password has been reset. Please log in again.")
+
+
+@router.post("/reset-password/phone", response_model=MessageResponse)
+async def reset_password_with_phone(
+    payload: PhonePasswordResetRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    try:
+        decoded_token = verify_firebase_id_token(payload.id_token)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired phone verification code.") from exc
+
+    verified_phone = normalize_phone_number(str(decoded_token.get("phone_number") or ""))
+    if not phone_number_is_valid(verified_phone):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired phone verification code.")
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.role))
+        .where(User.phone == verified_phone)
+        .order_by(User.id.asc())
+        .limit(1)
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired phone verification code.")
+
+    user.phone_verified = True
+    user.phone_verified_at = datetime.now(UTC)
+    user.hashed_password = get_password_hash(payload.new_password)
+    token_result = await db.execute(select(RefreshToken).where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)))
+    for token in token_result.scalars().all():
+        token.revoked_at = datetime.now(UTC)
+    await write_audit_log(db, request, "auth.password_reset_completed_phone", actor=user, resource_type="user", resource_id=user.id)
     await db.commit()
     return MessageResponse(message="Password has been reset. Please log in again.")
 

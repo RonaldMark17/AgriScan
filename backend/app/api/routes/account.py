@@ -22,6 +22,7 @@ from app.services.account_security import (
 )
 from app.services.audit import write_audit_log
 from app.services.push_notifications import create_notification
+from app.services.push_notifications import verify_firebase_id_token
 from app.services.sms import (
     normalize_phone_number,
     phone_number_is_valid,
@@ -41,6 +42,10 @@ class PhoneUpdateRequest(BaseModel):
 
 class PhoneVerifyRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6)
+
+
+class FirebasePhoneVerifyRequest(BaseModel):
+    id_token: str = Field(min_length=20)
 
 
 class PhoneVerificationSendResponse(BaseModel):
@@ -224,6 +229,37 @@ async def verify_phone_number(
     current_user.sms_alerts_enabled = True
     _clear_phone_verification_challenge(current_user)
     await write_audit_log(db, request, "account.phone_verified", actor=current_user, resource_type="user", resource_id=current_user.id)
+    await db.commit()
+    await db.refresh(current_user, ["role"])
+    return current_user
+
+
+@router.post("/phone/verify-firebase", response_model=UserRead)
+async def verify_phone_number_with_firebase(
+    payload: FirebasePhoneVerifyRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    normalized_phone = normalize_phone_number(current_user.phone)
+    if not phone_number_is_valid(normalized_phone):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add a valid phone number such as +639171234567 before verifying with Firebase.")
+
+    try:
+        decoded_token = verify_firebase_id_token(payload.id_token)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Firebase phone verification could not be confirmed.") from exc
+
+    firebase_phone = normalize_phone_number(str(decoded_token.get("phone_number") or ""))
+    if firebase_phone != normalized_phone:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Firebase verified a different phone number.")
+
+    current_user.phone = normalized_phone
+    current_user.phone_verified = True
+    current_user.phone_verified_at = datetime.now(UTC)
+    current_user.sms_alerts_enabled = False
+    _clear_phone_verification_challenge(current_user)
+    await write_audit_log(db, request, "account.phone_verified_firebase", actor=current_user, resource_type="user", resource_id=current_user.id)
     await db.commit()
     await db.refresh(current_user, ["role"])
     return current_user

@@ -9,6 +9,12 @@ import { useI18n } from '../context/I18nContext.jsx';
 import { useVoice } from '../context/VoiceContext.jsx';
 import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
 import {
+  confirmFirebasePhoneVerificationCode,
+  firebasePhoneAuthTroubleshootingAction,
+  firebasePhoneRecaptchaContainerId,
+  sendFirebasePhoneVerificationCode,
+} from '../utils/firebasePhoneAuth.js';
+import {
   ensureWebPushNotificationsEnabled,
   getWebPushSubscriptionState,
   rememberNotificationIds,
@@ -39,6 +45,7 @@ export default function SecuritySettings() {
   const [syncStatus, setSyncStatus] = useState(() => localStorage.getItem('agriscan_last_sync') || t('notSyncedYet'));
   const [settingsStatus, setSettingsStatus] = useState('');
   const [pushLoading, setPushLoading] = useState(false);
+  const [pushTestLoading, setPushTestLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [toggles, setToggles] = useState(() => ({
     autoSync: localStorage.getItem('agriscan_auto_sync') !== 'false',
@@ -208,6 +215,22 @@ export default function SecuritySettings() {
     }
   }
 
+  async function sendTestNotification() {
+    setPushTestLoading(true);
+    try {
+      const { data } = await api.post('/notifications/test');
+      setPushStatus(data.message || t('testNotificationSent'));
+      setPushEnabled(true);
+    } catch (error) {
+      setPushStatus(getDetailedApiErrorMessage(error, t('testNotificationFailed'), {
+        title: 'Firebase push test could not be sent.',
+        action: 'Enable Firebase push on this device, confirm the Firebase service account and VAPID key are configured, then try again.',
+      }));
+    } finally {
+      setPushTestLoading(false);
+    }
+  }
+
   async function savePhoneNumber() {
     setSmsLoading('phone');
     setSmsMessage('');
@@ -233,6 +256,13 @@ export default function SecuritySettings() {
     setSmsLoading('send-code');
     setSmsMessage('');
     try {
+      if (smsStatus?.provider === 'firebase') {
+        await sendFirebasePhoneVerificationCode(smsStatus?.phone || user?.phone);
+        setSmsMessageType('success');
+        setSmsMessage(t('firebaseSmsCodeSent'));
+        return;
+      }
+
       const { data } = await api.post('/account/phone/send-code');
       await loadSmsStatus();
       setSmsMessageType('success');
@@ -241,7 +271,9 @@ export default function SecuritySettings() {
       setSmsMessageType('danger');
       setSmsMessage(getDetailedApiErrorMessage(error, t('smsCodeSendFailed'), {
         title: 'SMS code could not be sent.',
-        action: 'Check the phone number, SMS configuration, and provider quota, then try again.',
+        action: smsStatus?.provider === 'firebase'
+          ? firebasePhoneAuthTroubleshootingAction(error)
+          : 'For live SMS, set SMS_API_KEY or TEXTBELT_API_KEY to a paid Textbelt key, restart the backend, then try again.',
       }));
     } finally {
       setSmsLoading('');
@@ -252,6 +284,17 @@ export default function SecuritySettings() {
     setSmsLoading('verify');
     setSmsMessage('');
     try {
+      if (smsStatus?.provider === 'firebase') {
+        const idToken = await confirmFirebasePhoneVerificationCode(smsCode);
+        await api.post('/account/phone/verify-firebase', { id_token: idToken });
+        await refreshUser();
+        await loadSmsStatus();
+        setSmsCode('');
+        setSmsMessageType('success');
+        setSmsMessage(t('phoneVerifiedWithFirebase'));
+        return;
+      }
+
       await api.post('/account/phone/verify', { code: smsCode });
       await refreshUser();
       await loadSmsStatus();
@@ -270,6 +313,11 @@ export default function SecuritySettings() {
   }
 
   async function toggleSmsAlerts() {
+    if (smsStatus?.available === false) {
+      setSmsMessageType('danger');
+      setSmsMessage(t('smsUnavailableUseFirebase'));
+      return;
+    }
     const nextEnabled = !smsStatus?.sms_alerts_enabled;
     setSmsLoading('toggle');
     setSmsMessage('');
@@ -301,7 +349,7 @@ export default function SecuritySettings() {
       setSmsMessageType('danger');
       setSmsMessage(getDetailedApiErrorMessage(error, t('testSmsFailed'), {
         title: 'Test SMS could not be sent.',
-        action: 'Check phone verification, SMS provider test mode, and Textbelt quota.',
+        action: 'For live SMS, set SMS_API_KEY or TEXTBELT_API_KEY to a paid Textbelt key, restart the backend, then try again.',
       }));
     } finally {
       setSmsLoading('');
@@ -310,11 +358,13 @@ export default function SecuritySettings() {
 
   const mfaStatusLabel = mfaEnabled ? t('enabled') : mfaRequired ? t('required') : t('optional');
   const pushStatusLabel = pushEnabled ? t('enabled') : pushChecking ? t('checking') : t('notEnabled');
+  const smsAvailable = smsStatus?.available !== false;
+  const firebasePhoneProvider = smsStatus?.provider === 'firebase';
   const hasSmsPhone = Boolean(smsStatus?.phone || user?.phone);
   const smsVerified = Boolean(smsStatus?.phone_verified || user?.phone_verified);
-  const smsEnabled = Boolean(smsStatus?.sms_alerts_enabled || user?.sms_alerts_enabled);
-  const smsStatusLabel = !hasSmsPhone ? t('notEnabled') : smsVerified ? (smsEnabled ? t('enabled') : t('verified')) : t('unverified');
-  const smsStatusBody = !hasSmsPhone ? t('smsNoPhoneBody') : smsVerified ? t('smsReadyBody') : t('smsVerifyBody');
+  const smsEnabled = smsAvailable && !firebasePhoneProvider && Boolean(smsStatus?.sms_alerts_enabled || user?.sms_alerts_enabled);
+  const smsStatusLabel = !smsAvailable ? t('notEnabled') : !hasSmsPhone ? t('notEnabled') : smsVerified ? (smsEnabled ? t('enabled') : t('verified')) : t('unverified');
+  const smsStatusBody = firebasePhoneProvider ? t('firebasePhoneSmsBody') : !smsAvailable ? t('smsUnavailableUseFirebase') : !hasSmsPhone ? t('smsNoPhoneBody') : smsVerified ? t('smsReadyBody') : t('smsVerifyBody');
   const syncStatusLabel = toggles.autoSync ? t('active') : t('notEnabled');
   const recentDevices = devices.slice(0, 5);
   const getDeviceDisplayName = useCallback(
@@ -519,6 +569,16 @@ export default function SecuritySettings() {
                   {t('smsTestModeNotice')}
                 </p>
               ) : null}
+              {!smsAvailable ? (
+                <p className="mt-3 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-semibold leading-5 text-sky-800">
+                  {t('smsUnavailableUseFirebase')}
+                </p>
+              ) : null}
+              {firebasePhoneProvider ? (
+                <p className="mt-3 rounded-lg border border-leaf-100 bg-leaf-50 px-3 py-2 text-xs font-semibold leading-5 text-leaf-800">
+                  {t('firebasePhoneSmsBody')}
+                </p>
+              ) : null}
             </div>
 
             <div className="mt-4 grid gap-3">
@@ -539,7 +599,7 @@ export default function SecuritySettings() {
               </button>
             </div>
 
-            {hasSmsPhone && !smsVerified ? (
+            {smsAvailable && hasSmsPhone && !smsVerified ? (
               <div className="mt-4 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-4">
                 <button className="btn-secondary w-full justify-center bg-white" type="button" onClick={sendPhoneCode} disabled={smsLoading === 'send-code' || (smsStatus?.cooldown_seconds || 0) > 0}>
                   {smsLoading === 'send-code' ? <RefreshCw className="h-4 w-4 mr-2 shrink-0 animate-spin" /> : <Send className="h-4 w-4 mr-2 shrink-0" />}
@@ -564,10 +624,11 @@ export default function SecuritySettings() {
                     {t('verifyPhone')}
                   </button>
                 </div>
+                {firebasePhoneProvider ? <div id={firebasePhoneRecaptchaContainerId()} /> : null}
               </div>
             ) : null}
 
-            {hasSmsPhone && smsVerified ? (
+            {smsAvailable && !firebasePhoneProvider && hasSmsPhone && smsVerified ? (
               <div className="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white w-full">
                 <SettingToggle
                   title={t('smsFieldAlerts')}
@@ -582,6 +643,12 @@ export default function SecuritySettings() {
                   </button>
                 </div>
               </div>
+            ) : null}
+
+            {firebasePhoneProvider && hasSmsPhone && smsVerified ? (
+              <p className="mt-4 rounded-lg border border-leaf-100 bg-leaf-50 px-3 py-2 text-sm font-semibold leading-6 text-leaf-800">
+                {t('firebasePhoneVerifiedNotice')}
+              </p>
             ) : null}
 
             {smsMessage ? (
@@ -608,6 +675,14 @@ export default function SecuritySettings() {
                 <button className="btn-secondary w-full justify-center" onClick={enablePush} type="button" disabled={pushLoading || pushChecking || !pushServerReady}>
                   <BellRing className="h-4 w-4 mr-2 shrink-0" />
                   <span className="truncate">{pushLoading ? t('enabling') : pushChecking ? `${t('checking')}...` : t('enablePush')}</span>
+                </button>
+              </div>
+            ) : null}
+            {pushEnabled ? (
+              <div className="mt-4 w-full">
+                <button className="btn-secondary w-full justify-center" onClick={sendTestNotification} type="button" disabled={pushTestLoading}>
+                  {pushTestLoading ? <RefreshCw className="h-4 w-4 mr-2 shrink-0 animate-spin" /> : <Send className="h-4 w-4 mr-2 shrink-0" />}
+                  <span className="truncate">{pushTestLoading ? t('sendingTestNotification') : t('sendTestNotification')}</span>
                 </button>
               </div>
             ) : null}

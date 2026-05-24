@@ -87,6 +87,19 @@ class PasswordResetRequest(BaseModel):
         return value
 
 
+class PhonePasswordResetRequest(BaseModel):
+    id_token: str = Field(min_length=20)
+    new_password: str = Field(min_length=12, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_is_strong(cls, value: str) -> str:
+        errors = validate_strong_password(value)
+        if errors:
+            raise ValueError(" ".join(errors))
+        return value
+
+
 class MFASetupResponse(BaseModel):
     secret: str
     otpauth_url: str

@@ -14,7 +14,9 @@ settings = get_settings()
 
 TEXTBELT_SEND_URL = "https://textbelt.com/text"
 TEXTBELT_PROVIDER = "textbelt"
+FIREBASE_PROVIDER = "firebase"
 DISABLED_PROVIDERS = {"", "none", "disabled", "off", "false"}
+PUBLIC_TEXTBELT_KEYS = {"textbelt", "textbelt_test"}
 E164_PATTERN = re.compile(r"^\+[1-9]\d{7,14}$")
 
 
@@ -74,21 +76,33 @@ def phone_number_is_valid(phone: str | None) -> bool:
 def sms_configuration() -> SmsConfiguration:
     provider = (settings.sms_provider or "").strip().lower()
     enabled = provider not in DISABLED_PROVIDERS
+    test_mode = bool(settings.sms_test_mode)
     missing: list[str] = []
 
-    if enabled and provider != TEXTBELT_PROVIDER:
+    if enabled and provider not in {TEXTBELT_PROVIDER, FIREBASE_PROVIDER}:
         missing.append("supported SMS provider")
+    if enabled and provider == TEXTBELT_PROVIDER and not test_mode and not _configured_textbelt_key():
+        missing.append("paid Textbelt API key")
 
     return SmsConfiguration(
         provider=provider or "disabled",
         enabled=enabled and not missing,
-        test_mode=bool(settings.sms_test_mode),
+        test_mode=test_mode,
         missing=tuple(missing),
     )
 
 
+def _raw_textbelt_key() -> str:
+    return (settings.textbelt_api_key or settings.sms_api_key or "").strip()
+
+
+def _configured_textbelt_key() -> str | None:
+    key = _raw_textbelt_key()
+    return key if key and key.lower() not in PUBLIC_TEXTBELT_KEYS else None
+
+
 def _textbelt_key() -> str:
-    key = (settings.textbelt_api_key or settings.sms_api_key or "textbelt").strip()
+    key = _raw_textbelt_key() or "textbelt"
     if settings.sms_test_mode and key and not key.endswith("_test"):
         return f"{key}_test"
     return key
@@ -105,6 +119,11 @@ async def send_sms(phone: str | None, message: str, *, sender: str = "AgriScan")
 
     if not config.enabled:
         result.skipped_reason = "sms_not_configured"
+        if config.missing:
+            result.error = (
+                f"SMS is not configured: missing {', '.join(config.missing)}. "
+                "Set SMS_API_KEY or TEXTBELT_API_KEY to a paid Textbelt key, then restart the backend."
+            )
         return result
     if not phone_number_is_valid(normalized_phone):
         result.skipped_reason = "invalid_phone"
@@ -113,7 +132,8 @@ async def send_sms(phone: str | None, message: str, *, sender: str = "AgriScan")
 
     if config.provider != TEXTBELT_PROVIDER:
         result.skipped_reason = "unsupported_provider"
-        result.error = f"Unsupported SMS provider: {config.provider}"
+        if config.provider != FIREBASE_PROVIDER:
+            result.error = f"Unsupported SMS provider: {config.provider}"
         return result
 
     payload: dict[str, Any] = {
@@ -139,6 +159,11 @@ async def send_sms(phone: str | None, message: str, *, sender: str = "AgriScan")
     quota_remaining = data.get("quotaRemaining")
     result.quota_remaining = quota_remaining if isinstance(quota_remaining, int) else None
     result.error = str(data.get("error")) if data.get("error") else None
+    if result.error and "free sms are disabled" in result.error.lower():
+        result.error = (
+            "Textbelt rejected the free SMS route for this country. "
+            "Set SMS_API_KEY or TEXTBELT_API_KEY to a paid Textbelt key, then restart the backend."
+        )
     if not result.sent and not result.error:
         result.error = "SMS provider did not accept the message."
     return result
