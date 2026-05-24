@@ -7,6 +7,7 @@ const RECAPTCHA_CONTAINER_ID = 'firebase-phone-recaptcha';
 
 let recaptchaVerifier = null;
 let confirmationResult = null;
+let recaptchaElementId = '';
 
 async function getFirebaseConfig() {
   const { data } = await api.get('/auth/firebase-phone-config');
@@ -33,16 +34,28 @@ function resetRecaptcha() {
     }
   }
   recaptchaVerifier = null;
+  if (recaptchaElementId) {
+    document.getElementById(recaptchaElementId)?.remove();
+    recaptchaElementId = '';
+  }
 }
 
-function getRecaptchaVerifier(auth) {
+function createRecaptchaElement() {
   const container = document.getElementById(RECAPTCHA_CONTAINER_ID);
   if (!container) {
     throw new Error('Firebase reCAPTCHA container is missing.');
   }
+  container.replaceChildren();
+  recaptchaElementId = `${RECAPTCHA_CONTAINER_ID}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const recaptchaElement = document.createElement('div');
+  recaptchaElement.id = recaptchaElementId;
+  container.appendChild(recaptchaElement);
+  return recaptchaElementId;
+}
 
+function getRecaptchaVerifier(auth) {
   if (!recaptchaVerifier) {
-    recaptchaVerifier = new RecaptchaVerifier(auth, RECAPTCHA_CONTAINER_ID, {
+    recaptchaVerifier = new RecaptchaVerifier(auth, createRecaptchaElement(), {
       size: 'invisible',
     });
   }
@@ -74,6 +87,7 @@ export async function sendFirebasePhoneVerificationCode(phone) {
   auth.useDeviceLanguage();
 
   try {
+    resetRecaptcha();
     confirmationResult = await signInWithPhoneNumber(auth, phone, getRecaptchaVerifier(auth));
     return true;
   } catch (error) {
