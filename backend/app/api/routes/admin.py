@@ -32,7 +32,6 @@ from app.schemas.domain import (
 from app.services.account_security import apply_account_status_change, record_admin_action
 from app.services.audit import write_audit_log
 from app.services.feedback_learning import accept_scan_feedback, reject_scan_feedback, undo_scan_feedback_decision
-from app.services.firebase_storage import upload_exists_in_firebase
 from app.services.push_notifications import create_notification
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -47,7 +46,7 @@ def _scan_image_url(image_path: str | None) -> str | None:
     if not image_name:
         return None
 
-    if not (settings.upload_path / image_name).is_file() and not upload_exists_in_firebase(image_name):
+    if not (settings.upload_path / image_name).is_file():
         return None
 
     return f"/uploads/{image_name}"

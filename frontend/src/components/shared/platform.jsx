@@ -66,7 +66,7 @@ export function SearchFilterBar({
           <label className="relative min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <input
-              className="field min-h-10 pl-10"
+              className="field field-leading-icon min-h-10"
               type="search"
               value={search}
               onChange={(event) => onSearchChange?.(event.target.value)}
@@ -79,7 +79,7 @@ export function SearchFilterBar({
                 <label key={filter.id} className="relative min-w-[10rem] flex-1 sm:flex-none">
                   <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                   <select
-                    className="field min-h-10 pl-10"
+                    className="field field-leading-icon min-h-10"
                     value={filter.value}
                     onChange={(event) => filter.onChange?.(event.target.value)}
                     aria-label={filter.label}

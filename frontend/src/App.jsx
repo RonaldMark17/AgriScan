@@ -34,6 +34,7 @@ function ScrollToPageTop() {
 
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
+    document.querySelector('.app-content')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [pathname]);
 
   return null;

@@ -24,7 +24,6 @@ class Settings(BaseSettings):
     allowed_hosts: str = "localhost,127.0.0.1,agriscann.duckdns.org"
 
     database_url: str = "sqlite+aiosqlite:///./data/agriscan.sqlite3"
-    mysql_database_url: str | None = None
     auto_create_tables: bool = True
 
     secret_key: str = Field(default="change-this-access-secret")
@@ -45,15 +44,12 @@ class Settings(BaseSettings):
     firebase_api_key: str | None = None
     firebase_auth_domain: str | None = None
     firebase_project_id: str | None = None
-    firebase_storage_bucket: str | None = None
     firebase_messaging_sender_id: str | None = None
     firebase_app_id: str | None = None
     firebase_measurement_id: str | None = None
     firebase_vapid_key: str | None = None
     firebase_service_account_file: str | None = None
     firebase_service_account_json: str | None = None
-    firebase_storage_prefix: str = "agriscan"
-    firebase_mirror_uploads: bool = True
     
     # AWS Secrets Manager
     aws_secrets_manager_secret_name: str | None = None

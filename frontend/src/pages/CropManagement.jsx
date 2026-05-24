@@ -388,7 +388,7 @@ export default function CropManagement() {
           ) : null}
         </div>
 
-        <aside className="space-y-5 min-[1440px]:sticky sticky-panel min-[1440px]:self-start">
+        <aside className="space-y-5">
           <FormSection icon={ScanLine} title="Crop tools" body="Quick actions for scanning, disease detection, and farm records.">
             <div className="grid gap-2">
               <Link className="btn-primary justify-center" to="/scan">

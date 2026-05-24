@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.models import Scan, ScanFeedback, User
 from app.schemas.domain import ScanFeedbackCreate
-from app.services.firebase_storage import restore_upload_from_firebase
 from app.services.ml_service import CLASS_METADATA, DEFAULT_LABELS, DISEASE_PROFILES, DiseaseDetection, detector
 
 
@@ -53,8 +52,7 @@ def _resolve_feedback_image_path(image_path: str) -> Path:
         if candidate.exists():
             return candidate
 
-    restored = restore_upload_from_firebase(path.name)
-    return restored or settings.upload_path / path.name
+    return settings.upload_path / path.name
 
 FEATURE_DISTANCE_SCALES = {
     "contrast": 80.0,

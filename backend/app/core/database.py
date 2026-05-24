@@ -198,16 +198,15 @@ def _ensure_sqlite_parent(database_url: str) -> None:
 
 
 def create_app_engine(database_url: str):
+    if not is_sqlite_url(database_url):
+        raise RuntimeError("AgriScan supports SQLite only. Set DATABASE_URL to a sqlite+aiosqlite:/// path.")
+
     engine_options = {}
-    if is_sqlite_url(database_url):
-        _ensure_sqlite_parent(database_url)
-        engine_options["connect_args"] = {"check_same_thread": False}
-    else:
-        engine_options.update(pool_pre_ping=True, pool_recycle=280)
+    _ensure_sqlite_parent(database_url)
+    engine_options["connect_args"] = {"check_same_thread": False}
 
     created_engine = create_async_engine(database_url, **engine_options)
-    if is_sqlite_url(database_url):
-        event.listen(created_engine.sync_engine, "connect", _enable_sqlite_foreign_keys)
+    event.listen(created_engine.sync_engine, "connect", _enable_sqlite_foreign_keys)
     return created_engine
 
 

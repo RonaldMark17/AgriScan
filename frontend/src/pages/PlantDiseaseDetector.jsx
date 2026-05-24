@@ -1,21 +1,26 @@
 import {
+  AlertTriangle,
   Camera,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
   ClipboardList,
+  FileCheck2,
   Flag,
   FlaskConical,
+  Gauge,
   ImagePlus,
   Loader2,
   RotateCcw,
   Send,
+  ShieldCheck,
   Upload,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, getApiBaseUrl } from '../api/client.js';
 import { diseaseDetectorImage } from '../assets/visuals/index.js';
+import PageHeader from '../components/shared/PageHeader.jsx';
 import TranslatedText from '../components/shared/TranslatedText.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
 import visualMemoryRuntime from '../data/visualMemoryRuntime.json';
@@ -3066,50 +3071,187 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
     }
   }
 
-  return (
-    <section ref={panelRef} className="surface scroll-mt-panel overflow-hidden rounded-lg">
-      <div className="grid gap-0 lg:items-start lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="p-5 sm:p-7">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold sm:px-4 ${statusClass}`}>
-              <FlaskConical className="h-4 w-4" />
-              {needsReview ? t('reviewNeeded') : t('analysisReady')}
-            </span>
-            {cropLabel !== '--' && (
-              <span className="rounded-full bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700 sm:px-4">
-                {translatedCropLabel}
+  if (!result) {
+    return (
+      <section ref={panelRef} className="surface disease-diagnosis-panel scroll-mt-panel overflow-hidden rounded-lg">
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,0.72fr)]">
+          <div className="p-4 sm:p-6 xl:p-7">
+            <div className="flex flex-col gap-4 min-[1700px]:flex-row min-[1700px]:items-start min-[1700px]:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100 sm:h-14 sm:w-14">
+                  <FlaskConical className="h-6 w-6" />
+                </span>
+                <div className="min-w-0">
+                  <p className="eyebrow">{t('diagnosis')}</p>
+                  <h2 className="mt-2 max-w-xl text-3xl font-bold leading-tight text-stone-950">
+                    {t('readyForDiseaseAnalysis')}
+                  </h2>
+                  <p className="mt-3 max-w-xl text-sm leading-7 text-stone-600 sm:text-base">
+                    {t('diseaseAnalysisPrompt')}
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex min-h-9 w-fit shrink-0 items-center gap-2 rounded-full border border-leaf-100 bg-leaf-50 px-4 text-sm font-bold text-leaf-800">
+                <ShieldCheck className="h-4 w-4" />
+                {t('analysisReady')}
               </span>
-            )}
+            </div>
+
+            <div className="mt-6 rounded-lg border border-leaf-100 bg-gradient-to-br from-leaf-50 via-white to-sky-50 p-4 sm:p-5">
+              <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1 min-[1700px]:grid-cols-3">
+                {[
+                  [FlaskConical, t('cropType'), t('cropHintBody')],
+                  [ImagePlus, t('takeOrUploadPhoto'), t('takeClearCropPhoto')],
+                  [Gauge, t('confidence'), t('previewAndAnalysis')],
+                ].map(([Icon, title, body]) => (
+                  <article key={title} className="rounded-lg border border-white/80 bg-white/85 p-3 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <p className="text-sm font-bold text-stone-950">{title}</p>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-stone-600">{body}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 min-[1700px]:grid-cols-3">
+              <article className="rounded-lg border border-stone-200 bg-white p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('detectedCrop')}</p>
+                <p className="mt-3 text-lg font-bold text-stone-950">{t('autoDetectCrop')}</p>
+              </article>
+              <article className="rounded-lg border border-stone-200 bg-white p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('confidence')}</p>
+                <p className="mt-3 text-2xl font-bold text-stone-400">--</p>
+                <div className="mt-3 h-2 rounded-full bg-stone-100" />
+              </article>
+              <article className="rounded-lg border border-sky-100 bg-sky-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('modelBasis')}</p>
+                <p className="mt-3 text-lg font-bold text-sky-950">{t('checkingStatus')}</p>
+              </article>
+            </div>
           </div>
 
-          <h2 className="mt-5 break-words text-2xl font-bold text-stone-950 sm:text-3xl">
-            {result?.disease_name ? translateDiseaseName(result.disease_name, t) : t('readyForDiseaseAnalysis')}
-          </h2>
-          {!result ? (
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
-              {t('diseaseAnalysisPrompt')}
-            </p>
-          ) : null}
+          <div className="border-t border-stone-200 bg-stone-50/70 p-4 sm:p-5 xl:border-l xl:border-t-0">
+            <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex items-start gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
+                  <ImagePlus className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">{t('previewAndAnalysis')}</p>
+                  <p className="mt-2 text-sm leading-6 text-stone-600">{t('diseaseAnalysisPrompt')}</p>
+                </div>
+              </div>
+              <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
+                {displayPreviewUrl ? (
+                  <div className="relative w-full overflow-hidden bg-stone-950" style={{ aspectRatio: previewAspectRatio }}>
+                    <img
+                      src={displayPreviewUrl}
+                      alt={t('uploadCropImage')}
+                      className="absolute inset-0 h-full w-full object-contain"
+                      onLoad={(event) => {
+                        const { naturalWidth, naturalHeight } = event.currentTarget;
+                        if (naturalWidth > 0 && naturalHeight > 0) {
+                          setPreviewAspectRatio(naturalWidth / naturalHeight);
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="relative w-full overflow-hidden bg-leaf-50" style={{ aspectRatio: 4 / 3 }}>
+                    <img src={diseaseDetectorImage} alt={t('uploadCropImage')} className="absolute inset-0 h-full w-full object-cover opacity-20" />
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/45 p-5 text-center text-stone-700">
+                      <div className="max-w-60">
+                        <span className="mx-auto grid h-14 w-14 place-items-center rounded-lg border border-stone-200 bg-white/95 text-leaf-700 shadow-sm">
+                          <ImagePlus className="h-7 w-7" />
+                        </span>
+                        <p className="mt-3 text-sm font-bold leading-6">{t('diseaseAnalysisPrompt')}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
+  return (
+    <section ref={panelRef} className="surface disease-diagnosis-panel scroll-mt-panel overflow-hidden rounded-lg">
+      <div className="grid gap-0">
+        <div className="p-4 sm:p-6 xl:p-7">
+          <div className="flex flex-col gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${needsReview ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' : 'bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100'}`}>
+                {needsReview ? <AlertTriangle className="h-5 w-5" /> : <FlaskConical className="h-5 w-5" />}
+              </span>
+              <div className="min-w-0">
+                <p className="eyebrow">{t('diagnosis')}</p>
+                <h2 className="mt-1 max-w-4xl text-2xl font-bold leading-tight text-stone-950 sm:text-3xl">
+                  {result?.disease_name ? translateDiseaseName(result.disease_name, t) : t('readyForDiseaseAnalysis')}
+                </h2>
+                {!result ? (
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+                    {t('diseaseAnalysisPrompt')}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:pl-14">
+              <span className={`inline-flex min-h-8 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold sm:px-4 ${statusClass}`}>
+                <ShieldCheck className="h-4 w-4" />
+                {needsReview ? t('reviewNeeded') : t('analysisReady')}
+              </span>
+              {cropLabel !== '--' && (
+                <span className="inline-flex min-h-8 items-center rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 sm:px-4">
+                  {translatedCropLabel}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="detector-metric-grid mt-6">
             <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('detectedCrop')}</p>
+              <div className="flex items-center gap-2 text-stone-500">
+                <FileCheck2 className="h-4 w-4" />
+                <p className="text-xs font-bold uppercase tracking-wide">{t('detectedCrop')}</p>
+              </div>
               <p className="mt-2 text-lg font-bold text-stone-950">{translatedCropLabel}</p>
               <p className="mt-1 text-sm text-stone-500">
                 {!result ? t('diseaseAnalysisPrompt') : cropVerified ? t('estimatedFromUploadedCropImage') : t('analyzedGeneralCropLeaf')}
               </p>
             </article>
             <article className={`rounded-lg border p-4 ${confidenceClass}`}>
-              <p className={`text-xs font-bold uppercase tracking-wide ${confidenceLabelClass}`}>{needsReview ? t('scanCertainty') : t('confidence')}</p>
-              <p className={`mt-2 text-3xl font-bold ${confidenceTextClass}`}>{confidence || '--'}%</p>
+              <div className={`flex items-center gap-2 ${confidenceLabelClass}`}>
+                <Gauge className="h-4 w-4" />
+                <p className="text-xs font-bold uppercase tracking-wide">{needsReview ? t('scanCertainty') : t('confidence')}</p>
+              </div>
+              <p className={`mt-2 text-3xl font-bold ${confidenceTextClass}`}>{result ? `${confidence}%` : '--'}</p>
               <div className="mt-3 h-2 rounded-full bg-stone-100">
                 <div className={`h-2 rounded-full ${confidenceBarClass}`} style={{ width: result ? `${confidence}%` : '0%' }} />
               </div>
             </article>
+            <article className="rounded-lg border border-sky-100 bg-sky-50 p-4">
+              <div className="flex items-center gap-2 text-sky-700">
+                <ShieldCheck className="h-4 w-4" />
+                <p className="text-xs font-bold uppercase tracking-wide">{t('modelBasis')}</p>
+              </div>
+              <p className="mt-2 text-lg font-bold text-sky-950">
+                {result ? (isLocalVisualAnalysisMode(result.analysis_mode) ? t('deviceMode') : t('mlOnline')) : t('checkingStatus')}
+              </p>
+              <p className="mt-1 text-sm leading-5 text-sky-800">
+                {result?.analysis_mode || t('previewAndAnalysis')}
+              </p>
+            </article>
           </div>
 
           {result && (result.severity || result.disease_stage || result.visual_symptoms || result.affected_area_percentage !== undefined) ? (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="detector-detail-grid mt-4">
               {result.severity && (
                 <article className="rounded-lg border border-rose-100 bg-rose-50 p-4">
                   <p className="text-xs font-bold uppercase tracking-wide text-rose-700">Severity</p>
@@ -3120,10 +3262,10 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
                 </article>
               )}
               {result.disease_stage && (
-                <article className="rounded-lg border border-purple-100 bg-purple-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-purple-700">Disease Stage</p>
-                  <p className="mt-2 text-lg font-bold text-purple-950 capitalize">{result.disease_stage}</p>
-                  <p className="mt-1 text-sm text-purple-700">
+                <article className="rounded-lg border border-amber-100 bg-amber-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Disease Stage</p>
+                  <p className="mt-2 text-lg font-bold text-amber-950 capitalize">{result.disease_stage}</p>
+                  <p className="mt-1 text-sm text-amber-800">
                     {result.disease_stage === 'early' && 'Early detection - act quickly'}
                     {result.disease_stage === 'mid' && 'Mid-stage - intervention needed'}
                     {result.disease_stage === 'late' && 'Late stage - intensive management required'}
@@ -3170,14 +3312,15 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
           ) : null}
 
           {hasSupplementaryCards ? (
-            <div className="mt-4 grid gap-4 md:auto-rows-fr md:grid-cols-2">
+            <div className="detector-support-grid mt-4">
               {result && result.visual_symptoms && result.visual_symptoms.length > 0 ? (
-                <article className="flex h-full flex-col rounded-lg border border-indigo-100 bg-indigo-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Observed Symptoms</p>
+                <article className="flex h-full flex-col rounded-lg border border-sky-100 bg-sky-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-sky-700">Observed Symptoms</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {result.visual_symptoms.map((symptom, idx) => (
-                      <span key={idx} className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1.5 text-sm font-semibold text-indigo-900">
-                        • {symptom}
+                      <span key={idx} className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-sky-900 ring-1 ring-sky-100">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-sky-700" />
+                        {symptom}
                       </span>
                     ))}
                   </div>
@@ -3185,17 +3328,17 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
               ) : null}
 
               {result && result.immediate_actions && result.immediate_actions.length > 0 ? (
-                <article className="flex h-full flex-col rounded-lg border border-green-100 bg-green-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-green-700">Immediate Actions</p>
+                <article className="flex h-full flex-col rounded-lg border border-leaf-100 bg-leaf-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Immediate Actions</p>
                   <div className="mt-3 space-y-2">
                     {result.immediate_actions.map((action, idx) => {
                       const displayAction = formatImmediateAction(action);
                       return (
                         <div key={idx} className="flex items-start gap-3 rounded-lg bg-white/60 px-3 py-2">
-                          <span className="mt-0.5 inline-flex shrink-0 items-center justify-center rounded-full bg-green-100 p-1 text-green-700">
+                          <span className="mt-0.5 inline-flex shrink-0 items-center justify-center rounded-full bg-leaf-100 p-1 text-leaf-700">
                             <CheckCircle2 className="h-4 w-4" />
                           </span>
-                          <p className="min-w-0 flex-1 text-sm text-green-900">{displayAction}</p>
+                          <p className="min-w-0 flex-1 text-sm text-leaf-900">{displayAction}</p>
                         </div>
                       );
                     })}
@@ -3218,11 +3361,14 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
               ) : null}
 
               {result && result.image_quality_issues && result.image_quality_issues.length > 0 ? (
-                <article className="flex h-full flex-col rounded-lg border border-orange-100 bg-orange-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Image Quality Notes</p>
+                <article className="flex h-full flex-col rounded-lg border border-amber-100 bg-amber-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Image Quality Notes</p>
                   <div className="mt-3 space-y-2">
                     {result.image_quality_issues.map((issue, idx) => (
-                      <p key={idx} className="text-sm text-orange-900">⚠️ {issue}</p>
+                      <div key={idx} className="flex items-start gap-2 rounded-lg bg-white/75 px-3 py-2 text-sm text-amber-950">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                        <p>{issue}</p>
+                      </div>
                     ))}
                   </div>
                 </article>
@@ -3254,9 +3400,17 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
 
         </div>
 
-        <div className="border-t border-stone-200 bg-stone-50/70 p-4 sm:p-5 lg:self-start lg:border-l lg:border-t-0 lg:bg-stone-50/40">
+        <div className="border-t border-stone-200 bg-stone-50/70 p-4 sm:p-5">
           <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{t('previewAndAnalysis')}</p>
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
+                <ImagePlus className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">{t('previewAndAnalysis')}</p>
+                <p className="mt-1 text-xs leading-5 text-stone-500">{result ? t('analysisReady') : t('diseaseAnalysisPrompt')}</p>
+              </div>
+            </div>
             <div className="mt-4 overflow-hidden rounded-lg border border-stone-200 bg-white">
               {displayPreviewUrl ? (
                 <div className="relative w-full overflow-hidden bg-stone-950" style={{ aspectRatio: previewAspectRatio }}>
@@ -3331,7 +3485,7 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
               </p>
             )}
             {yoloDetections.length > 0 && (
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-1 sm:gap-3 lg:grid-cols-2">
+              <div className="mt-3 grid gap-2 sm:mt-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))] sm:gap-3">
                 {yoloDetections.slice(0, 4).map((detection, index) => (
                   <div key={`${detection.raw_label || detection.label}-summary-${index}`} className="rounded-lg border border-stone-200 bg-white p-3">
                     <p className="truncate text-xs font-bold text-stone-900 sm:text-sm">{translateDiseaseName(detection.label, t)}</p>
@@ -3346,13 +3500,13 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
 
       {result && (
         <div className="border-t border-stone-200 bg-stone-50/30 px-5 py-5 sm:px-7 sm:py-6">
-          <div className="grid gap-4 md:auto-rows-fr md:grid-cols-2">
-            <article className="flex h-full min-h-[12.5rem] flex-col rounded-lg border border-stone-200 bg-white p-4">
+          <div className="detector-info-grid">
+            <article className="flex h-full flex-col rounded-lg border border-stone-200 bg-white p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('likelyCause')}</p>
               <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={result.cause} />
             </article>
 
-            <article className="flex h-full min-h-[12.5rem] flex-col rounded-lg border border-sky-100 bg-sky-50 p-4">
+            <article className="flex h-full flex-col rounded-lg border border-sky-100 bg-sky-50 p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{t('modelBasis')}</p>
               <p className="mt-2 text-sm leading-6 text-stone-700">
                 {yoloDetections.length > 0
@@ -3368,13 +3522,13 @@ function ResultPanel({ result, previewUrl, t, panelRef, onFeedbackApplied }) {
               )}
             </article>
 
-            <article className="flex h-full min-h-[12.5rem] flex-col rounded-lg border border-stone-200 bg-white p-4">
+            <article className="flex h-full flex-col rounded-lg border border-stone-200 bg-white p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('treatmentSuggestion')}</p>
               <TranslatedText as="p" className="mt-2 text-sm leading-6 text-stone-700" text={result.treatment} />
             </article>
 
             {canGiveFeedback ? (
-              <article className="flex h-full min-h-[12.5rem] flex-col rounded-lg border border-stone-200 bg-white p-4">
+              <article className="flex h-full flex-col rounded-lg border border-stone-200 bg-white p-4">
                 <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('correctionLearning')}</p>
@@ -3487,11 +3641,17 @@ function HistoryList({ history, onSelect, t }) {
   const displayedHistory = showAll ? visibleHistory : visibleHistory.slice(0, 6);
 
   return (
-    <section className="w-full">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-stone-950">{t('recentDiseaseScans')}</h2>
-          <p className="text-sm text-stone-500">{t('savedDiseaseDetections')}</p>
+    <section className="surface overflow-hidden rounded-lg">
+      <div className="flex flex-col gap-4 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-700 ring-1 ring-stone-200">
+            <ClipboardList className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="eyebrow">{t('imageDiagnosis')}</p>
+            <h2 className="mt-1 break-words text-xl font-bold text-stone-950">{t('recentDiseaseScans')}</h2>
+            <p className="mt-1 text-sm leading-6 text-stone-500">{t('savedDiseaseDetections')}</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {visibleHistory.length > 6 && (
@@ -3510,33 +3670,55 @@ function HistoryList({ history, onSelect, t }) {
         </div>
       </div>
 
-      <div className="history-grid">
-        {displayedHistory.map((scan) => (
-          <button
-            key={scan.local_id}
-            className="surface min-h-[132px] rounded-lg p-4 text-left transition hover:border-leaf-200 hover:bg-leaf-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300"
-            onClick={() => onSelect(scan)}
-            type="button"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-400">{translateCropLabel(resolveCropLabel(scan), t)}</p>
-                <h3 className="mt-2 break-words text-lg font-bold text-stone-950">{translateDiseaseName(scan.disease_name, t)}</h3>
-                <p className="mt-1 text-sm text-stone-500">{new Date(scan.created_at).toLocaleString()}</p>
-              </div>
-              <span className="shrink-0 rounded-full bg-leaf-50 px-3 py-1 text-xs font-bold text-leaf-700">
-                {Math.round(scan.confidence * 100)}%
-              </span>
-            </div>
-          </button>
-        ))}
+      <div className="border-t border-stone-200 bg-stone-50/70 p-4 sm:p-5">
+        <div className="history-grid">
+          {displayedHistory.map((scan) => {
+            const scanImageUrl = getScanImageUrl(scan);
+            return (
+              <button
+                key={historyKey(scan)}
+                className="group min-h-[9.25rem] rounded-lg border border-stone-200 bg-white p-3 text-left shadow-sm transition hover:border-leaf-200 hover:bg-leaf-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300"
+                onClick={() => onSelect(scan)}
+                type="button"
+              >
+                <div className="flex h-full gap-3">
+                  {scanImageUrl ? (
+                    <img
+                      src={scanImageUrl}
+                      alt={translateDiseaseName(scan.disease_name, t)}
+                      className="h-24 w-24 shrink-0 rounded-lg border border-stone-200 object-cover"
+                    />
+                  ) : (
+                    <span className="grid h-24 w-24 shrink-0 place-items-center rounded-lg border border-stone-200 bg-stone-50 text-stone-400">
+                      <ImagePlus className="h-6 w-6" />
+                    </span>
+                  )}
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold uppercase tracking-wide text-stone-400">{translateCropLabel(resolveCropLabel(scan), t)}</p>
+                        <h3 className="mt-1 line-clamp-2 break-words text-base font-bold leading-5 text-stone-950">{translateDiseaseName(scan.disease_name, t)}</h3>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-leaf-50 px-2.5 py-1 text-xs font-bold text-leaf-700 ring-1 ring-leaf-100">
+                        {Math.round(scan.confidence * 100)}%
+                      </span>
+                    </div>
+                    <p className="mt-auto pt-3 text-xs font-semibold text-stone-500">{new Date(scan.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
 
-        {visibleHistory.length === 0 && (
-          <div className="surface rounded-lg border-dashed p-6 text-center md:col-span-2">
-            <ClipboardList className="mx-auto h-8 w-8 text-stone-400" />
-            <p className="mt-3 text-sm font-semibold text-stone-500">{t('noDiseaseDetections')}</p>
-          </div>
-        )}
+          {visibleHistory.length === 0 && (
+            <div className="rounded-lg border border-dashed border-stone-300 bg-white p-8 text-center md:col-span-2">
+              <span className="mx-auto grid h-12 w-12 place-items-center rounded-lg bg-stone-100 text-stone-500">
+                <ClipboardList className="h-6 w-6" />
+              </span>
+              <p className="mt-3 text-sm font-semibold text-stone-500">{t('noDiseaseDetections')}</p>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -3896,72 +4078,121 @@ export default function PlantDiseaseDetector() {
     setResult(normalizeHistoryScan(scan));
   }
 
-  return (
-    <div className="page-stack">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="eyebrow">{t('imageDiagnosis')}</p>
-          <h1 className="mt-1 break-words text-2xl font-bold tracking-normal text-stone-950 sm:text-3xl">
-            {t('plantDiseaseDetector')}
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-            {t('plantDiseaseDetectorBody')}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="status-pill border border-stone-200 bg-white text-stone-700">{quickCropOptions.length} {t('crops')}</span>
-          <span className={`status-pill ${detectorMode === 'online' ? 'bg-leaf-50 text-leaf-800' : detectorMode === 'offline' ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-700'}`}>
-            {detectorMode === 'online' ? t('mlOnline') : detectorMode === 'offline' ? t('deviceMode') : t('checkingStatus')}
-          </span>
-        </div>
-      </header>
+  const detectorModeLabel =
+    detectorMode === 'online' ? t('mlOnline') : detectorMode === 'offline' ? t('deviceMode') : t('checkingStatus');
+  const detectorModeClass =
+    detectorMode === 'online'
+      ? 'border-leaf-100 bg-leaf-50 text-leaf-800'
+      : detectorMode === 'offline'
+        ? 'border-amber-100 bg-amber-50 text-amber-800'
+        : 'border-stone-200 bg-stone-100 text-stone-700';
 
-      <div className="grid gap-6 lg:grid-cols-5 lg:items-start lg:gap-8 xl:gap-10">
-        <div className="lg:col-span-2">
-          <form onSubmit={submit} className="surface rounded-lg p-4 sm:p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-bold text-stone-950 sm:text-xl">{t('uploadCropImage')}</h2>
-                <p className="mt-1 text-xs sm:text-sm text-stone-500">{t('uploadClearCropImage')}</p>
+  return (
+    <div className="page-stack disease-detector-page">
+      <PageHeader
+        eyebrow={t('imageDiagnosis')}
+        title={t('plantDiseaseDetector')}
+        body={t('plantDiseaseDetectorBody')}
+        actions={(
+          <>
+            <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 shadow-sm">
+              <FileCheck2 className="h-4 w-4 text-leaf-700" />
+              {quickCropOptions.length} {t('crops')}
+            </span>
+            <span className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-sm font-bold shadow-sm ${detectorModeClass}`}>
+              <ShieldCheck className="h-4 w-4" />
+              {detectorModeLabel}
+            </span>
+          </>
+        )}
+      />
+
+      <div className="disease-detector-layout">
+        <div className="disease-upload-column min-w-0">
+          <form onSubmit={submit} className="surface overflow-hidden rounded-lg">
+            <div className="border-b border-stone-200 bg-gradient-to-br from-white via-leaf-50/60 to-sky-50/70 p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-leaf-700 text-white shadow-sm">
+                    <ImagePlus className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="break-words text-lg font-bold text-stone-950 sm:text-xl">{t('uploadCropImage')}</h2>
+                    <p className="mt-1 text-sm leading-6 text-stone-600">{t('uploadClearCropImage')}</p>
+                  </div>
+                </div>
+                <button className="btn-icon shrink-0" type="button" onClick={resetForm} title={t('resetForm')}>
+                  <RotateCcw className="h-4 w-4" />
+                </button>
               </div>
-              <button className="btn-icon shrink-0" type="button" onClick={resetForm} title={t('resetForm')}>
-                <RotateCcw className="h-4 w-4" />
-              </button>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
+                  <FileCheck2 className="h-4 w-4 text-leaf-700" />
+                  <p className="mt-2 text-xs font-bold text-stone-800">{t('cropType')}</p>
+                </div>
+                <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
+                  <Camera className="h-4 w-4 text-sky-700" />
+                  <p className="mt-2 text-xs font-bold text-stone-800">{t('takeOrUploadPhoto')}</p>
+                </div>
+                <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
+                  <Gauge className="h-4 w-4 text-amber-700" />
+                  <p className="mt-2 text-xs font-bold text-stone-800">{t('confidence')}</p>
+                </div>
+              </div>
             </div>
 
-            <div className="mt-4 space-y-5 sm:mt-6">
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-stone-700 sm:text-sm">{t('cropType')}</span>
-                <select
-                  className="field mt-2 h-11 sm:h-12"
-                  value={selectedCrop}
-                  onChange={(event) => {
-                    setError('');
-                    setSelectedCrop(event.target.value);
-                    if (event.target.value !== CUSTOM_CROP_OPTION) setCustomCrop('');
-                  }}
-                >
-                  <option value="">{t('autoDetectCrop')}</option>
-                  {quickCropOptions.map((crop) => (
-                    <option key={crop} value={crop}>{crop}</option>
-                  ))}
-                  <option value={CUSTOM_CROP_OPTION}>{t('otherNotListed')}</option>
-                </select>
-                {selectedCrop === CUSTOM_CROP_OPTION && (
-                  <input
-                    className="field mt-3 h-11 sm:h-12"
-                    maxLength={80}
-                    placeholder={t('cropName')}
-                    value={customCrop}
-                    onChange={(event) => {
-                      setError('');
-                      setCustomCrop(event.target.value);
-                    }}
-                  />
-                )}
-              </label>
+            <div className="divide-y divide-stone-200">
+              <section className="p-4 sm:p-5">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
+                    <FlaskConical className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <label className="block">
+                      <span className="text-xs font-bold uppercase tracking-wide text-stone-700 sm:text-sm">{t('cropType')}</span>
+                      <select
+                        className="field mt-2 h-11 sm:h-12"
+                        value={selectedCrop}
+                        onChange={(event) => {
+                          setError('');
+                          setSelectedCrop(event.target.value);
+                          if (event.target.value !== CUSTOM_CROP_OPTION) setCustomCrop('');
+                        }}
+                      >
+                        <option value="">{t('autoDetectCrop')}</option>
+                        {quickCropOptions.map((crop) => (
+                          <option key={crop} value={crop}>{crop}</option>
+                        ))}
+                        <option value={CUSTOM_CROP_OPTION}>{t('otherNotListed')}</option>
+                      </select>
+                      {selectedCrop === CUSTOM_CROP_OPTION && (
+                        <input
+                          className="field mt-3 h-11 sm:h-12"
+                          maxLength={80}
+                          placeholder={t('cropName')}
+                          value={customCrop}
+                          onChange={(event) => {
+                            setError('');
+                            setCustomCrop(event.target.value);
+                          }}
+                        />
+                      )}
+                    </label>
+                    <p className="mt-3 text-xs leading-5 text-stone-500">{t('cropHintBody')}</p>
+                  </div>
+                </div>
+              </section>
 
-              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 sm:p-4">
+              <section className="bg-stone-50/70 p-4 sm:p-5">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-stone-950">{t('takeOrUploadPhoto')}</p>
+                    <p className="mt-1 text-xs leading-5 text-stone-500">{t('takeClearCropPhoto')}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-stone-200 bg-white px-2.5 py-1 text-xs font-bold text-stone-600">
+                    {MAX_IMAGE_UPLOAD_MB}MB
+                  </span>
+                </div>
                 <input
                   accept="image/*"
                   className="hidden"
@@ -3980,15 +4211,22 @@ export default function PlantDiseaseDetector() {
                   onChange={handleFileInputChange}
                 />
                 <button
-                  className="group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-stone-300 bg-white text-center transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
+                  className="group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-stone-300 bg-white text-center shadow-sm transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
                   type="button"
                   onClick={() => setShowImageSourcePicker(true)}
                 >
                   {previewUrl ? (
-                    <img src={previewUrl} alt={t('uploadCropImage')} className="h-40 w-full object-cover sm:h-48" />
+                    <div className="relative w-full">
+                      <img src={previewUrl} alt={t('uploadCropImage')} className="h-48 w-full object-cover sm:h-56" />
+                      <span className="absolute bottom-3 left-3 rounded-full bg-stone-950/75 px-3 py-1 text-xs font-bold text-white">
+                        {t('chooseImageSource')}
+                      </span>
+                    </div>
                   ) : (
-                    <div className="px-4 py-6 sm:px-5 sm:py-8">
-                      <Upload className="mx-auto h-9 w-9 text-leaf-600 sm:h-10 sm:w-10" />
+                    <div className="px-4 py-8 sm:px-5 sm:py-10">
+                      <span className="mx-auto grid h-14 w-14 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
+                        <Upload className="h-7 w-7" />
+                      </span>
                       <p className="mt-3 text-sm font-bold text-stone-900 sm:mt-4 sm:text-base">{t('takeOrUploadPhoto')}</p>
                       <p className="mt-1 text-xs leading-5 text-stone-500 sm:mt-2 sm:text-sm sm:leading-6">
                         {t('takeClearCropPhoto')}
@@ -3998,7 +4236,7 @@ export default function PlantDiseaseDetector() {
                 </button>
 
                 {showImageSourcePicker && (
-                  <div className="mt-3 grid gap-2 grid-cols-2 sm:mt-4 sm:gap-3" role="dialog" aria-label={t('chooseImageSource')}>
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:mt-4 sm:grid-cols-2 sm:gap-3" role="dialog" aria-label={t('chooseImageSource')}>
                     <button
                       className="flex min-h-16 sm:min-h-20 items-center gap-2 sm:gap-3 rounded-lg border border-stone-200 bg-white p-2 sm:p-4 text-left text-xs sm:text-sm transition hover:border-leaf-300 hover:bg-leaf-50 focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2"
                       type="button"
@@ -4029,7 +4267,7 @@ export default function PlantDiseaseDetector() {
                 )}
 
                 {imageFile && (
-                  <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3 sm:mt-4">
+                  <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-leaf-100 bg-white p-3 shadow-sm sm:mt-4">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-bold text-stone-900 sm:text-sm">{imageFile.name}</p>
                       <p className="mt-1 text-xs text-stone-500">{formatFileSize(imageFile.size)}</p>
@@ -4039,29 +4277,31 @@ export default function PlantDiseaseDetector() {
                     </button>
                   </div>
                 )}
-              </div>
+              </section>
+
+              <section className="p-4 sm:p-5">
+                {error && <div className="danger-message mb-4 text-xs sm:text-sm">{error}</div>}
+
+                {offlineAnalysisActive && (
+                  <div className="offline-loading-card mb-4" role="status" aria-live="polite">
+                    <span className="offline-loading-pulse" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold">{t('offlineImageLoading')}</p>
+                      <p className="mt-1 text-xs leading-5">{t('offlineLoadingBody')}</p>
+                    </div>
+                  </div>
+                )}
+
+                <button className="btn-primary h-11 w-full text-sm font-bold sm:h-12 sm:text-base" disabled={!canSubmit || loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {scanButtonText}
+                </button>
+              </section>
             </div>
-
-            {error && <div className="danger-message mt-4 text-xs sm:mt-5 sm:text-sm">{error}</div>}
-
-            {offlineAnalysisActive && (
-              <div className="offline-loading-card mt-4" role="status" aria-live="polite">
-                <span className="offline-loading-pulse" aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="text-sm font-bold">{t('offlineImageLoading')}</p>
-                  <p className="mt-1 text-xs leading-5">{t('offlineLoadingBody')}</p>
-                </div>
-              </div>
-            )}
-
-            <button className="btn-primary mt-4 h-11 w-full text-sm font-bold sm:mt-6 sm:h-12 sm:text-base" disabled={!canSubmit || loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              {scanButtonText}
-            </button>
           </form>
         </div>
 
-        <div className="lg:col-span-3">
+        <div className="disease-result-column min-w-0">
           <ResultPanel
             panelRef={resultPanelRef}
             result={result}
@@ -4070,7 +4310,7 @@ export default function PlantDiseaseDetector() {
             onFeedbackApplied={handleFeedbackApplied}
           />
         </div>
-        <div className="lg:col-span-5">
+        <div className="disease-detector-history">
           <HistoryList history={history} onSelect={handleHistorySelect} t={t} />
         </div>
       </div>

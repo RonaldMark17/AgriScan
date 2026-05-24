@@ -619,7 +619,7 @@ export default function Dashboard() {
           </section>
         </div>
 
-        <aside className="space-y-5 min-[1440px]:sticky sticky-panel min-[1440px]:self-start">
+        <aside className="space-y-5">
           <section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
             <div className="flex items-start justify-between gap-4">
               <div>

@@ -13,7 +13,7 @@
   --sidebar-width: 16rem;
   --sidebar-collapsed-width: 5.25rem;
   --mobile-nav-height: calc(4.5rem + env(safe-area-inset-bottom));
-  --page-max-width: 92rem;
+  --page-max-width: none;
   --page-gutter: 0.75rem;
   --page-bottom-space: calc(env(safe-area-inset-bottom) + 3.5rem);
   --minimal-border: #dce6da;
@@ -501,6 +501,14 @@ button {
   border-color: #c5ccbf;
 }
 
+.field.field-leading-icon {
+  padding-left: 2.65rem;
+}
+
+select.field.field-leading-icon {
+  padding-right: 2.5rem;
+}
+
 .btn-primary {
   @apply inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-center text-sm font-bold text-white transition focus-ring disabled:cursor-not-allowed disabled:opacity-60;
   border-color: var(--role-accent);
@@ -560,6 +568,85 @@ button {
 
 .page-stack {
   @apply space-y-5 sm:space-y-6;
+}
+
+.disease-detector-page {
+  width: 100%;
+  max-width: none;
+}
+
+.disease-detector-layout {
+  display: grid;
+  min-width: 0;
+  width: 100%;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.disease-upload-column,
+.disease-result-column,
+.disease-detector-history {
+  min-width: 0;
+}
+
+.disease-upload-column > *,
+.disease-result-column > *,
+.disease-detector-history > * {
+  width: 100%;
+}
+
+.detector-metric-grid,
+.detector-detail-grid,
+.detector-support-grid,
+.detector-info-grid {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.detector-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.detector-detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+
+.detector-support-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+}
+
+.detector-info-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+@media (min-width: 1180px) {
+  .disease-detector-layout {
+    align-items: start;
+    gap: 1.1rem;
+    grid-template-columns: minmax(19rem, clamp(19rem, 27vw, 26rem)) minmax(0, 1fr);
+  }
+
+  .disease-detector-history {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1600px) {
+  .disease-detector-layout {
+    gap: 1.25rem;
+    grid-template-columns: minmax(22rem, clamp(22rem, 22vw, 28rem)) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .disease-detector-layout,
+  .detector-metric-grid,
+  .detector-detail-grid,
+  .detector-support-grid,
+  .detector-info-grid {
+    gap: 0.75rem;
+  }
 }
 
 .page-header {

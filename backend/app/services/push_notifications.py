@@ -64,7 +64,6 @@ def _firebase_client_config() -> dict[str, str]:
         "apiKey": _clean(settings.firebase_api_key),
         "authDomain": _clean(settings.firebase_auth_domain),
         "projectId": _clean(settings.firebase_project_id),
-        "storageBucket": _clean(settings.firebase_storage_bucket),
         "messagingSenderId": _clean(settings.firebase_messaging_sender_id),
         "appId": _clean(settings.firebase_app_id),
         "measurementId": _clean(settings.firebase_measurement_id),
@@ -142,10 +141,7 @@ def _firebase_app():
                 return None
             credential = credentials.Certificate(str(service_account_path))
 
-        options = {"projectId": settings.firebase_project_id}
-        if settings.firebase_storage_bucket:
-            options["storageBucket"] = settings.firebase_storage_bucket
-        return firebase_admin.initialize_app(credential, options)
+        return firebase_admin.initialize_app(credential, {"projectId": settings.firebase_project_id})
     except Exception as exc:
         logger.exception("Firebase Admin could not initialize; push delivery will be skipped.", exc_info=exc)
         return None

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from pathlib import Path
 from uuid import uuid4
@@ -14,7 +13,6 @@ from app.models import Farm, Role, Scan, ScanFeedback, User
 from app.schemas.domain import ScanFeedbackCreate, ScanFeedbackRead, ScanRead
 from app.services.audit import write_audit_log
 from app.services.feedback_learning import apply_verified_feedback, create_scan_feedback
-from app.services.firebase_storage import mirror_upload_to_firebase, restore_upload_from_firebase
 from app.services.ml_service import detector, manual_entry_diagnosis
 from app.services.push_notifications import create_notification, dispatch_push_to_user
 
@@ -38,20 +36,7 @@ def _resolve_scan_image_path(image_path: str) -> Path:
     path = Path(image_path)
     if path.is_absolute() or path.exists():
         return path
-    local_path = settings.upload_path / path.name
-    if not local_path.exists():
-        try:
-            restore_upload_from_firebase(path.name)
-        except Exception as exc:
-            logger.warning("Could not restore scan image %s from Firebase Storage: %s", path.name, exc)
-    return local_path
-
-
-async def _mirror_upload_safely(file_path: Path, content_type: str | None) -> None:
-    try:
-        await asyncio.to_thread(mirror_upload_to_firebase, file_path, content_type)
-    except Exception as exc:
-        logger.exception("Could not mirror scan upload %s to Firebase Storage.", file_path, exc_info=exc)
+    return settings.upload_path / path.name
 
 
 def _scan_crop_label(scan: Scan) -> str | None:
@@ -310,8 +295,6 @@ async def create_scan(
     )
     await db.commit()
     await db.refresh(scan)
-    if file_path is not None:
-        await _mirror_upload_safely(file_path, image.content_type if image is not None else None)
     if scan_alert is not None and scan_notification is not None:
         title, body, payload = scan_alert
         await dispatch_push_to_user(

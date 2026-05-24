@@ -12,12 +12,7 @@ copy .env.example .env
 uvicorn app.main:app --reload
 ```
 
-SQLite is the default database and is created at `data/agriscan.sqlite3` when `AUTO_CREATE_TABLES=true`.
-To copy an existing MySQL database into SQLite, set `MYSQL_DATABASE_URL` in `.env` and run:
-
-```bash
-python scripts/migrate_mysql_to_sqlite.py --replace
-```
+SQLite is the only application database and is created at `data/agriscan.sqlite3` when `AUTO_CREATE_TABLES=true`.
 
 ## Serve the Frontend From FastAPI
 

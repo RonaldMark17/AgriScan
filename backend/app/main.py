@@ -20,7 +20,6 @@ from app.core.middleware import SecurityHeadersMiddleware
 from app.core.security import decode_token
 from app.models import Role, User, UserAccountStatus
 from app.services.account_security import effective_account_status
-from app.services.firebase_storage import restore_upload_from_firebase
 from app.services.realtime_alerts import realtime_alert_hub
 
 logger = logging.getLogger(__name__)
@@ -340,11 +339,6 @@ async def serve_upload(filename: str):
         raise HTTPException(status_code=404, detail="Not found")
 
     local_path = settings.upload_path / image_name
-    if not local_path.is_file():
-        restored_path = await asyncio.to_thread(restore_upload_from_firebase, image_name)
-        if restored_path is not None:
-            local_path = restored_path
-
     if not local_path.is_file():
         raise HTTPException(status_code=404, detail="Not found")
 
