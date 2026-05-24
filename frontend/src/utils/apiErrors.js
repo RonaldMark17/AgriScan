@@ -40,6 +40,14 @@ export function getDetailedApiErrorMessage(error, fallback = 'Something went wro
   return buildDetailedAlert(title, reason, action);
 }
 
+export function getRetryAfterSeconds(error) {
+  const detail = error?.response?.data?.detail;
+  const detailRetryAfter = detail && typeof detail === 'object' ? Number(detail.retry_after_seconds) : 0;
+  const headerRetryAfter = Number(error?.response?.headers?.['retry-after'] || 0);
+  const retryAfter = detailRetryAfter || headerRetryAfter;
+  return Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 0;
+}
+
 function formatValidationIssue(issue) {
   if (!issue || typeof issue !== 'object') {
     return String(issue || '');

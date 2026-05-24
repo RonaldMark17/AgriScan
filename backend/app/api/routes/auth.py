@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials
@@ -73,6 +74,8 @@ from app.services.rate_limiter import login_limiter
 router = APIRouter(prefix="/auth", tags=["authentication"])
 settings = get_settings()
 GENERIC_DEVICE_NAMES = {"agriscan pwa", "pwa", "unknown device"}
+LOGIN_LOCKOUT_FAILURE_INTERVAL = 3
+LOGIN_LOCKOUT_STEPS_SECONDS = (60, 300, 900)
 
 
 def _user_payload(user: User) -> dict:
@@ -87,6 +90,56 @@ def _user_payload(user: User) -> dict:
         "is_active": user.is_active,
         "mfa_enabled": bool(user.mfa_setting and user.mfa_setting.enabled),
     }
+
+
+def _as_utc(timestamp: datetime | None) -> datetime | None:
+    if timestamp is None:
+        return None
+    if timestamp.tzinfo is None:
+        return timestamp.replace(tzinfo=UTC)
+    return timestamp.astimezone(UTC)
+
+
+def _seconds_until(timestamp: datetime | None) -> int:
+    timestamp = _as_utc(timestamp)
+    if timestamp is None:
+        return 0
+    return max(0, ceil((timestamp - datetime.now(UTC)).total_seconds()))
+
+
+def _format_retry_after(seconds: int) -> str:
+    if seconds >= 60:
+        minutes = ceil(seconds / 60)
+        unit = "minute" if minutes == 1 else "minutes"
+        return f"{minutes} {unit}"
+    unit = "second" if seconds == 1 else "seconds"
+    return f"{seconds} {unit}"
+
+
+def _login_lockout_detail(retry_after_seconds: int, locked_until: datetime | None = None) -> dict:
+    retry_after_seconds = max(1, int(retry_after_seconds))
+    return {
+        "code": "LOGIN_LOCKED",
+        "message": f"Too many login attempts. Try again in {_format_retry_after(retry_after_seconds)}.",
+        "retry_after_seconds": retry_after_seconds,
+        "locked_until": _as_utc(locked_until).isoformat() if locked_until else None,
+    }
+
+
+def _login_lockout_exception(retry_after_seconds: int, locked_until: datetime | None = None) -> HTTPException:
+    retry_after_seconds = max(1, int(retry_after_seconds))
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=_login_lockout_detail(retry_after_seconds, locked_until),
+        headers={"Retry-After": str(retry_after_seconds)},
+    )
+
+
+def _lockout_seconds_for_failed_attempts(failed_attempts: int) -> int | None:
+    if failed_attempts <= 0 or failed_attempts % LOGIN_LOCKOUT_FAILURE_INTERVAL != 0:
+        return None
+    step_index = min((failed_attempts // LOGIN_LOCKOUT_FAILURE_INTERVAL) - 1, len(LOGIN_LOCKOUT_STEPS_SECONDS) - 1)
+    return LOGIN_LOCKOUT_STEPS_SECONDS[step_index]
 
 
 def _is_expired(timestamp: datetime | None) -> bool:
@@ -260,18 +313,33 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
             severity="high",
             email=payload.email.lower(),
             device_name=resolved_device_name,
-            metadata={"retry_after_seconds": limit.retry_after_seconds},
+            metadata={"retry_after_seconds": limit.retry_after_seconds, "lockout_level": limit.lockout_level},
         )
         await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many login attempts. Try again in {limit.retry_after_seconds} seconds.",
-        )
+        raise _login_lockout_exception(limit.retry_after_seconds, limit.locked_until)
     result = await db.execute(
         select(User).options(selectinload(User.role), selectinload(User.mfa_setting)).where(User.email == payload.email.lower())
     )
     user = result.scalar_one_or_none()
     user_agent = request.headers.get("user-agent")
+    if user:
+        retry_after_seconds = _seconds_until(user.locked_until)
+        if retry_after_seconds > 0:
+            await record_security_event(
+                db,
+                request,
+                event_type="login_lockout_active",
+                severity="high",
+                user=user,
+                email=user.email,
+                device_name=resolved_device_name,
+                metadata={"retry_after_seconds": retry_after_seconds},
+            )
+            await db.commit()
+            raise _login_lockout_exception(retry_after_seconds, user.locked_until)
+        if user.locked_until:
+            user.locked_until = None
+
     previous_devices: list[DeviceLoginHistory] = []
     if user:
         previous_device_result = await db.execute(
@@ -299,9 +367,16 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     )
 
     if not success:
-        login_limiter.record_failure(limiter_key)
+        limiter_failure = login_limiter.record_failure(limiter_key)
+        lockout_until = None
+        lockout_seconds = 0
         if user:
-            user.failed_login_attempts += 1
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            user_lockout_seconds = _lockout_seconds_for_failed_attempts(user.failed_login_attempts)
+            if user_lockout_seconds:
+                lockout_seconds = user_lockout_seconds
+                user.locked_until = datetime.now(UTC) + timedelta(seconds=user_lockout_seconds)
+                lockout_until = user.locked_until
         failed_attempts = user.failed_login_attempts if user else 1
         await record_security_event(
             db,
@@ -313,6 +388,21 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
             device_name=resolved_device_name,
             metadata={"failed_login_attempts": failed_attempts},
         )
+        if lockout_seconds:
+            await record_security_event(
+                db,
+                request,
+                event_type="login_lockout_started",
+                severity="high",
+                user=user,
+                email=payload.email.lower(),
+                device_name=resolved_device_name,
+                metadata={
+                    "failed_login_attempts": failed_attempts,
+                    "retry_after_seconds": lockout_seconds,
+                    "locked_until": lockout_until.isoformat() if lockout_until else None,
+                },
+            )
         if user and failed_attempts >= 3:
             await record_security_event(
                 db,
@@ -327,10 +417,15 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
             await auto_suspend_after_failed_logins(db, request, user=user, device_name=resolved_device_name)
         await write_audit_log(db, request, "auth.login_failed", actor=user, resource_type="user", resource_id=user.id if user else None)
         await db.commit()
+        if lockout_seconds:
+            raise _login_lockout_exception(lockout_seconds, lockout_until)
+        if not limiter_failure.allowed:
+            raise _login_lockout_exception(limiter_failure.retry_after_seconds, limiter_failure.locked_until)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
 
     login_limiter.record_success(limiter_key)
     user.failed_login_attempts = 0
+    user.locked_until = None
     user.last_login_at = datetime.now(UTC)
     await write_audit_log(db, request, "auth.password_verified", actor=user, resource_type="user", resource_id=user.id)
     if previous_devices:

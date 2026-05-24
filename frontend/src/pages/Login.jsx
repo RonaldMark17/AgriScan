@@ -1,12 +1,20 @@
-import { ArrowRight, Eye, EyeOff, Leaf, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Clock, Eye, EyeOff, Leaf, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loginHeroImage } from '../assets/visuals/index.js';
 import LanguageToggle from '../components/shared/LanguageToggle.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../context/I18nContext.jsx';
-import { getDetailedApiErrorMessage } from '../utils/apiErrors.js';
+import { getDetailedApiErrorMessage, getRetryAfterSeconds } from '../utils/apiErrors.js';
 import { getCurrentDeviceName, getFallbackDeviceName } from '../utils/deviceName.js';
+
+function formatCountdown(totalSeconds) {
+  const safeSeconds = Math.max(0, Math.ceil(totalSeconds || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  if (!minutes) return `${seconds}s`;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
 
 export default function Login() {
   const { hasRememberedSession, isAuthenticated, login, restoreRememberedSession, sessionReady } = useAuth();
@@ -17,7 +25,11 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [lockoutUntil, setLockoutUntil] = useState(0);
+  const [secondsRemaining, setSecondsRemaining] = useState(0);
   const returnTo = location.state?.from?.pathname || '/';
+  const lockedOut = secondsRemaining > 0;
+  const countdownLabel = formatCountdown(secondsRemaining);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +47,25 @@ export default function Login() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!lockoutUntil) {
+      setSecondsRemaining(0);
+      return undefined;
+    }
+
+    function tick() {
+      const remaining = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
+      setSecondsRemaining(remaining);
+      if (remaining <= 0) {
+        setLockoutUntil(0);
+      }
+    }
+
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [lockoutUntil]);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +97,7 @@ export default function Login() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (lockedOut) return;
     setError('');
     setLoading(true);
     try {
@@ -80,18 +112,25 @@ export default function Login() {
         navigate('/mfa/setup', { state: { setupToken: result.setup_token, user: result.user, rememberMe: payload.remember_me, deviceName } });
       }
     } catch (requestError) {
-      setError(getDetailedApiErrorMessage(requestError, 'Login failed. Please check your credentials.', {
-        title: 'Login could not be completed.',
-        action: 'Check your email, password, account status, and MFA requirement, then try again.',
-      }));
+      const retryAfterSeconds = getRetryAfterSeconds(requestError);
+      if (retryAfterSeconds) {
+        setError('');
+        setLockoutUntil(Date.now() + retryAfterSeconds * 1000);
+        setSecondsRemaining(retryAfterSeconds);
+      } else {
+        setError(getDetailedApiErrorMessage(requestError, t('loginFailed'), {
+          title: 'Login could not be completed.',
+          action: 'Check your email, password, account status, and MFA requirement, then try again.',
+        }));
+      }
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="auth-page grid h-[100dvh] overflow-hidden px-3 py-3 text-stone-950 sm:px-4 sm:py-4 place-items-center">
-      <div className="auth-card grid h-full max-h-full w-full max-w-5xl overflow-hidden lg:grid-cols-[minmax(0,1fr)_410px]">
+    <main className="auth-page grid min-h-[100dvh] px-3 py-3 text-stone-950 sm:px-4 sm:py-4 lg:place-items-center">
+      <div className="auth-card grid w-full max-w-5xl overflow-hidden lg:min-h-[min(760px,calc(100dvh-2rem))] lg:grid-cols-[minmax(0,1fr)_410px]">
         <section className="relative hidden overflow-hidden bg-leaf-950 lg:block">
           <img
             src={loginHeroImage}
@@ -123,9 +162,9 @@ export default function Login() {
           </div>
         </section>
 
-        <section className="flex min-h-0 items-center justify-center overflow-hidden bg-white px-4 pb-4 pt-4 sm:px-6 sm:pb-5 sm:pt-5 lg:px-8 lg:pt-6">
+        <section className="flex min-h-0 items-start justify-center bg-white px-4 py-6 sm:px-6 sm:py-7 lg:px-8">
           <div className="w-full max-w-[420px]">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <Link to="/" className="flex min-w-0 items-center gap-3">
                 <span className="brand-mark">
                   <Leaf className="h-6 w-6" />
@@ -143,6 +182,16 @@ export default function Login() {
               <p className="mt-2 text-sm leading-6 text-stone-500">{t('loginSubtitle')}</p>
 
               {error && <div className="danger-message mt-4">{error}</div>}
+
+              {lockedOut && (
+                <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900" aria-live="polite">
+                  <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                  <span className="min-w-0">
+                    <span className="block">{t('loginLockedTitle')}</span>
+                    <span className="mt-1 block text-xs leading-5 text-amber-800">{t('loginLockedBody', { time: countdownLabel })}</span>
+                  </span>
+                </div>
+              )}
 
               <label className="mt-5 block text-sm font-semibold text-stone-700">{t('email')}</label>
               <div className="mt-2 flex h-14 items-center rounded-lg border border-stone-300 bg-white px-4 transition focus-within:border-leaf-600 focus-within:ring-2 focus-within:ring-leaf-100">
@@ -197,8 +246,8 @@ export default function Login() {
                 </span>
               </label>
 
-              <button className="btn-primary mt-5 h-12 w-full text-base" disabled={loading}>
-                {loading ? t('signingIn') : t('accessDashboard')}
+              <button className="btn-primary mt-5 h-12 w-full text-base" disabled={loading || lockedOut}>
+                {lockedOut ? t('loginLockedButton', { time: countdownLabel }) : loading ? t('signingIn') : t('accessDashboard')}
                 <ArrowRight className="h-4 w-4" />
               </button>
 

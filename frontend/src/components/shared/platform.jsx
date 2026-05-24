@@ -8,6 +8,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 export function StatusBadge({ status = 'active', children }) {
   const normalized = String(status || 'active').toLowerCase();
@@ -228,12 +229,12 @@ export function ConfirmModal({
   onCancel,
   children,
 }) {
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-y-auto bg-stone-950/45 p-4 backdrop-blur-sm sm:items-center">
-      <div className="surface modal-panel w-full max-w-lg rounded-lg bg-white p-5">
-        <div className="flex items-start gap-3">
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-stone-950/45 px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-6">
+      <div className="surface modal-panel my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-lg bg-white p-0 sm:max-h-[calc(100dvh-3rem)]">
+        <div className="flex shrink-0 items-start gap-3 p-4 pb-3 sm:p-5 sm:pb-4">
           <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${danger ? 'bg-red-50 text-red-700' : 'bg-leaf-50 text-leaf-700'}`}>
             {danger ? <AlertTriangle className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
           </span>
@@ -245,8 +246,8 @@ export function ConfirmModal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        {children ? <div className="mt-4">{children}</div> : null}
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        {children ? <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-1 sm:px-5">{children}</div> : null}
+        <div className="flex shrink-0 flex-col gap-2 border-t border-stone-100 p-4 sm:flex-row sm:justify-end sm:p-5">
           <button className="btn-secondary" type="button" onClick={onCancel} disabled={loading}>
             {cancelLabel}
           </button>
@@ -256,7 +257,8 @@ export function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
