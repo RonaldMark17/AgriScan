@@ -122,8 +122,18 @@ export default function Register() {
                     <input className="field mt-2" type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
                   </label>
                   <label className="block">
-                    <span className="text-sm font-semibold text-stone-700">{t('phone')}</span>
-                    <input className="field mt-2" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+                    <span className="text-sm font-semibold text-stone-700">
+                      {t('smsPhoneLabel')} <span className="font-medium text-stone-400">({t('optional')})</span>
+                    </span>
+                    <input
+                      className="field mt-2"
+                      value={form.phone}
+                      onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                      placeholder="+639171234567"
+                      inputMode="tel"
+                      autoComplete="tel"
+                    />
+                    <p className="mt-1 text-xs leading-5 text-stone-500">{t('phoneSmsRegisterHint')}</p>
                   </label>
                 </div>
               </section>

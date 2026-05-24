@@ -18,6 +18,14 @@ class RegisterRequest(BaseModel):
             raise ValueError(" ".join(errors))
         return value
 
+    @field_validator("phone")
+    @classmethod
+    def blank_phone_is_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
 
 class LoginRequest(BaseModel):
     email: EmailStr

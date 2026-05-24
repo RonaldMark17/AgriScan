@@ -130,6 +130,7 @@ Set real secrets and API keys before deployment:
 - `SMTP_*`
 - `FIREBASE_*`
 - `WEATHER_API_KEY`
+- `SMS_PROVIDER`, `TEXTBELT_API_KEY` or `SMS_API_KEY`
 - `GOOGLE_MAPS_API_KEY`
 
 Use HTTPS, set `ENVIRONMENT=production`, configure `ALLOWED_HOSTS`, and run the frontend behind the included Nginx container or your platform edge.
@@ -179,6 +180,16 @@ volumes:
 ```
 
 SQLite is the only application database. Scan uploads are stored on the backend filesystem or Docker `backend_uploads` volume. Firebase is used only for Cloud Messaging push notifications.
+
+Configure Textbelt SMS for verified phone alerts and password recovery codes:
+
+```env
+SMS_PROVIDER=textbelt
+TEXTBELT_API_KEY=textbelt
+SMS_TEST_MODE=true
+```
+
+`SMS_TEST_MODE=true` validates Textbelt requests without sending a real SMS. Set it to `false` only when you are ready to consume Textbelt free or paid quota.
 
 AJAX notification refresh runs every 10 seconds by default, so the notification bell updates without a manual refresh. Set `VITE_ENABLE_REALTIME_ALERTS=true` only after the host proxy can pass `/api/v1/notifications/stream` WebSocket traffic.
 

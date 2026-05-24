@@ -15,6 +15,7 @@ from app.services.audit import write_audit_log
 from app.services.feedback_learning import apply_verified_feedback, create_scan_feedback
 from app.services.ml_service import detector, manual_entry_diagnosis
 from app.services.push_notifications import create_notification, dispatch_push_to_user
+from app.services.sms import send_field_alert_sms
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 settings = get_settings()
@@ -305,6 +306,9 @@ async def create_scan(
             url="/disease-detector",
             payload={**payload, "notification_id": scan_notification.id, "type": "disease_scan"},
         )
+        sms_result = await send_field_alert_sms(current_user, body)
+        if sms_result.error:
+            logger.warning("Field alert SMS was not delivered for user %s: %s", current_user.id, sms_result.error)
     setattr(scan, "crop_label", detection.crop_label)
     setattr(scan, "analysis_mode", detection.analysis_mode)
     setattr(scan, "reference_url", detection.reference_url)

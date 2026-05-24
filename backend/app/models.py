@@ -57,6 +57,13 @@ class User(Base):
     account_status: Mapped[str] = mapped_column(String(32), default=UserAccountStatus.active.value, index=True)
     account_status_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    phone_verification_otp_hash: Mapped[str | None] = mapped_column(String(255))
+    phone_verification_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    phone_verification_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    phone_verification_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sms_alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -74,6 +81,10 @@ class User(Base):
         back_populates="user",
         foreign_keys="AppealRequest.user_id",
     )
+
+    @property
+    def mfa_enabled(self) -> bool:
+        return bool(self.mfa_setting and self.mfa_setting.enabled)
 
 
 class Farm(Base):

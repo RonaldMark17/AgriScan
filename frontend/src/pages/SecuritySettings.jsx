@@ -1,4 +1,4 @@
-import { BellRing, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Cloud, KeyRound, Mic, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react';
+import { BellRing, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Cloud, KeyRound, MessageSquareText, Mic, RefreshCw, Send, ShieldCheck, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
@@ -17,7 +17,7 @@ import {
 import { deviceNameFromUserAgent, isGenericDeviceName } from '../utils/deviceName.js';
 
 export default function SecuritySettings() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { language, setLanguage, t } = useI18n();
   const {
     voiceAssistantEnabled,
@@ -30,6 +30,12 @@ export default function SecuritySettings() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushServerReady, setPushServerReady] = useState(false);
   const [pushChecking, setPushChecking] = useState(true);
+  const [smsStatus, setSmsStatus] = useState(null);
+  const [smsMessage, setSmsMessage] = useState('');
+  const [smsMessageType, setSmsMessageType] = useState('success');
+  const [smsCode, setSmsCode] = useState('');
+  const [smsLoading, setSmsLoading] = useState('');
+  const [phoneInput, setPhoneInput] = useState(() => user?.phone || '');
   const [syncStatus, setSyncStatus] = useState(() => localStorage.getItem('agriscan_last_sync') || t('notSyncedYet'));
   const [settingsStatus, setSettingsStatus] = useState('');
   const [pushLoading, setPushLoading] = useState(false);
@@ -97,6 +103,16 @@ export default function SecuritySettings() {
     }
   }, [pushServerConfigStatus, t]);
 
+  const loadSmsStatus = useCallback(async () => {
+    try {
+      const { data } = await api.get('/account/sms/status');
+      setSmsStatus(data);
+      setPhoneInput(data.phone || '');
+    } catch {
+      setSmsStatus(null);
+    }
+  }, []);
+
   useEffect(() => {
     fetchDevices();
   }, [fetchDevices]);
@@ -104,6 +120,16 @@ export default function SecuritySettings() {
   useEffect(() => {
     checkPushStatus();
   }, [checkPushStatus]);
+
+  useEffect(() => {
+    loadSmsStatus();
+  }, [loadSmsStatus]);
+
+  useEffect(() => {
+    if (!smsStatus) {
+      setPhoneInput(user?.phone || '');
+    }
+  }, [smsStatus, user?.phone]);
 
   useEffect(() => {
     if (!localStorage.getItem('agriscan_last_sync')) {
@@ -182,8 +208,113 @@ export default function SecuritySettings() {
     }
   }
 
+  async function savePhoneNumber() {
+    setSmsLoading('phone');
+    setSmsMessage('');
+    try {
+      await api.patch('/account/phone', { phone: phoneInput });
+      await refreshUser();
+      await loadSmsStatus();
+      setSmsMessageType('success');
+      setSmsMessage(t('phoneSavedForSms'));
+      setSmsCode('');
+    } catch (error) {
+      setSmsMessageType('danger');
+      setSmsMessage(getDetailedApiErrorMessage(error, t('phoneSaveFailed'), {
+        title: 'Phone number could not be saved.',
+        action: 'Use international format such as +639171234567, then try again.',
+      }));
+    } finally {
+      setSmsLoading('');
+    }
+  }
+
+  async function sendPhoneCode() {
+    setSmsLoading('send-code');
+    setSmsMessage('');
+    try {
+      const { data } = await api.post('/account/phone/send-code');
+      await loadSmsStatus();
+      setSmsMessageType('success');
+      setSmsMessage(data.debug_code ? `${data.message} ${t('smsDevCode', { code: data.debug_code })}` : data.message);
+    } catch (error) {
+      setSmsMessageType('danger');
+      setSmsMessage(getDetailedApiErrorMessage(error, t('smsCodeSendFailed'), {
+        title: 'SMS code could not be sent.',
+        action: 'Check the phone number, SMS configuration, and provider quota, then try again.',
+      }));
+    } finally {
+      setSmsLoading('');
+    }
+  }
+
+  async function verifyPhoneCode() {
+    setSmsLoading('verify');
+    setSmsMessage('');
+    try {
+      await api.post('/account/phone/verify', { code: smsCode });
+      await refreshUser();
+      await loadSmsStatus();
+      setSmsCode('');
+      setSmsMessageType('success');
+      setSmsMessage(t('phoneVerifiedForSms'));
+    } catch (error) {
+      setSmsMessageType('danger');
+      setSmsMessage(getDetailedApiErrorMessage(error, t('smsCodeVerifyFailed'), {
+        title: 'Phone verification failed.',
+        action: 'Enter the latest 6-digit SMS code or request a new one.',
+      }));
+    } finally {
+      setSmsLoading('');
+    }
+  }
+
+  async function toggleSmsAlerts() {
+    const nextEnabled = !smsStatus?.sms_alerts_enabled;
+    setSmsLoading('toggle');
+    setSmsMessage('');
+    try {
+      await api.patch('/account/sms-alerts', { enabled: nextEnabled });
+      await refreshUser();
+      await loadSmsStatus();
+      setSmsMessageType('success');
+      setSmsMessage(nextEnabled ? t('smsAlertsEnabled') : t('smsAlertsDisabled'));
+    } catch (error) {
+      setSmsMessageType('danger');
+      setSmsMessage(getDetailedApiErrorMessage(error, t('smsAlertUpdateFailed'), {
+        title: 'SMS preference could not be updated.',
+        action: 'Verify the phone number first, then try again.',
+      }));
+    } finally {
+      setSmsLoading('');
+    }
+  }
+
+  async function sendTestSms() {
+    setSmsLoading('test');
+    setSmsMessage('');
+    try {
+      const { data } = await api.post('/account/sms/test');
+      setSmsMessageType('success');
+      setSmsMessage(data.message || t('testSmsSent'));
+    } catch (error) {
+      setSmsMessageType('danger');
+      setSmsMessage(getDetailedApiErrorMessage(error, t('testSmsFailed'), {
+        title: 'Test SMS could not be sent.',
+        action: 'Check phone verification, SMS provider test mode, and Textbelt quota.',
+      }));
+    } finally {
+      setSmsLoading('');
+    }
+  }
+
   const mfaStatusLabel = mfaEnabled ? t('enabled') : mfaRequired ? t('required') : t('optional');
   const pushStatusLabel = pushEnabled ? t('enabled') : pushChecking ? t('checking') : t('notEnabled');
+  const hasSmsPhone = Boolean(smsStatus?.phone || user?.phone);
+  const smsVerified = Boolean(smsStatus?.phone_verified || user?.phone_verified);
+  const smsEnabled = Boolean(smsStatus?.sms_alerts_enabled || user?.sms_alerts_enabled);
+  const smsStatusLabel = !hasSmsPhone ? t('notEnabled') : smsVerified ? (smsEnabled ? t('enabled') : t('verified')) : t('unverified');
+  const smsStatusBody = !hasSmsPhone ? t('smsNoPhoneBody') : smsVerified ? t('smsReadyBody') : t('smsVerifyBody');
   const syncStatusLabel = toggles.autoSync ? t('active') : t('notEnabled');
   const recentDevices = devices.slice(0, 5);
   const getDeviceDisplayName = useCallback(
@@ -209,7 +340,7 @@ export default function SecuritySettings() {
         }
       />
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 w-full">
         <StatusCard
           icon={ShieldCheck}
           label={t('security')}
@@ -223,6 +354,13 @@ export default function SecuritySettings() {
           value={pushStatusLabel}
           body={pushChecking ? t('checkingPushStatus') : pushStatus || t('pushNotEnabledYet')}
           tone={pushEnabled ? 'leaf' : 'stone'}
+        />
+        <StatusCard
+          icon={MessageSquareText}
+          label={t('smsAlertsTitle')}
+          value={smsStatusLabel}
+          body={smsStatusBody}
+          tone={smsEnabled ? 'leaf' : hasSmsPhone && !smsVerified ? 'amber' : 'stone'}
         />
         <StatusCard
           icon={Cloud}
@@ -363,6 +501,94 @@ export default function SecuritySettings() {
                 {t('setupAuthenticator')}
               </Link>
             )}
+          </SettingsSection>
+
+          <SettingsSection icon={MessageSquareText} title={t('smsAlertsTitle')} body={t('smsAlertsBody')}>
+            <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm w-full">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between w-full">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-stone-900">{t('phone')}</p>
+                  <p className="mt-1 break-all text-xs sm:text-sm text-stone-600">{smsStatus?.phone || user?.phone || t('noPhoneSaved')}</p>
+                </div>
+                <StatusPill tone={smsEnabled ? 'leaf' : hasSmsPhone && !smsVerified ? 'amber' : 'stone'}>
+                  {smsStatusLabel}
+                </StatusPill>
+              </div>
+              {smsStatus?.test_mode ? (
+                <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+                  {t('smsTestModeNotice')}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <label className="block">
+                <span className="text-sm font-semibold text-stone-700">{t('smsPhoneLabel')}</span>
+                <input
+                  className="field mt-2"
+                  value={phoneInput}
+                  onChange={(event) => setPhoneInput(event.target.value)}
+                  placeholder="+639171234567"
+                  inputMode="tel"
+                  autoComplete="tel"
+                />
+              </label>
+              <button className="btn-secondary w-full justify-center" type="button" onClick={savePhoneNumber} disabled={smsLoading === 'phone'}>
+                {smsLoading === 'phone' ? <RefreshCw className="h-4 w-4 mr-2 shrink-0 animate-spin" /> : <Smartphone className="h-4 w-4 mr-2 shrink-0" />}
+                <span className="truncate">{smsLoading === 'phone' ? t('saving') : t('savePhone')}</span>
+              </button>
+            </div>
+
+            {hasSmsPhone && !smsVerified ? (
+              <div className="mt-4 grid gap-3 rounded-lg border border-amber-100 bg-amber-50 p-4">
+                <button className="btn-secondary w-full justify-center bg-white" type="button" onClick={sendPhoneCode} disabled={smsLoading === 'send-code' || (smsStatus?.cooldown_seconds || 0) > 0}>
+                  {smsLoading === 'send-code' ? <RefreshCw className="h-4 w-4 mr-2 shrink-0 animate-spin" /> : <Send className="h-4 w-4 mr-2 shrink-0" />}
+                  <span className="truncate">
+                    {(smsStatus?.cooldown_seconds || 0) > 0
+                      ? t('smsCodeCooldown', { seconds: smsStatus.cooldown_seconds })
+                      : smsLoading === 'send-code'
+                        ? t('sendingResetCode')
+                        : t('sendSmsCode')}
+                  </span>
+                </button>
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <input
+                    className="field"
+                    value={smsCode}
+                    onChange={(event) => setSmsCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder={t('smsCodePlaceholder')}
+                    inputMode="numeric"
+                  />
+                  <button className="btn-primary justify-center" type="button" onClick={verifyPhoneCode} disabled={smsLoading === 'verify' || smsCode.length !== 6}>
+                    {smsLoading === 'verify' ? <RefreshCw className="h-4 w-4 mr-2 shrink-0 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2 shrink-0" />}
+                    {t('verifyPhone')}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {hasSmsPhone && smsVerified ? (
+              <div className="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white w-full">
+                <SettingToggle
+                  title={t('smsFieldAlerts')}
+                  body={t('smsFieldAlertsBody')}
+                  active={smsEnabled}
+                  onToggle={toggleSmsAlerts}
+                />
+                <div className="px-4 py-4">
+                  <button className="btn-secondary w-full justify-center" type="button" onClick={sendTestSms} disabled={!smsEnabled || smsLoading === 'test'}>
+                    {smsLoading === 'test' ? <RefreshCw className="h-4 w-4 mr-2 shrink-0 animate-spin" /> : <Send className="h-4 w-4 mr-2 shrink-0" />}
+                    {smsLoading === 'test' ? t('sendingTestSms') : t('sendTestSms')}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {smsMessage ? (
+              <p className={`mt-4 rounded-lg border px-3 py-2 text-sm font-semibold leading-6 ${smsMessageType === 'danger' ? 'border-red-100 bg-red-50 text-red-800' : 'border-leaf-100 bg-leaf-50 text-leaf-800'}`}>
+                {smsMessage}
+              </p>
+            ) : null}
           </SettingsSection>
 
           <SettingsSection icon={BellRing} title={t('pushNotificationStatus')}>

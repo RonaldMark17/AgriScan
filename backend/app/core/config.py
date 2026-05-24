@@ -57,7 +57,11 @@ class Settings(BaseSettings):
     weather_api_key: str | None = None
     weather_api_base_url: str = "https://api.openweathermap.org/data/2.5"
     google_maps_api_key: str | None = None
+    sms_provider: str = "textbelt"
     sms_api_key: str | None = None
+    textbelt_api_key: str | None = None
+    sms_test_mode: bool = True
+    sms_timeout_seconds: float = 8.0
     ocr_api_key: str | None = None
 
     upload_dir: str = "uploads"

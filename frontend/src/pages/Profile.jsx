@@ -71,6 +71,16 @@ export default function Profile() {
               <div>
                 <dt className="font-bold text-stone-500">Phone</dt>
                 <dd className="mt-1 text-stone-950">{user?.phone || '-'}</dd>
+                {user?.phone ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <StatusBadge status={user?.phone_verified ? 'verified' : 'pending'}>
+                      {user?.phone_verified ? 'Verified for SMS' : 'Not verified'}
+                    </StatusBadge>
+                    <StatusBadge status={user?.sms_alerts_enabled ? 'approved' : 'draft'}>
+                      {user?.sms_alerts_enabled ? 'SMS alerts on' : 'SMS alerts off'}
+                    </StatusBadge>
+                  </div>
+                ) : null}
               </div>
             </div>
           </dl>
@@ -93,7 +103,7 @@ export default function Profile() {
           </dl>
         </FormSection>
 
-        <FormSection icon={KeyRound} title="Password and security" body="Use the security settings page for MFA, device history, notification preferences, and password recovery workflows.">
+        <FormSection icon={KeyRound} title="Password and security" body="Use the security settings page for MFA, SMS phone verification, device history, notification preferences, and password recovery workflows.">
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link className="btn-primary justify-center" to="/settings">
               <ShieldCheck className="h-4 w-4" />

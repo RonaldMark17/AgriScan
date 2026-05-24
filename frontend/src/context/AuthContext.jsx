@@ -127,6 +127,13 @@ export function AuthProvider({ children }) {
     localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
   }, []);
 
+  const persistUser = useCallback((nextUser) => {
+    if (!nextUser) return null;
+    localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+    setUser(nextUser);
+    return nextUser;
+  }, []);
+
   const clearSession = useCallback(() => {
     sessionVersionRef.current += 1;
     localStorage.removeItem(ACCESS_KEY);
@@ -161,6 +168,11 @@ export function AuthProvider({ children }) {
     const { data } = await api.post('/auth/register', payload);
     return data;
   }, []);
+
+  const refreshUser = useCallback(async () => {
+    const { data } = await api.get('/auth/me');
+    return persistUser(data);
+  }, [persistUser]);
 
   const verifyMfa = useCallback(
     async (payload) => {
@@ -367,6 +379,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(accessToken && user),
       login,
       register,
+      refreshUser,
       verifyMfa,
       saveTokensFromMfaSetup,
       logout,
@@ -381,6 +394,7 @@ export function AuthProvider({ children }) {
       sessionReady,
       login,
       register,
+      refreshUser,
       verifyMfa,
       saveTokensFromMfaSetup,
       logout,

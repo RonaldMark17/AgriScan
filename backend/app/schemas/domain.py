@@ -22,6 +22,10 @@ class UserRead(BaseModel):
     account_status: str = "active"
     account_status_until: datetime | None = None
     is_verified: bool
+    phone_verified: bool = False
+    phone_verified_at: datetime | None = None
+    sms_alerts_enabled: bool = False
+    mfa_enabled: bool = False
     created_at: datetime
     last_login_at: datetime | None
 

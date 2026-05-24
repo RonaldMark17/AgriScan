@@ -70,6 +70,11 @@ from app.services.mfa import (
     verify_totp,
 )
 from app.services.rate_limiter import login_limiter
+from app.services.sms import (
+    normalize_phone_number,
+    phone_number_is_valid,
+    send_password_reset_sms,
+)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 settings = get_settings()
@@ -89,6 +94,9 @@ def _user_payload(user: User) -> dict:
         "account_status_until": user.account_status_until.isoformat() if user.account_status_until else None,
         "is_active": user.is_active,
         "mfa_enabled": bool(user.mfa_setting and user.mfa_setting.enabled),
+        "phone_verified": bool(user.phone_verified),
+        "phone_verified_at": user.phone_verified_at.isoformat() if user.phone_verified_at else None,
+        "sms_alerts_enabled": bool(user.sms_alerts_enabled),
     }
 
 
@@ -274,6 +282,10 @@ async def _resolve_setup_user(
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)) -> User:
+    normalized_phone = normalize_phone_number(payload.phone)
+    if payload.phone and not phone_number_is_valid(normalized_phone):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use a valid phone number such as +639171234567.")
+
     existing = await db.execute(select(User).where(User.email == payload.email.lower()))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered.")
@@ -285,7 +297,7 @@ async def register(payload: RegisterRequest, request: Request, db: AsyncSession 
 
     user = User(
         email=payload.email.lower(),
-        phone=payload.phone,
+        phone=normalized_phone,
         full_name=payload.full_name,
         hashed_password=get_password_hash(payload.password),
         role_id=role.id,
@@ -588,6 +600,7 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: 
             )
         )
         await send_password_reset_otp(user.email, otp)
+        await send_password_reset_sms(user, otp)
         await write_audit_log(db, request, "auth.password_reset_requested", actor=user, resource_type="user", resource_id=user.id)
         await db.commit()
     return MessageResponse(message="If the account exists, a password reset code has been sent.")

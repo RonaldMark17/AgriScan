@@ -10,6 +10,7 @@ from app.schemas.common import MessageResponse
 from app.schemas.domain import AccountStatusUpdate, UserRead, UserUpdate
 from app.services.account_security import apply_account_status_change, record_admin_action
 from app.services.audit import write_audit_log
+from app.services.sms import normalize_phone_number, phone_number_is_valid
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -19,7 +20,7 @@ async def list_users(
     _: User = Depends(require_roles("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> list[User]:
-    result = await db.execute(select(User).options(selectinload(User.role)).order_by(User.created_at.desc()).limit(200))
+    result = await db.execute(select(User).options(selectinload(User.role), selectinload(User.mfa_setting)).order_by(User.created_at.desc()).limit(200))
     return list(result.scalars().all())
 
 
@@ -31,7 +32,7 @@ async def update_user(
     current_user: User = Depends(require_roles("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    result = await db.execute(select(User).options(selectinload(User.role)).where(User.id == user_id))
+    result = await db.execute(select(User).options(selectinload(User.role), selectinload(User.mfa_setting)).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
@@ -51,6 +52,19 @@ async def update_user(
         if role is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role.")
         user.role_id = role.id
+    if "phone" in data:
+        normalized_phone = normalize_phone_number(data["phone"])
+        if data["phone"] and not phone_number_is_valid(normalized_phone):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use a valid phone number such as +639171234567.")
+        if normalized_phone != user.phone:
+            user.phone_verified = False
+            user.phone_verified_at = None
+            user.phone_verification_otp_hash = None
+            user.phone_verification_expires_at = None
+            user.phone_verification_attempts = 0
+            user.phone_verification_sent_at = None
+            user.sms_alerts_enabled = False
+        data["phone"] = normalized_phone
     for field, value in data.items():
         setattr(user, field, value)
 
@@ -79,7 +93,7 @@ async def update_account_status(
     current_user: User = Depends(require_roles("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    result = await db.execute(select(User).options(selectinload(User.role)).where(User.id == user_id))
+    result = await db.execute(select(User).options(selectinload(User.role), selectinload(User.mfa_setting)).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
