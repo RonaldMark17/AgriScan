@@ -60,7 +60,7 @@ from app.services.account_security import (
 )
 from app.services.audit import write_audit_log
 from app.services.email import send_new_login_alert, send_password_reset_otp
-from app.services.push_notifications import verify_firebase_id_token
+from app.services.push_notifications import firebase_push_configuration, verify_firebase_id_token
 from app.services.mfa import (
     build_otpauth_url,
     create_totp_secret,
@@ -586,6 +586,17 @@ async def logout(
 @router.get("/me", response_model=UserRead)
 async def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
+
+
+@router.get("/firebase-phone-config")
+async def firebase_phone_config() -> dict:
+    config = firebase_push_configuration()
+    return {
+        "provider": "firebase",
+        "enabled": config.enabled,
+        "firebase_config": config.client_config if config.enabled else None,
+        "missing": list(config.missing),
+    }
 
 
 @router.post("/forgot-password", response_model=MessageResponse)

@@ -9,7 +9,7 @@ let recaptchaVerifier = null;
 let confirmationResult = null;
 
 async function getFirebaseConfig() {
-  const { data } = await api.get('/notifications/push/config');
+  const { data } = await api.get('/auth/firebase-phone-config');
   const firebaseConfig = data?.firebase_config || null;
   if (!firebaseConfig || !data?.enabled) {
     const error = new Error('Firebase is not configured.');
