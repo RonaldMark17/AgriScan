@@ -15,6 +15,7 @@ import {
   MapPin,
   Play,
   RotateCcw,
+  Sparkles,
   Sprout,
   Sun,
   ThumbsDown,
@@ -1141,6 +1142,236 @@ function CropGuideModal({ crop, weatherSummary, onClose, onPlayAudio, t }) {
   );
 }
 
+
+const AVAILABLE_TREATMENTS = [
+  {
+    id: 'lime',
+    title: 'Agricultural Lime (Calcite)',
+    badge: '+1.0 pH',
+    description: 'Increases soil pH by +1.0. Neutralizes heavy acidity and frees up phosphorus uptake.',
+    calcBoost: (form, cropName) => {
+      const ph = parseOptionalNumber(form?.ph_level);
+      const isAcidLoving = ['pineapple', 'cassava', 'sweet potato', 'cacao', 'coconut'].some((c) =>
+        (cropName || '').toLowerCase().includes(c)
+      );
+      if (ph !== null && ph < 5.8 && !isAcidLoving) return 14;
+      if (ph !== null && ph < 6.5 && !isAcidLoving) return 8;
+      return 4;
+    },
+  },
+  {
+    id: 'compost',
+    title: 'Organic Compost / Humus',
+    badge: '+10% Moisture & Biology',
+    description: 'Boosts organic matter, improves water retention (+10%), and buffers root temperature.',
+    calcBoost: (form) => {
+      const moisture = parseOptionalNumber(form?.moisture_percent);
+      if (moisture !== null && moisture < 40) return 12;
+      return 6;
+    },
+  },
+  {
+    id: 'drainage',
+    title: 'Raised Beds & Furrow Ditches',
+    badge: 'Drainage Aeration',
+    description: 'Improves soil aeration and eliminates waterlogging risk for vegetables and root crops.',
+    calcBoost: (form, cropName) => {
+      const drainage = (form?.drainage || '').toLowerCase();
+      const isWaterLoving = ['rice', 'gabi', 'taro'].some((c) => (cropName || '').toLowerCase().includes(c));
+      if ((drainage === 'poor' || drainage === 'waterlogged') && !isWaterLoving) return 15;
+      return 4;
+    },
+  },
+  {
+    id: 'npk',
+    title: 'Complete 14-14-14 Starter',
+    badge: 'Balanced NPK',
+    description: 'Restores baseline nitrogen, phosphorus, and potassium availability for early growth vigor.',
+    calcBoost: (form) => {
+      let b = 0;
+      if (form?.nitrogen_level === 'low') b += 4;
+      if (form?.phosphorus_level === 'low') b += 4;
+      if (form?.potassium_level === 'low') b += 4;
+      return b > 0 ? b : 5;
+    },
+  },
+];
+
+function SoilTreatmentSimulator({ activeTreatments, onToggleTreatment, onResetTreatments, t }) {
+  const activeCount = activeTreatments.size;
+  const [plotHectares, setPlotHectares] = useState(1.0);
+  const [showDosageCalc, setShowDosageCalc] = useState(false);
+
+  const dosageGuides = {
+    lime: {
+      rateKgPerHa: 800,
+      bagsPerHa: 16,
+      tip: 'Broadcast evenly 2–3 weeks before planting to neutralize aluminum toxicity and release locked phosphorus.',
+    },
+    compost: {
+      rateKgPerHa: 1500,
+      bagsPerHa: 30,
+      tip: 'Incorporate into top 15cm soil during land preparation to increase water holding capacity and build microbiology.',
+    },
+    drainage: {
+      rateKgPerHa: 0,
+      bagsPerHa: 0,
+      tip: 'Dig 30cm furrow ditches along bed contours to protect roots from waterlogging during monsoons.',
+    },
+    npk: {
+      rateKgPerHa: 250,
+      bagsPerHa: 5,
+      tip: 'Apply basal 14-14-14 at furrow depth before planting, followed by nitrogen top-dressing at vegetative stage.',
+    },
+  };
+
+  return (
+    <section className="mb-6 rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/50 p-5 sm:p-6 shadow-sm w-full transition-all" aria-live="polite">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-emerald-100 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white shadow-sm">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-stone-900">
+                Soil Treatment Simulator
+              </h3>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                &ldquo;What-if?&rdquo; preview
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
+              Simulate agronomic soil amendments to see projected crop suitability improvements in real time.
+            </p>
+          </div>
+        </div>
+        {activeCount > 0 && (
+          <button
+            type="button"
+            onClick={onResetTreatments}
+            className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition-colors shadow-2xs"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reset ({activeCount})
+          </button>
+        )}
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {AVAILABLE_TREATMENTS.map((treatment) => {
+          const isActive = activeTreatments.has(treatment.id);
+          return (
+            <button
+              key={treatment.id}
+              type="button"
+              onClick={() => onToggleTreatment(treatment.id)}
+              className={`group relative flex flex-col text-left p-3.5 rounded-xl border transition-all ${
+                isActive
+                  ? 'border-emerald-500 bg-emerald-500/10 shadow-sm ring-2 ring-emerald-500/20'
+                  : 'border-stone-200/90 bg-white hover:border-emerald-300 hover:bg-emerald-50/30'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full mb-1.5">
+                <span
+                  className={`text-xs font-bold uppercase tracking-wider rounded-md px-2 py-0.5 ${
+                    isActive
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-stone-100 text-stone-600 group-hover:bg-emerald-100 group-hover:text-emerald-700'
+                  }`}
+                >
+                  {treatment.badge}
+                </span>
+                <span
+                  className={`h-4 w-4 rounded-full border flex items-center justify-center transition-colors ${
+                    isActive ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-stone-300 bg-stone-50'
+                  }`}
+                >
+                  {isActive && <CheckCircle2 className="h-3.5 w-3.5" />}
+                </span>
+              </div>
+              <p className="text-sm font-bold text-stone-900 group-hover:text-emerald-950">
+                {treatment.title}
+              </p>
+              <p className="mt-1 text-xs text-stone-500 leading-relaxed">
+                {treatment.description}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {activeCount > 0 && (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl bg-emerald-100/70 px-4 py-2.5 text-xs sm:text-sm font-semibold text-emerald-900 border border-emerald-200">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 shrink-0 text-emerald-700" />
+              <span>
+                {activeCount} treatment{activeCount > 1 ? 's' : ''} applied: suitability scores below reflect projected improvements.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDosageCalc((v) => !v)}
+              className="inline-flex items-center gap-1.5 font-bold text-emerald-800 hover:text-emerald-950 underline self-start sm:self-auto"
+            >
+              {showDosageCalc ? 'Hide Dosage Calculator' : 'Calculate Bags Needed for My Plot'}
+            </button>
+          </div>
+
+          {showDosageCalc && (
+            <div className="rounded-xl border border-emerald-200 bg-white p-4 sm:p-5 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
+                <div>
+                  <h4 className="text-sm font-bold text-stone-900">Treatment Application & Dosage Calculator</h4>
+                  <p className="text-xs text-stone-500">Estimates required input volumes based on your target land size.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="sim-plot-hectares" className="text-xs font-bold text-stone-700 whitespace-nowrap">Plot Size (Hectares):</label>
+                  <input
+                    id="sim-plot-hectares"
+                    type="number"
+                    min="0.1"
+                    max="100"
+                    step="0.1"
+                    value={plotHectares}
+                    onChange={(e) => setPlotHectares(Math.max(0.1, Number(e.target.value) || 0.1))}
+                    className="w-20 rounded-lg border border-stone-300 px-2.5 py-1 text-sm font-bold text-stone-900 text-center focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {Array.from(activeTreatments).map((tId) => {
+                  const treatment = AVAILABLE_TREATMENTS.find((t) => t.id === tId);
+                  const guide = dosageGuides[tId];
+                  if (!treatment || !guide) return null;
+                  const totalKg = Math.round(guide.rateKgPerHa * plotHectares);
+                  const totalBags = Math.ceil((guide.rateKgPerHa * plotHectares) / 50);
+
+                  return (
+                    <div key={tId} className="rounded-xl border border-stone-200 bg-stone-50/70 p-3.5 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-800">{treatment.title}</span>
+                        {guide.rateKgPerHa > 0 && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-extrabold text-emerald-800">
+                            {totalBags} bags (50kg) / {totalKg} kg
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-stone-600 leading-relaxed">{guide.tip}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function CropCard({ crop, onGuide, weatherSummary, t }) {
   return (
     <article
@@ -1175,13 +1406,37 @@ function CropCard({ crop, onGuide, weatherSummary, t }) {
             </div>
           </div>
           <div className="text-left min-[440px]:text-right shrink-0">
-            <p className={`text-2xl sm:text-3xl font-bold leading-none ${crop.isBestMatch ? 'text-leaf-700' : 'text-leaf-600'}`}>{crop.score}%</p>
-            <p className="mt-1 text-[10px] sm:text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
+            {crop.simulatedScore != null && crop.simulatedBoost > 0 ? (
+              <div>
+                <div className="flex items-baseline gap-1.5 justify-end">
+                  <span className="text-sm sm:text-base font-semibold text-stone-400 line-through">
+                    {crop.score}%
+                  </span>
+                  <span className="text-2xl sm:text-3xl font-extrabold leading-none text-emerald-700">
+                    {crop.simulatedScore}%
+                  </span>
+                </div>
+                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] sm:text-xs font-bold text-emerald-800">
+                  <TrendingUp className="h-3 w-3" />
+                  +{crop.simulatedBoost}% simulated
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className={`text-2xl sm:text-3xl font-bold leading-none ${crop.isBestMatch ? 'text-leaf-700' : 'text-leaf-600'}`}>{crop.score}%</p>
+                <p className="mt-1 text-[10px] sm:text-xs font-bold uppercase text-stone-500">{t('suitability')}</p>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="mt-5 sm:mt-6 h-2 rounded-full bg-leaf-50 w-full">
-          <div className={`h-2 rounded-full ${crop.isBestMatch ? 'bg-leaf-700' : 'bg-leaf-500'}`} style={{ width: `${crop.score}%` }} />
+        <div className="mt-5 sm:mt-6 h-2 rounded-full bg-leaf-50 w-full overflow-hidden">
+          <div
+            className={`h-2 rounded-full transition-all duration-500 ${
+              crop.simulatedScore != null ? 'bg-gradient-to-r from-leaf-600 to-emerald-500' : crop.isBestMatch ? 'bg-leaf-700' : 'bg-leaf-500'
+            }`}
+            style={{ width: `${crop.simulatedScore ?? crop.score}%` }}
+          />
         </div>
 
         <div className="mt-4 sm:mt-5 flex flex-wrap gap-2 w-full">
@@ -1320,14 +1575,49 @@ export default function Scan() {
     [result]
   );
 
+  const [activeTreatments, setActiveTreatments] = useState(new Set());
+
+  const toggleTreatment = useCallback((id) => {
+    setActiveTreatments((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const resetTreatments = useCallback(() => {
+    setActiveTreatments(new Set());
+  }, []);
+
   const visibleCrops = useMemo(() => {
     const filtered = activeCategory === 'All Crops' ? crops : crops.filter((crop) => crop.category === activeCategory);
-    return [...filtered].sort((a, b) => {
+    const mapped = filtered.map((crop) => {
+      if (activeTreatments.size === 0) {
+        return { ...crop, simulatedScore: null, simulatedBoost: 0 };
+      }
+      let totalBoost = 0;
+      AVAILABLE_TREATMENTS.forEach((treatment) => {
+        if (activeTreatments.has(treatment.id)) {
+          totalBoost += treatment.calcBoost(form, crop.name);
+        }
+      });
+      const simulatedScore = Math.min(98, Math.max(crop.score, crop.score + totalBoost));
+      return {
+        ...crop,
+        simulatedScore,
+        simulatedBoost: simulatedScore - crop.score,
+      };
+    });
+
+    return [...mapped].sort((a, b) => {
       if (sortMode === 'Crop Name') return a.name.localeCompare(b.name);
       if (sortMode === 'Planting Window') return a.window.localeCompare(b.window);
-      return b.score - a.score;
+      const scoreA = a.simulatedScore ?? a.score;
+      const scoreB = b.simulatedScore ?? b.score;
+      return scoreB - scoreA;
     });
-  }, [activeCategory, crops, sortMode]);
+  }, [activeCategory, crops, sortMode, activeTreatments, form]);
 
   function updateField(field, value) {
     setError('');
@@ -1877,6 +2167,15 @@ export default function Scan() {
               </div>
             </div>
           </section>
+
+          {result && (
+            <SoilTreatmentSimulator
+              activeTreatments={activeTreatments}
+              onToggleTreatment={toggleTreatment}
+              onResetTreatments={resetTreatments}
+              t={t}
+            />
+          )}
 
           <section className="w-full">
             <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">

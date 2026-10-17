@@ -18,7 +18,10 @@ async def create_admin(full_name: str, email: str, password: str, phone: str | N
     try:
         normalized_email = str(TypeAdapter(EmailStr).validate_python(email)).lower()
     except ValidationError as exc:
-        raise SystemExit(f"Invalid admin email: {exc.errors()[0]['msg']}") from exc
+        err_msg = exc.errors()[0]["msg"]
+        if "reserved name" in err_msg.lower() or "special-use" in err_msg.lower():
+            err_msg += " (Note: Domains like '.local' are reserved by RFC 6762. Use a standard domain such as '@agriscanproject.com' or '@gmail.com' instead.)"
+        raise SystemExit(f"Invalid admin email: {err_msg}") from exc
 
     errors = validate_strong_password(password)
     if errors:

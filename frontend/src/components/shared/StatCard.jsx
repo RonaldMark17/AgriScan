@@ -1,25 +1,25 @@
 export default function StatCard({ icon: Icon, label, value, helper, tone = 'leaf' }) {
   const tones = {
-    leaf: 'border-leaf-100 bg-leaf-50 text-leaf-800 ring-leaf-100',
-    soil: 'border-soil-100 bg-soil-50 text-soil-800 ring-soil-100',
-    sky: 'border-sky-100 bg-sky-50 text-sky-800 ring-sky-100',
-    amber: 'border-amber-100 bg-amber-50 text-amber-800 ring-amber-100',
+    leaf: 'border-emerald-200/60 bg-emerald-50/80 text-emerald-700 shadow-sm shadow-emerald-500/10',
+    soil: 'border-amber-200/60 bg-amber-50/80 text-amber-700 shadow-sm shadow-amber-500/10',
+    sky: 'border-sky-200/60 bg-sky-50/80 text-sky-700 shadow-sm shadow-sky-500/10',
+    amber: 'border-amber-200/60 bg-amber-50/80 text-amber-700 shadow-sm shadow-amber-500/10',
   };
 
   return (
-    <section className="surface stat-card rounded-lg p-4 sm:p-5">
+    <section className="surface stat-card rounded-2xl p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-950/5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="break-words text-xs font-bold uppercase text-stone-500">{label}</p>
-          <p className="mt-2 break-words text-3xl font-bold leading-none text-stone-950">{value}</p>
+          <p className="break-words text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p>
+          <p className="mt-2.5 break-words text-3xl font-black tracking-tight text-slate-900">{value}</p>
         </div>
         {Icon && (
-          <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg border ring-1 ${tones[tone] || tones.leaf}`}>
-            <Icon className="h-5 w-5" />
+          <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl border ${tones[tone] || tones.leaf}`}>
+            <Icon className="h-6 w-6" />
           </div>
         )}
       </div>
-      {helper && <p className="mt-4 text-sm leading-6 text-stone-600">{helper}</p>}
+      {helper && <p className="mt-3 text-xs leading-relaxed text-slate-500">{helper}</p>}
     </section>
   );
 }

@@ -720,15 +720,15 @@ export default function SecuritySettings() {
 
 function SettingsSection({ icon: Icon, title, body, actions, children }) {
   return (
-    <section className="surface rounded-lg p-4 sm:p-5 w-full">
+    <section className="surface rounded-3xl p-6 shadow-sm w-full">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 w-full">
-        <div className="flex min-w-0 items-start gap-3 flex-1">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
+        <div className="flex min-w-0 items-start gap-3.5 flex-1">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-sm">
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold text-stone-950 truncate">{title}</h2>
-            {body ? <p className="mt-1 text-xs sm:text-sm leading-5 sm:leading-6 text-stone-600">{body}</p> : null}
+            <h2 className="text-base font-extrabold text-slate-900 truncate">{title}</h2>
+            {body ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{body}</p> : null}
           </div>
         </div>
         {actions ? <div className="shrink-0 self-start sm:self-auto">{actions}</div> : null}
@@ -738,136 +738,23 @@ function SettingsSection({ icon: Icon, title, body, actions, children }) {
   );
 }
 
-function ActivityLogPanel({
-  activityLoading,
-  activityLogs,
-  activityPage,
-  activityPageCount,
-  activityShowingEnd,
-  activityShowingStart,
-  fetchActivityLogs,
-  formatActivityAction,
-  formatActivityResource,
-  setActivityPage,
-  t,
-  visibleActivityLogs,
-}) {
-  return (
-    <section className="surface rounded-lg p-4 sm:p-5 w-full overflow-hidden">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between w-full">
-        <div className="flex min-w-0 items-start gap-3 flex-1">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
-            <Clock3 className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold text-stone-950 truncate">{t('userActivityLog')}</h2>
-            <p className="mt-1 text-xs sm:text-sm leading-5 sm:leading-6 text-stone-600 truncate">{t('userActivityEmptyBody')}</p>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 w-full sm:w-auto">
-          <span className="status-pill border border-stone-200 bg-white text-stone-700 flex-1 sm:flex-none text-center justify-center">
-            {activityLogs.length} {t('total')}
-          </span>
-          <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs flex-1 sm:flex-none justify-center" onClick={fetchActivityLogs} disabled={activityLoading} type="button">
-            <RefreshCw className={`h-4 w-4 mr-2 shrink-0 ${activityLoading ? 'animate-spin' : ''}`} />
-            {t('refresh')}
-          </button>
-        </div>
-      </div>
-
-      {activityLogs.length === 0 ? (
-        <div className="mt-5">
-          <EmptyState title={t('noUserActivity')} body={t('userActivityEmptyBody')} />
-        </div>
-      ) : (
-        <>
-          <div className="table-shell mt-5 w-full overflow-x-auto rounded-lg border border-stone-200">
-            <table className="activity-table w-full text-left text-sm min-w-[800px] table-fixed">
-              <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase tracking-wider text-stone-500">
-                <tr>
-                  <th className="w-[24%] px-4 py-3 font-semibold">{t('user')}</th>
-                  <th className="w-[24%] px-4 py-3 font-semibold">{t('activity')}</th>
-                  <th className="w-[18%] px-4 py-3 font-semibold">{t('resource')}</th>
-                  <th className="w-[14%] px-4 py-3 font-semibold">{t('ipAddress')}</th>
-                  <th className="w-[20%] px-4 py-3 font-semibold">{t('time')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 bg-white">
-                {visibleActivityLogs.map((log) => (
-                  <tr key={log.id} className="transition hover:bg-stone-50/70">
-                    <td className="px-4 py-3 align-top">
-                      <p className="break-words font-semibold text-stone-900">{log.user_name || t('systemActivity')}</p>
-                      <p className="break-all text-xs text-stone-500 mt-0.5">{log.user_email || '-'}</p>
-                      {log.user_role ? (
-                        <span className="mt-2 inline-flex rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase text-stone-600">
-                          {log.user_role}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <p className="break-words font-semibold text-stone-900">{formatActivityAction(log.action)}</p>
-                      <p className="mt-1 break-all text-xs text-stone-500 font-mono bg-stone-50 px-1.5 py-0.5 rounded w-fit">{log.action}</p>
-                    </td>
-                    <td className="break-words px-4 py-3 align-top text-stone-600">{formatActivityResource(log)}</td>
-                    <td className="break-words px-4 py-3 align-top text-stone-600 font-mono text-xs">{log.ip_address || '-'}</td>
-                    <td className="break-words px-4 py-3 align-top text-stone-600 text-xs">{new Date(log.created_at).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex flex-col gap-4 rounded-lg border border-stone-200 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between w-full">
-            <p className="text-xs sm:text-sm font-semibold text-stone-600 text-center sm:text-left">
-              {t('paginationSummary', { start: activityShowingStart, end: activityShowingEnd, total: activityLogs.length })}
-            </p>
-            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
-              <button
-                className="btn-secondary min-h-9 px-3 py-1.5 text-xs flex-1 sm:flex-none justify-center"
-                type="button"
-                onClick={() => setActivityPage((current) => Math.max(1, current - 1))}
-                disabled={activityPage <= 1}
-              >
-                <ChevronLeft className="h-4 w-4 mr-1 sm:mr-2" />
-                {t('previous')}
-              </button>
-              <span className="status-pill border border-stone-200 bg-white text-stone-700 text-[10px] sm:text-xs">
-                {t('pageOf', { page: activityPage, total: activityPageCount })}
-              </span>
-              <button
-                className="btn-secondary min-h-9 px-3 py-1.5 text-xs flex-1 sm:flex-none justify-center"
-                type="button"
-                onClick={() => setActivityPage((current) => Math.min(activityPageCount, current + 1))}
-                disabled={activityPage >= activityPageCount}
-              >
-                {t('next')}
-                <ChevronRight className="h-4 w-4 ml-1 sm:ml-2" />
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
 function StatusCard({ icon: Icon, label, value, body, tone = 'stone' }) {
-  const toneClass =
-    tone === 'leaf'
-      ? 'bg-leaf-50 text-leaf-800 ring-leaf-100'
-      : tone === 'amber'
-        ? 'bg-amber-50 text-amber-800 ring-amber-100'
-        : 'bg-stone-50 text-stone-700 ring-stone-200';
+  const toneClasses = {
+    leaf: 'border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-500/10',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700 shadow-sm shadow-amber-500/10',
+    stone: 'border-slate-200 bg-slate-50 text-slate-600',
+  }[tone] || 'border-slate-200 bg-slate-50 text-slate-600';
 
   return (
-    <div className="surface rounded-lg p-4 w-full flex flex-col h-full">
-      <div className="flex items-start gap-3 w-full">
-        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ring-1 ${toneClass}`}>
+    <div className="surface rounded-2xl p-5 w-full flex flex-col h-full shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-950/5">
+      <div className="flex items-start gap-3.5 w-full">
+        <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl border ${toneClasses}`}>
           <Icon className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="panel-heading truncate text-xs sm:text-sm">{label}</p>
-          <p className="mt-1 text-base sm:text-lg font-bold text-stone-950 truncate">{value}</p>
-          <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-stone-500">{body}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">{label}</p>
+          <p className="mt-1 text-base font-extrabold text-slate-900 truncate">{value}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{body}</p>
         </div>
       </div>
     </div>
@@ -877,13 +764,13 @@ function StatusCard({ icon: Icon, label, value, body, tone = 'stone' }) {
 function StatusPill({ children, tone = 'stone' }) {
   const toneClass =
     tone === 'leaf'
-      ? 'border-leaf-100 bg-white text-leaf-700'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
       : tone === 'amber'
-        ? 'border-amber-100 bg-white text-amber-700'
-        : 'border-stone-200 bg-white text-stone-700';
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : 'border-slate-200 bg-slate-50 text-slate-700';
 
   return (
-    <span className={`inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-none ${toneClass}`}>
+    <span className={`inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold ${toneClass}`}>
       {children}
     </span>
   );
@@ -892,8 +779,10 @@ function StatusPill({ children, tone = 'stone' }) {
 function LanguageButton({ active, title, body, onClick }) {
   return (
     <button
-      className={`focus-ring w-full min-h-20 sm:min-h-24 rounded-lg p-3 sm:p-4 text-left transition ${
-        active ? 'border border-leaf-200 bg-leaf-50 ring-1 ring-leaf-200 shadow-sm' : 'border border-stone-200 bg-white hover:bg-stone-50'
+      className={`focus-ring w-full min-h-20 rounded-2xl p-4 text-left transition-all duration-200 ${
+        active
+          ? 'border-2 border-emerald-500 bg-emerald-50/50 shadow-md shadow-emerald-500/10'
+          : 'border border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/50'
       }`}
       onClick={onClick}
       type="button"
@@ -901,10 +790,10 @@ function LanguageButton({ active, title, body, onClick }) {
     >
       <div className="flex items-start justify-between gap-3 w-full">
         <div className="min-w-0 flex-1">
-          <p className={`font-bold text-sm sm:text-base truncate ${active ? 'text-leaf-900' : 'text-stone-950'}`}>{title}</p>
-          <p className={`mt-1 text-[10px] sm:text-xs font-semibold uppercase tracking-wider truncate ${active ? 'text-leaf-700' : 'text-stone-400'}`}>{body}</p>
+          <p className={`font-extrabold text-sm sm:text-base truncate ${active ? 'text-emerald-900' : 'text-slate-900'}`}>{title}</p>
+          <p className={`mt-0.5 text-xs font-semibold uppercase tracking-wider truncate ${active ? 'text-emerald-700' : 'text-slate-400'}`}>{body}</p>
         </div>
-        {active ? <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-leaf-700 mt-0.5" /> : null}
+        {active ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" /> : null}
       </div>
     </button>
   );
@@ -914,18 +803,19 @@ function SettingToggle({ title, body, active = false, onToggle }) {
   return (
     <div className="flex items-start justify-between gap-4 px-4 py-4 w-full">
       <div className="min-w-0 flex-1">
-        <p className="font-semibold text-stone-900 text-sm sm:text-base truncate">{title}</p>
-        <p className="mt-1 text-xs sm:text-sm leading-5 sm:leading-6 text-stone-500 line-clamp-2">{body}</p>
+        <p className="font-bold text-slate-900 text-sm truncate">{title}</p>
+        <p className="mt-0.5 text-xs text-slate-500 leading-relaxed line-clamp-2">{body}</p>
       </div>
       <button
-        className={`focus-ring relative h-6 w-11 sm:h-7 sm:w-12 shrink-0 rounded-full transition-colors mt-0.5 ${active ? 'bg-leaf-600' : 'bg-stone-300'}`}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-ring mt-0.5 ${active ? 'bg-emerald-600' : 'bg-slate-200'}`}
         aria-pressed={active}
         aria-label={title}
         onClick={onToggle}
         type="button"
       >
-        <span className={`absolute top-1 h-4 w-4 sm:h-5 sm:w-5 rounded-full bg-white transition-all ${active ? 'left-[22px] sm:left-6' : 'left-1'}`} />
+        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${active ? 'left-6' : 'left-1'}`} />
       </button>
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import { Bell, CheckCheck, Leaf, Loader2, LogOut, Settings, UserRound, X } from 'lucide-react';
+import { Bell, CheckCheck, Leaf, Loader2, LogOut, Settings, Sun, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client.js';
@@ -55,9 +55,13 @@ function dispatchNotificationEvents(notifications) {
   });
 }
 
-function pageMeta(pathname) {
+function pageMeta(pathname, isAdmin = false) {
   if (pathname === '/') return { title: 'Dashboard', breadcrumb: 'Workspace / Dashboard' };
-  if (pathname.startsWith('/farms')) return { title: 'Farmers', breadcrumb: 'Workspace / Farmers' };
+  if (pathname.startsWith('/farms')) {
+    return isAdmin
+      ? { title: 'Farmer Registry', breadcrumb: 'Admin / Farmers' }
+      : { title: 'My Farms', breadcrumb: 'Workspace / Farm Registry' };
+  }
   if (pathname.startsWith('/crop-management')) return { title: 'Crop Management', breadcrumb: 'Workspace / Crop Management' };
   if (pathname.startsWith('/scan')) return { title: 'Manual Scan', breadcrumb: 'Crop Management / Manual Scan' };
   if (pathname.startsWith('/disease-detector')) return { title: 'Disease Detector', breadcrumb: 'Crop Management / Disease Detector' };
@@ -84,14 +88,39 @@ export default function Topbar() {
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false);
+  const [sunlightMode, setSunlightMode] = useState(() => {
+    return typeof window !== 'undefined' && localStorage.getItem('agriscan_sunlight_mode') === 'true';
+  });
+
+  const toggleSunlightMode = useCallback(() => {
+    setSunlightMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('agriscan_sunlight_mode', String(next));
+      if (next) {
+        document.documentElement.classList.add('sunlight-mode');
+      } else {
+        document.documentElement.classList.remove('sunlight-mode');
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (sunlightMode) {
+      document.documentElement.classList.add('sunlight-mode');
+    } else {
+      document.documentElement.classList.remove('sunlight-mode');
+    }
+  }, [sunlightMode]);
   const [notificationToast, setNotificationToast] = useState(null);
   const notificationsRef = useRef(null);
   const profileRef = useRef(null);
   const knownNotificationIdsRef = useRef(new Set());
   const notificationsInitializedRef = useRef(false);
   const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name || 'farmer';
+  const isAdmin = roleName.toLowerCase() === 'admin';
   const userDisplayName = user?.full_name || user?.email || 'AgriScan User';
-  const currentPage = useMemo(() => pageMeta(location.pathname), [location.pathname]);
+  const currentPage = useMemo(() => pageMeta(location.pathname, isAdmin), [location.pathname, isAdmin]);
   const unreadCount = useMemo(() => notifications.filter((item) => !item.is_read).length, [notifications]);
   const notificationSummary = useMemo(() => {
     if (unreadCount > 0) return t('unreadNotifications', { count: unreadCount });
@@ -277,6 +306,19 @@ export default function Topbar() {
             <div className="hidden min-[700px]:block lg:hidden">
               <LanguageToggle />
             </div>
+            <button
+              type="button"
+              className={`focus-ring grid h-10 w-10 place-items-center rounded-lg border transition ${
+                sunlightMode
+                  ? 'border-amber-400 bg-amber-400 text-stone-950 font-bold shadow-sm'
+                  : 'border-stone-200 bg-white text-stone-700 hover:border-amber-300 hover:bg-amber-50'
+              }`}
+              onClick={toggleSunlightMode}
+              title={sunlightMode ? 'Disable Outdoor Sunlight Mode' : 'Enable Outdoor Sunlight Mode (High Contrast)'}
+              aria-label="Toggle Outdoor Sunlight Mode"
+            >
+              <Sun className="h-4 w-4 sm:h-5 sm:w-5" />
+            </button>
             <Link
               to="/settings"
               className="focus-ring hidden h-10 w-10 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition hover:border-leaf-200 hover:bg-leaf-50 hover:text-leaf-800 md:grid"

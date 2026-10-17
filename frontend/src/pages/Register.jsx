@@ -1,4 +1,4 @@
-import { Leaf, Loader2, X } from 'lucide-react';
+import { Leaf, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
@@ -77,169 +77,231 @@ export default function Register() {
     setIsTermsModalOpen(false);
   }
 
+  const passwordChecks = [
+    { label: 'At least 12 characters', valid: form.password.length >= 12 },
+    { label: 'Uppercase & lowercase letters', valid: /[A-Z]/.test(form.password) && /[a-z]/.test(form.password) },
+    { label: 'At least one number', valid: /[0-9]/.test(form.password) },
+    { label: 'At least one symbol (!@#$%)', valid: /[^A-Za-z0-9]/.test(form.password) },
+  ];
+
   return (
-    <main className="auth-page flex items-center justify-center">
+    <main className="auth-page grid min-h-[100dvh] place-items-center p-3 sm:p-6 lg:p-8">
       <div className="w-full max-w-4xl">
-        <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="brand-mark">
+        {/* Top Header */}
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <Link to="/" className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-600/30">
               <Leaf className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="text-xl font-extrabold tracking-tight text-slate-900">AgriScan</p>
+              <p className="text-xs font-semibold text-slate-500">{t('farmerBuyerRegistration')}</p>
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-xl font-bold text-leaf-900">AgriScan</p>
-              <p className="text-sm text-stone-500">{t('farmerBuyerRegistration')}</p>
-            </div>
-          </div>
+          </Link>
           <LanguageToggle />
         </div>
 
-        <form className="auth-card grid overflow-hidden lg:grid-cols-[0.72fr_1.28fr]" onSubmit={handleSubmit}>
-          <div className="border-b border-stone-200 bg-stone-50 p-5 sm:p-6 lg:border-b-0 lg:border-r">
-            <div className="grid h-11 w-11 place-items-center rounded-lg border border-stone-200 bg-white text-leaf-800">
-              <Leaf className="h-6 w-6" />
+        {/* Main Card */}
+        <form className="auth-card grid overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-2xl shadow-emerald-950/10 lg:grid-cols-[0.85fr_1.35fr]" onSubmit={handleSubmit}>
+          {/* Left Hero Sidebar */}
+          <div className="flex flex-col justify-between border-b border-slate-200/80 bg-gradient-to-br from-emerald-950 via-slate-900 to-emerald-900 p-6 sm:p-8 text-white lg:border-b-0 lg:border-r">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200 backdrop-blur-md">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                Farmer Community
+              </div>
+              <h1 className="mt-4 text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl">
+                {t('register')}
+              </h1>
+              <p className="mt-3 text-sm leading-relaxed text-emerald-100/80">
+                Join thousands of Filipino farmers using AI-driven early crop disease detection, soil advisory, and automated harvest tracking.
+              </p>
             </div>
-            <h1 className="mt-4 text-2xl font-bold leading-tight text-stone-950">{t('register')}</h1>
-            <p className="mt-2 text-sm leading-6 text-stone-600">{t('strongPasswordRequired')}</p>
+
+            {/* Feature Perks */}
+            <div className="my-8 space-y-3.5">
+              <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/10 p-3.5 backdrop-blur-md">
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-500/30 text-emerald-300">
+                  <Leaf className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white">Automated Crop AI</p>
+                  <p className="text-[11px] text-emerald-100/70">Instant pathogen detection for rice, corn, and more.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/10 p-3.5 backdrop-blur-md">
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-500/30 text-emerald-300">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white">Full Offline Capability</p>
+                  <p className="text-[11px] text-emerald-100/70">Works in remote fields without active internet.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Note */}
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-emerald-200/80">
+              <span className="font-semibold text-emerald-300">Enterprise Security:</span> Argon2id encryption & optional hardware MFA protection.
+            </div>
           </div>
 
-          <div className="p-4 sm:p-6">
-            {message && <div className="success-message">{message}</div>}
-            {error && <div className="danger-message">{error}</div>}
+          {/* Right Form Fields */}
+          <div className="p-6 sm:p-8">
+            {message && (
+              <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 shadow-sm">
+                {message}
+              </div>
+            )}
+            {error && (
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-800 shadow-sm">
+                {error}
+              </div>
+            )}
 
-            <div className="mt-5 space-y-4">
-              <section className="rounded-lg border border-stone-200 bg-white p-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Personal information</p>
-                  <p className="mt-1 text-sm leading-6 text-stone-600">Use the legal name and contact details tied to the farm account.</p>
-                </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block sm:col-span-2">
-                    <span className="text-sm font-semibold text-stone-700">{t('fullName')}</span>
-                    <input className="field mt-2" required value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} />
-                  </label>
-                  <label className="block">
-                    <span className="text-sm font-semibold text-stone-700">{t('email')}</span>
-                    <input className="field mt-2" type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-                  </label>
-                  <label className="block">
-                    <span className="text-sm font-semibold text-stone-700">
-                      {t('smsPhoneLabel')} <span className="font-medium text-stone-400">({t('optional')})</span>
-                    </span>
+            <div className="space-y-5">
+              {/* Personal Information */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">1. Personal Information</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700">{t('fullName')}</label>
                     <input
-                      className="field mt-2"
+                      className="field mt-1.5"
+                      placeholder="Juan Dela Cruz"
+                      required
+                      value={form.full_name}
+                      onChange={(event) => setForm({ ...form, full_name: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700">{t('email')}</label>
+                    <input
+                      className="field mt-1.5"
+                      type="email"
+                      placeholder="juan@agriscan.ph"
+                      required
+                      value={form.email}
+                      onChange={(event) => setForm({ ...form, email: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700">
+                      {t('smsPhoneLabel')} <span className="font-normal text-slate-400">({t('optional')})</span>
+                    </label>
+                    <input
+                      className="field mt-1.5"
                       value={form.phone}
                       onChange={(event) => setForm({ ...form, phone: event.target.value })}
                       placeholder="+639171234567"
                       inputMode="tel"
                       autoComplete="tel"
                     />
-                    <p className="mt-1 text-xs leading-5 text-stone-500">{t('phoneSmsRegisterHint')}</p>
-                  </label>
+                  </div>
                 </div>
-              </section>
+              </div>
 
-              <section className="rounded-lg border border-leaf-100 bg-leaf-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Farmer details</p>
+              {/* Account Credentials */}
+              <div className="border-t border-slate-100 pt-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">2. Security & Credentials</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-leaf-100 bg-white p-3">
-                    <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('role')}</p>
-                    <p className="mt-1 text-sm font-bold text-stone-950">{t('farmer')}</p>
-                  </div>
-                  <div className="rounded-lg border border-leaf-100 bg-white p-3">
-                    <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Farm profile</p>
-                    <p className="mt-1 text-sm font-semibold text-stone-700">Register farm boundaries after sign in.</p>
-                  </div>
-                </div>
-              </section>
-
-              <section className="rounded-lg border border-stone-200 bg-white p-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-leaf-700">Account credentials</p>
-                  <p className="mt-1 text-sm leading-6 text-stone-600">{t('strongPasswordRequired')}</p>
-                </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="text-sm font-semibold text-stone-700">{t('password')}</span>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700">{t('password')}</label>
                     <input
-                      className="field mt-2"
+                      className="field mt-1.5"
                       type="password"
+                      placeholder="••••••••••••"
                       required
                       value={form.password}
                       onChange={(event) => setForm({ ...form, password: event.target.value })}
                     />
-                  </label>
-                  <label className="block">
-                    <span className="text-sm font-semibold text-stone-700">{t('confirmPassword')}</span>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700">{t('confirmPassword')}</label>
                     <input
-                      className="field mt-2"
+                      className="field mt-1.5"
                       type="password"
+                      placeholder="••••••••••••"
                       required
                       value={confirmPassword}
                       onChange={(event) => setConfirmPassword(event.target.value)}
                     />
-                  </label>
+                  </div>
                 </div>
-              </section>
-            </div>
 
-            <section className="mt-5 rounded-lg border border-stone-200 bg-stone-50 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">{t('termsAndConditions')}</h2>
-                  <p className="mt-2 text-sm leading-6 text-stone-600">{t('termsSummary')}</p>
-                </div>
-                <button
-                  className="btn-secondary h-10 shrink-0 px-4 text-sm"
-                  type="button"
-                  onClick={() => setIsTermsModalOpen(true)}
-                >
-                  {t('reviewTermsAction')}
-                </button>
+                {/* Password Criteria checklist */}
+                {form.password && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
+                    {passwordChecks.map((check, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-[11px]">
+                        <span className={`h-1.5 w-1.5 rounded-full ${check.valid ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                        <span className={check.valid ? 'font-semibold text-emerald-700' : 'text-slate-500'}>{check.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="mt-4 flex items-start gap-3 rounded-lg border border-stone-200 bg-white px-3 py-3">
-                <input
-                  id="register-terms-checkbox"
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-stone-300 text-leaf-700 focus:ring-leaf-600"
-                  type="checkbox"
-                  checked={acceptedTerms}
-                  onChange={(event) => {
-                    setAcceptedTerms(event.target.checked);
-                    if (event.target.checked) {
-                      setError('');
-                    }
-                  }}
-                />
-                <div className="pt-0.5 text-sm font-semibold leading-6 text-stone-700">
-                  <label className="cursor-pointer" htmlFor="register-terms-checkbox">
-                    {t('termsAgreementLabelPrefix')}{' '}
-                  </label>
+
+              {/* Terms and Conditions */}
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">{t('termsAndConditions')}</h3>
+                    <p className="text-xs text-slate-500">{t('termsSummary')}</p>
+                  </div>
                   <button
-                    className="font-bold text-leaf-700 underline decoration-2 underline-offset-4 transition hover:text-leaf-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-300"
+                    className="btn-secondary h-9 shrink-0 px-3 text-xs font-bold"
                     type="button"
                     onClick={() => setIsTermsModalOpen(true)}
                   >
-                    {t('termsAndConditions')}
+                    {t('reviewTermsAction')}
                   </button>
-                  <label className="cursor-pointer" htmlFor="register-terms-checkbox">
-                    .
-                  </label>
                 </div>
+                <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-white bg-white p-3 shadow-sm transition hover:bg-slate-50">
+                  <input
+                    id="register-terms-checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500"
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(event) => {
+                      setAcceptedTerms(event.target.checked);
+                      if (event.target.checked) setError('');
+                    }}
+                  />
+                  <span className="text-xs font-medium text-slate-700 leading-relaxed">
+                    {t('termsAgreementLabelPrefix')}{' '}
+                    <button
+                      className="font-bold text-emerald-600 hover:underline"
+                      type="button"
+                      onClick={() => setIsTermsModalOpen(true)}
+                    >
+                      {t('termsAndConditions')}
+                    </button>
+                    .
+                  </span>
+                </label>
               </div>
-            </section>
 
-            <button className="btn-primary mt-6 h-12 w-full" disabled={loading || !acceptedTerms}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {loading ? t('creating') : t('register')}
-            </button>
-            <p className="mt-4 text-center text-sm text-stone-500">
-              {t('alreadyRegistered')}{' '}
-              <Link className="font-semibold text-leaf-700 hover:text-leaf-900" to="/login">
-                {t('login')}
-              </Link>
-            </p>
+              {/* Submit CTA */}
+              <button
+                className="btn-primary flex h-12 w-full items-center justify-center gap-2 text-base font-bold shadow-lg shadow-emerald-600/25 transition-all hover:shadow-xl hover:shadow-emerald-600/35"
+                disabled={loading || !acceptedTerms}
+              >
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+                {loading ? t('creating') : t('register')}
+              </button>
+
+              <p className="text-center text-xs text-slate-500">
+                {t('alreadyRegistered')}{' '}
+                <Link className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline" to="/login">
+                  {t('login')}
+                </Link>
+              </p>
+            </div>
           </div>
         </form>
       </div>
+
       <TermsModal
         isOpen={isTermsModalOpen}
         onAccept={handleTermsAccept}

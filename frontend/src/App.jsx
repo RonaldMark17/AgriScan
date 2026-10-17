@@ -63,7 +63,6 @@ export default function App() {
               <Route path="/crop-management" element={<CropManagement />} />
               <Route path="/scan" element={<Scan />} />
               <Route path="/disease-detector" element={<PlantDiseaseDetector />} />
-              <Route path="/marketplace" element={<Navigate to="/crop-management" replace />} />
               <Route path="/reports" element={<Reports />} />
             </Route>
             <Route element={<AdminRequiredRoute />}>

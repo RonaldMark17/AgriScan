@@ -141,12 +141,37 @@ export default function Reports() {
       });
   }
 
+  function downloadCsv() {
+    if (!report) return;
+    const diseaseRows = diseaseBreakdown.map(
+      (d) => `"${(d.disease || '').replace(/"/g, '""')}",${d.count || 0}`
+    );
+    const csvContent = [
+      'AgriScan Monthly Diagnostic & Farm Report',
+      `Generated At,${new Date().toISOString()}`,
+      `Total Registered Farms,${report.farm_count || 0}`,
+      `User Associated Farms,${report.user_farm_count || 0}`,
+      `Monthly Recommendation,"${(report.recommendation || '').replace(/"/g, '""')}"`,
+      '',
+      'Disease / Detection Group,Count',
+      ...diseaseRows,
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `agriscan-report-${new Date().toISOString().slice(0, 7)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   const diseaseBreakdown = Array.isArray(report?.disease_breakdown) ? report.disease_breakdown : [];
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="PDF export and analytics"
+        eyebrow="Data Export & Analytics"
         title="Reports"
         body="Review farm coverage, disease scan patterns, and monthly recommendations in one place."
         actions={
@@ -155,9 +180,13 @@ export default function Reports() {
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
             </button>
+            <button className="btn-secondary" onClick={downloadCsv} disabled={!report}>
+              <FileText className="h-4 w-4" />
+              CSV Export
+            </button>
             <button className="btn-primary" onClick={downloadPdf} disabled={!report}>
               <Download className="h-4 w-4" />
-              PDF
+              PDF Report
             </button>
           </>
         }

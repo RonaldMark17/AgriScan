@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     translation_api_base_url: str = "https://api.mymemory.translated.net/get"
     translation_timeout_seconds: float = 6.0
     require_admin_mfa: bool = True
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-flash-latest"
+    use_gemini_ai: bool = True
 
     @model_validator(mode="after")
     def load_firebase_from_secrets(self) -> "Settings":

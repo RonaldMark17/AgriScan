@@ -23,14 +23,14 @@ export default function Profile() {
         }
       />
 
-      <section className="surface rounded-lg p-5 sm:p-6">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-          <div className="grid h-20 w-20 shrink-0 place-items-center rounded-lg bg-leaf-50 text-leaf-700 ring-1 ring-leaf-100">
+      <section className="surface rounded-3xl p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+          <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-600/30">
             <UserRound className="h-10 w-10" />
           </div>
           <div className="min-w-0">
-            <h2 className="break-words text-2xl font-bold text-stone-950">{user?.full_name || 'AgriScan User'}</h2>
-            <p className="mt-1 break-all text-sm text-stone-500">{user?.email || '-'}</p>
+            <h2 className="break-words text-2xl font-black text-slate-900">{user?.full_name || 'AgriScan User'}</h2>
+            <p className="mt-1 break-all text-xs font-semibold text-slate-400">{user?.email || '-'}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <StatusBadge status={accountStatus}>{labelize(accountStatus)}</StatusBadge>
               <StatusBadge status="draft">{labelize(roleName)}</StatusBadge>

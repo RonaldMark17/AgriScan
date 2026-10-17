@@ -582,6 +582,24 @@ export default function Farms() {
         boundary_geojson: draftBoundaryGeoJson,
       };
 
+      if (payload.latitude !== null && (payload.latitude < 4.5 || payload.latitude > 21.5)) {
+        setError(buildDetailedAlert(
+          'Coordinates outside the Philippines.',
+          'Latitude must be between 4.5°N and 21.5°N for Philippine farms.',
+          'Verify your GPS coordinates or click "Use Current GPS" to auto-detect your field coordinates.'
+        ));
+        return;
+      }
+
+      if (payload.longitude !== null && (payload.longitude < 116.0 || payload.longitude > 127.0)) {
+        setError(buildDetailedAlert(
+          'Coordinates outside the Philippines.',
+          'Longitude must be between 116.0°E and 127.0°E for Philippine farms.',
+          'Verify your GPS coordinates or click "Use Current GPS" to auto-detect your field coordinates.'
+        ));
+        return;
+      }
+
       if (hasDuplicateFarm(farms, payload, editingFarmId)) {
         setError(buildDetailedAlert(
           'Farm could not be saved.',

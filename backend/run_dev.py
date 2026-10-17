@@ -18,15 +18,21 @@ cmd = [
     "uvicorn",
     "app.main:app",
     "--reload",
-    "--reload-dirs", str(app_dir),  # Watch the app directory explicitly
+    "--reload-dir", str(app_dir),  # Watch the app directory explicitly
     "--reload-delay", "0.5",  # Reduce reload delay for faster detection
     "--port", "8000",
     "--host", "127.0.0.1",
 ]
 
-print(f"🚀 Starting development server...")
-print(f"📂 Watching: {app_dir}")
-print(f"🔗 Server: http://localhost:8000")
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+print(">> Starting development server...")
+print(f">> Watching: {app_dir}")
+print(">> Server: http://localhost:8000")
 print(f"Command: {' '.join(cmd)}\n")
 
 # Clear PYTHONDONTWRITEBYTECODE if set, allow normal cache behavior

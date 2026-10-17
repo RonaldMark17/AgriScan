@@ -3876,12 +3876,71 @@ export default function PlantDiseaseDetector() {
     pendingResultRevealRef.current = true;
   }
 
-  function updateImage(nextFile) {
-    if (!nextFile) return;
-    if (!nextFile.type.startsWith('image/')) {
+  async function compressImageIfNeeded(file, maxDimension = 1200) {
+    if (!file || !file.type.startsWith('image/')) return file;
+    if (file.size < 400 * 1024 && !file.type.includes('heic')) {
+      return file;
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            const cleanName = (file.name || 'leaf_scan').replace(/\.[^.]+$/, '') + '.webp';
+            const compressed = new File([blob], cleanName, {
+              type: 'image/webp',
+              lastModified: Date.now(),
+            });
+            resolve(compressed);
+          },
+          'image/webp',
+          0.85
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+  }
+
+  async function updateImage(rawFile) {
+    if (!rawFile) return;
+    if (!rawFile.type.startsWith('image/')) {
       setError(cropImageAlert('The selected file is not an image.'));
       return;
     }
+
+    let nextFile = rawFile;
+    try {
+      nextFile = await compressImageIfNeeded(rawFile);
+    } catch {
+      nextFile = rawFile;
+    }
+
     if (nextFile.size > MAX_IMAGE_UPLOAD_BYTES) {
       setError(scanRequestErrorMessage({ response: { status: 413 } }));
       setResult(null);
@@ -3898,6 +3957,30 @@ export default function PlantDiseaseDetector() {
       }
       return URL.createObjectURL(nextFile);
     });
+  }
+
+  function playDiagnosticChime(severity = 'low') {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const isWarning = /high|critical|moderate|severe/i.test(severity);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(isWarning ? 587.33 : 523.25, now);
+      osc.frequency.exponentialRampToValueAtTime(isWarning ? 880 : 659.25, now + 0.18);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc.start(now);
+      osc.stop(now + 0.35);
+      if ('vibrate' in navigator) {
+        navigator.vibrate(isWarning ? [60, 50, 90] : [50]);
+      }
+    } catch {}
   }
 
   function handleFileInputChange(event) {
@@ -4028,6 +4111,7 @@ export default function PlantDiseaseDetector() {
       });
 
       queueResultReveal();
+      playDiagnosticChime(nextResult?.severity);
       setResult(nextResult);
       saveHistory(nextResult);
     } catch (requestError) {
@@ -4216,11 +4300,29 @@ export default function PlantDiseaseDetector() {
                   onClick={() => setShowImageSourcePicker(true)}
                 >
                   {previewUrl ? (
-                    <div className="relative w-full">
-                      <img src={previewUrl} alt={t('uploadCropImage')} className="h-48 w-full object-cover sm:h-56" />
-                      <span className="absolute bottom-3 left-3 rounded-full bg-stone-950/75 px-3 py-1 text-xs font-bold text-white">
-                        {t('chooseImageSource')}
-                      </span>
+                    <div className="relative w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-950">
+                      <img src={previewUrl} alt={t('uploadCropImage')} className="h-56 w-full object-cover sm:h-64" />
+                      {/* Viewfinder Target Framing Reticle */}
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+                        <div className="relative h-40 w-40 sm:h-48 sm:w-48 rounded-2xl border-2 border-dashed border-emerald-400/80 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                          <span className="absolute -top-1 -left-1 h-4 w-4 border-t-2 border-l-2 border-emerald-400" />
+                          <span className="absolute -top-1 -right-1 h-4 w-4 border-t-2 border-r-2 border-emerald-400" />
+                          <span className="absolute -bottom-1 -left-1 h-4 w-4 border-b-2 border-l-2 border-emerald-400" />
+                          <span className="absolute -bottom-1 -right-1 h-4 w-4 border-b-2 border-r-2 border-emerald-400" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="h-2 w-2 rounded-full bg-emerald-400/80 animate-ping" />
+                          </div>
+                        </div>
+                      </div>
+                      {/* Status Bar */}
+                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                        <span className="rounded-full bg-stone-950/80 px-3 py-1 text-xs font-bold text-white backdrop-blur-sm">
+                          {imageFile ? `${(imageFile.size / 1024).toFixed(0)} KB • Optimized` : t('chooseImageSource')}
+                        </span>
+                        <span className="rounded-full bg-emerald-600/90 px-3 py-1 text-xs font-bold text-white shadow-sm backdrop-blur-sm">
+                          {t('chooseImageSource')}
+                        </span>
+                      </div>
                     </div>
                   ) : (
                     <div className="px-4 py-8 sm:px-5 sm:py-10">

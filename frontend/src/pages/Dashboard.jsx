@@ -44,26 +44,45 @@ const fallback = {
 };
 
 function MetricCard({ icon: Icon, label, value, unit, status, tone = 'green', helper, to }) {
-  const toneClass = tone === 'amber' ? 'text-amber-600 bg-amber-50 border-amber-100' : tone === 'lime' ? 'text-lime-700 bg-lime-50 border-lime-100' : 'text-leaf-700 bg-leaf-50 border-leaf-100';
+  const toneClasses = {
+    amber: {
+      icon: 'text-amber-600 bg-amber-50/80 border-amber-200/60 shadow-amber-500/10',
+      pill: 'bg-amber-50 text-amber-700 border-amber-200/80',
+    },
+    lime: {
+      icon: 'text-emerald-700 bg-emerald-50/80 border-emerald-200/60 shadow-emerald-500/10',
+      pill: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    },
+    green: {
+      icon: 'text-emerald-600 bg-emerald-50/80 border-emerald-200/60 shadow-emerald-500/10',
+      pill: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    },
+  }[tone] || {
+    icon: 'text-emerald-600 bg-emerald-50/80 border-emerald-200/60 shadow-emerald-500/10',
+    pill: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+  };
+
   const Component = to ? Link : 'section';
 
   return (
     <Component
       to={to}
-      className={`dashboard-metric-card surface rounded-lg p-4 sm:p-5 ${to ? 'block transition hover:border-leaf-200 hover:bg-leaf-50/40' : ''}`}
+      className={`dashboard-metric-card surface rounded-2xl p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-950/5 ${
+        to ? 'block cursor-pointer' : ''
+      }`}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className={`grid h-11 w-11 place-items-center rounded-lg border ${toneClass}`}>
-          <Icon className="h-5 w-5" />
+        <span className={`grid h-12 w-12 place-items-center rounded-2xl border shadow-sm ${toneClasses.icon}`}>
+          <Icon className="h-6 w-6" />
         </span>
-        <span className="status-pill border border-stone-200 bg-white text-stone-600">{status}</span>
+        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${toneClasses.pill}`}>{status}</span>
       </div>
-      <p className="mt-5 text-sm font-semibold text-stone-500 sm:mt-6">{label}</p>
-      <div className="mt-1 flex min-w-0 items-end gap-1">
-        <span className="min-w-0 break-words text-3xl font-bold tracking-normal text-stone-950">{value}</span>
-        {unit && <span className="mb-1 text-base font-semibold text-stone-500">{unit}</span>}
+      <p className="mt-4 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <div className="mt-1 flex min-w-0 items-baseline gap-1">
+        <span className="text-3xl font-black tracking-tight text-slate-900">{value}</span>
+        {unit && <span className="text-sm font-bold text-slate-400">{unit}</span>}
       </div>
-      <p className="mt-4 text-sm text-stone-500">{helper}</p>
+      <p className="mt-3 text-xs leading-relaxed text-slate-500">{helper}</p>
     </Component>
   );
 }
@@ -494,208 +513,270 @@ export default function Dashboard() {
   const activityTimeline = useMemo(() => buildActivityTimeline(summary, soilScans, t), [soilScans, summary, t]);
 
   return (
-    <div className="page-stack">
-      <PageHeader
-        eyebrow={t('overview')}
-        title={t('dashboardGreeting', { name: firstName })}
-        body={t('dashboardSubtitle')}
-        actions={
-          <Link to="/scan" className="btn-primary h-11 w-full px-5 text-sm sm:w-auto">
-            <ScanLine className="h-5 w-5" />
-            {t('newManualScan')}
-          </Link>
-        }
-      />
+    <div className="page-stack space-y-6">
+      {/* Hero Welcome Banner */}
+      <section className="relative overflow-hidden rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-900 via-stone-900 to-emerald-950 p-6 text-white shadow-xl shadow-emerald-950/10 sm:p-8">
+        <div className="absolute right-0 top-0 -mr-16 -mt-16 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 -mb-12 h-48 w-48 rounded-full bg-teal-500/10 blur-2xl pointer-events-none" />
 
-      <section className={`flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${alertToneClasses.wrapper}`}>
+        <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-center">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200 backdrop-blur-md">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              Smart Farm Operations Active
+            </div>
+            <h1 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl lg:text-4xl">
+              {t('dashboardGreeting', { name: firstName })}
+            </h1>
+            <p className="mt-2 text-sm text-emerald-100/80 leading-relaxed">
+              {t('dashboardSubtitle')}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/disease-detector"
+              className="btn-primary flex h-12 items-center gap-2.5 rounded-2xl px-6 text-sm font-bold shadow-lg shadow-emerald-500/30 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/40"
+            >
+              <FlaskConical className="h-5 w-5" />
+              <span>AI Disease Scan</span>
+            </Link>
+            <Link
+              to="/scan"
+              className="btn-secondary flex h-12 items-center gap-2.5 rounded-2xl border-white/20 bg-white/10 px-5 text-sm font-bold text-white backdrop-blur-md transition-all hover:bg-white/20"
+            >
+              <ScanLine className="h-5 w-5" />
+              <span>{t('newManualScan')}</span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured Alert Bar */}
+      <section className={`flex flex-col gap-4 rounded-2xl border p-4 shadow-sm transition-all sm:flex-row sm:items-center sm:justify-between ${alertToneClasses.wrapper}`}>
         <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
-          <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${alertToneClasses.iconBadge}`}>
+          <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl shadow-sm ${alertToneClasses.iconBadge}`}>
             <AlertTriangle className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <p className="text-lg font-bold">
+            <p className="text-base font-bold">
               {featuredAlertTitle || t('noActiveFieldAlerts')}
             </p>
-            <p className={`text-sm ${alertToneClasses.body}`}>
+            <p className={`text-xs sm:text-sm ${alertToneClasses.body}`}>
               {featuredAlertBody || t('liveAlertsPlaceholder')}
             </p>
           </div>
         </div>
         {featuredAlert?.action_to ? (
-          <Link to={featuredAlert.action_to} className={`btn-secondary ${alertToneClasses.button}`}>
+          <Link to={featuredAlert.action_to} className={`btn-secondary shrink-0 rounded-xl px-4 py-2 text-xs font-bold ${alertToneClasses.button}`}>
             {featuredAlertAction || t('viewDetails')}
           </Link>
         ) : null}
       </section>
 
       <div className="content-sidebar-layout">
-        <div className="space-y-5">
+        <div className="space-y-6">
+          {/* Key Metrics */}
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
             <MetricCard icon={Droplets} label={t('soilMoisture')} value={moistureMetric.value} unit={moistureMetric.unit} status={moistureMetric.status} tone={moistureMetric.tone} helper={moistureMetric.helper} to="/scan" />
             <MetricCard icon={Thermometer} label={t('soilTemp')} value={temperatureMetric.value} unit={temperatureMetric.unit} status={temperatureMetric.status} tone={temperatureMetric.tone} helper={temperatureMetric.helper} to="/scan" />
             <MetricCard icon={Zap} label={t('nutrientLevel')} value={nutrientMetric.value} unit={nutrientMetric.unit} status={nutrientMetric.status} tone={nutrientMetric.tone} helper={nutrientMetric.helper} to="/scan" />
           </div>
 
-          <section className="surface rounded-lg p-5 sm:p-7">
+          {/* Soil pH Trend Chart */}
+          <section className="surface rounded-3xl p-6 sm:p-7 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-stone-950">{t('soilPhTrend')}</h2>
-                <p className="mt-1 text-sm text-stone-500">
+                <h2 className="text-xl font-extrabold tracking-tight text-slate-900">{t('soilPhTrend')}</h2>
+                <p className="mt-1 text-xs text-slate-500">
                   {phChartData.length > 0 ? t('historicalSevenScans') : t('noPhScanHistory')}
                 </p>
               </div>
-              <Link to="/reports" className="inline-flex items-center gap-2 text-sm font-bold text-leaf-700">
+              <Link to="/reports" className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 transition">
                 {t('fullReport')} <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
             {phChartData.length > 0 ? (
               <>
-                <div className="mt-6 h-64 sm:mt-8 sm:h-80 xl:h-[340px]">
+                <div className="mt-6 h-64 sm:mt-8 sm:h-80 xl:h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={phChartData} margin={{ left: 8, right: 20, top: 10, bottom: 10 }}>
-                      <CartesianGrid stroke="#e7e5e4" strokeDasharray="6 8" vertical={false} />
-                      <XAxis dataKey="day" tick={{ fontSize: 13, fill: '#78716c' }} axisLine={false} tickLine={false} />
+                      <CartesianGrid stroke="#f1f5f9" strokeDasharray="4 4" vertical={false} />
+                      <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
                       <YAxis
                         width={44}
                         domain={phChartDomain}
-                        tick={{ fontSize: 13, fill: '#78716c' }}
+                        tick={{ fontSize: 12, fill: '#64748b' }}
                         tickFormatter={formatPhTick}
                         axisLine={false}
                         tickLine={false}
                       />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="ph" stroke="#22c55e" strokeWidth={3} dot={{ r: 5, fill: '#22c55e' }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          borderRadius: '1rem',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="ph"
+                        stroke="#059669"
+                        strokeWidth={3.5}
+                        dot={{ r: 5, fill: '#10b981', strokeWidth: 2, stroke: '#ffffff' }}
+                        activeDot={{ r: 7, fill: '#047857' }}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-2 flex justify-center text-sm font-semibold text-stone-500">
-                  <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-leaf-500" /> {t('soilPhLevel')}</span>
+                <div className="mt-3 flex justify-center text-xs font-semibold text-slate-500">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> {t('soilPhLevel')}
+                  </span>
                 </div>
               </>
             ) : (
-              <div className="mt-8 grid min-h-56 place-items-center rounded-lg border border-dashed border-stone-300 bg-stone-50 p-6 text-center">
+              <div className="mt-6 grid min-h-52 place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center">
                 <div>
-                  <p className="text-lg font-bold text-stone-900">{t('noPhScanHistoryTitle')}</p>
-                  <p className="mt-2 text-sm text-stone-500">{t('noPhScanHistoryBody')}</p>
+                  <p className="text-base font-bold text-slate-800">{t('noPhScanHistoryTitle')}</p>
+                  <p className="mt-1 text-xs text-slate-500">{t('noPhScanHistoryBody')}</p>
                 </div>
               </div>
             )}
           </section>
 
-          <section className="surface dashboard-timeline rounded-lg p-5 sm:p-6">
+          {/* Activity Timeline */}
+          <section className="surface dashboard-timeline rounded-3xl p-6 sm:p-7 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h2 className="section-title flex items-center gap-2">
-                  <CalendarClock className="h-5 w-5 text-leaf-700" />
-                  Field activity timeline
+                <h2 className="section-title flex items-center gap-2 text-lg font-extrabold text-slate-900">
+                  <CalendarClock className="h-5 w-5 text-emerald-600" />
+                  Field Activity Timeline
                 </h2>
-                <p className="mt-1 text-sm leading-6 text-stone-500">Recent scans and field events from your workspace.</p>
+                <p className="mt-1 text-xs text-slate-500">Recent AI diagnostics, manual sensor inputs, and field updates.</p>
               </div>
-              <Link to="/reports" className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+              <Link to="/reports" className="btn-secondary h-9 rounded-xl px-3 text-xs font-bold">
                 {t('reports')}
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
             {activityTimeline.length > 0 ? (
               <div className="mt-5 space-y-3">
                 {activityTimeline.map((item) => (
-                  <article key={item.key} className="timeline-item">
-                    <span className={`timeline-dot ${item.tone === 'amber' ? 'timeline-dot-amber' : 'timeline-dot-leaf'}`} />
-                    <div className="min-w-0">
-                      <p className="break-words text-sm font-bold text-stone-950">{item.title}</p>
-                      <p className="mt-1 break-words text-xs leading-5 text-stone-500">{item.meta}</p>
+                  <article key={item.key} className="timeline-item flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/50 p-3.5 transition hover:bg-slate-50">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`h-3 w-3 rounded-full shrink-0 ${item.tone === 'amber' ? 'bg-amber-400 ring-4 ring-amber-100' : 'bg-emerald-500 ring-4 ring-emerald-100'}`} />
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-slate-900">{item.title}</p>
+                        <p className="truncate text-[11px] text-slate-500">{item.meta}</p>
+                      </div>
                     </div>
-                    <time className="shrink-0 text-xs font-semibold text-stone-400">{formatTimelineTime(item.time)}</time>
+                    <time className="shrink-0 text-[11px] font-semibold text-slate-400">{formatTimelineTime(item.time)}</time>
                   </article>
                 ))}
               </div>
             ) : (
-              <div className="empty-state mt-5">
-                <CalendarClock className="mx-auto h-8 w-8 text-stone-400" />
-                <p className="mt-2 text-sm font-bold text-stone-950">No field activity yet</p>
-                <p className="mt-1 text-sm text-stone-500">Run a scan or register farm data to start the timeline.</p>
+              <div className="empty-state mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
+                <CalendarClock className="mx-auto h-7 w-7 text-slate-400" />
+                <p className="mt-2 text-xs font-bold text-slate-800">No field activity yet</p>
+                <p className="mt-1 text-xs text-slate-500">Run a scan or register farm data to start the timeline.</p>
               </div>
             )}
           </section>
         </div>
 
-        <aside className="space-y-5">
-          <section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
+        {/* Sidebar Widgets */}
+        <aside className="space-y-6">
+          {/* Current Weather Widget */}
+          <section className="rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-sky-50/60 to-white p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-bold uppercase tracking-wide text-sky-500">{t('currentWeather')}</p>
-                <div className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-stone-900">
-                  <MapPin className="h-4 w-4 text-sky-500" />
-                  <span>{summary.location.label}</span>
+                <p className="text-xs font-bold uppercase tracking-wider text-sky-600">{t('currentWeather')}</p>
+                <div className="mt-2 inline-flex items-center gap-1.5 text-sm font-extrabold text-slate-900">
+                  <MapPin className="h-4 w-4 text-sky-500 shrink-0" />
+                  <span className="truncate">{summary.location.label}</span>
                 </div>
-                <p className="mt-1 text-xs font-semibold text-stone-500">{locationSourceLabel}</p>
-                <p className="mt-1 text-xs text-stone-500">{formatLocationMeta(summary.location, t)}</p>
+                <p className="mt-0.5 text-xs font-semibold text-slate-500">{locationSourceLabel}</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">{formatLocationMeta(summary.location, t)}</p>
               </div>
-              <CloudSun className="h-7 w-7 text-sky-400" />
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sky-100/80 text-sky-600 shadow-sm">
+                <CloudSun className="h-7 w-7" />
+              </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button className="btn-secondary h-10 px-4 text-sm" type="button" onClick={requestPreciseLocation} disabled={gpsState.locating}>
-                {gpsState.locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                className="btn-secondary h-9 rounded-xl px-3 text-xs font-bold"
+                type="button"
+                onClick={requestPreciseLocation}
+                disabled={gpsState.locating}
+              >
+                {gpsState.locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crosshair className="h-3.5 w-3.5" />}
                 {gpsState.locating ? t('locating') : t('useCurrentGps')}
               </button>
-              <Link to="/farms" className="btn-secondary h-10 px-4 text-sm">
-                <MapPin className="h-4 w-4" />
+              <Link to="/farms" className="btn-secondary h-9 rounded-xl px-3 text-xs font-bold">
+                <MapPin className="h-3.5 w-3.5" />
                 {t('farmMap')}
               </Link>
             </div>
 
-            {gpsState.error && <p className="mt-3 text-sm font-medium text-amber-700">{gpsState.error}</p>}
+            {gpsState.error && <p className="mt-2 text-xs font-medium text-amber-700">{gpsState.error}</p>}
 
-            <div className="mt-6 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:gap-5">
-              <span className="text-3xl font-bold text-stone-950 sm:text-4xl">{weatherTemperature}C</span>
-              <div className="border-t border-sky-200 pt-3 text-sm text-stone-700 min-[420px]:border-l min-[420px]:border-t-0 min-[420px]:pl-5 min-[420px]:pt-0">
-                <p>{t('humidity')}: {weatherHumidity}%</p>
-                <p>{t('wind')}: {weatherWind} km/h</p>
-                <p>{t('feelsLike')}: {feelsLike}C</p>
+            <div className="mt-5 flex items-baseline gap-4 rounded-2xl bg-white/80 p-4 border border-sky-100 shadow-sm">
+              <span className="text-3xl font-black text-slate-900 sm:text-4xl">{weatherTemperature}°C</span>
+              <div className="border-l border-slate-200 pl-4 text-xs font-medium text-slate-600 space-y-0.5">
+                <p>{t('humidity')}: <span className="font-bold text-slate-800">{weatherHumidity}%</span></p>
+                <p>{t('wind')}: <span className="font-bold text-slate-800">{weatherWind} km/h</span></p>
+                <p>{t('feelsLike')}: <span className="font-bold text-slate-800">{feelsLike}°C</span></p>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg bg-white/70 p-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('rainfall')}</p>
-                <p className="mt-1 text-lg font-bold text-stone-950">{precipitation} mm</p>
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
+              <div className="rounded-2xl border border-white bg-white/70 p-3 shadow-sm">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{t('rainfall')}</p>
+                <p className="mt-0.5 text-base font-extrabold text-slate-900">{precipitation} mm</p>
               </div>
-              <div className="rounded-lg bg-white/70 p-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t('status')}</p>
-                <p className="mt-1 text-sm font-semibold text-stone-900">{formatObservedAt(summary.weather.observed_at, t)}</p>
+              <div className="rounded-2xl border border-white bg-white/70 p-3 shadow-sm">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{t('status')}</p>
+                <p className="mt-0.5 text-xs font-semibold text-slate-800 truncate">{formatObservedAt(summary.weather.observed_at, t)}</p>
               </div>
             </div>
 
-            <TranslatedText as="p" className="mt-5 text-sm leading-6 text-stone-600" text={summary.weather.summary} />
+            <TranslatedText as="p" className="mt-4 text-xs leading-relaxed text-slate-600" text={summary.weather.summary} />
           </section>
 
-          <section className="surface rounded-lg p-5">
+          {/* Quick Actions Deck */}
+          <section className="surface rounded-3xl p-6 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="section-title">{t('quickActions')}</h2>
-              <span className="status-pill border border-stone-200 bg-stone-50 text-stone-600">{t('fieldTools')}</span>
+              <h2 className="text-base font-extrabold text-slate-900">{t('quickActions')}</h2>
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-600">
+                {t('fieldTools')}
+              </span>
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-2.5">
               {[
-                [ScanLine, t('manualScan'), t('recordSoilReadings'), '/scan'],
-                [FlaskConical, t('diseaseDetector'), t('analyzeCropImages'), '/disease-detector'],
-                [MapPin, t('farmMap'), t('reviewFieldLocations'), '/farms'],
-              ].map(([Icon, label, helper, to]) => (
+                [FlaskConical, t('diseaseDetector'), t('analyzeCropImages'), '/disease-detector', 'from-emerald-500 to-emerald-700 text-white'],
+                [ScanLine, t('manualScan'), t('recordSoilReadings'), '/scan', 'from-amber-500 to-amber-600 text-white'],
+                [MapPin, t('farmMap'), t('reviewFieldLocations'), '/farms', 'from-sky-500 to-sky-600 text-white'],
+              ].map(([Icon, label, helper, to, gradient]) => (
                 <Link
                   key={label}
                   to={to}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white px-3 py-3 transition hover:border-leaf-200 hover:bg-leaf-50"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-stone-50 text-leaf-700">
-                      <Icon className="h-4 w-4" />
+                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br shadow-sm ${gradient}`}>
+                      <Icon className="h-5 w-5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-bold text-stone-950">{label}</span>
-                      <span className="block truncate text-xs text-stone-500">{helper}</span>
+                      <span className="block truncate text-xs font-bold text-slate-900">{label}</span>
+                      <span className="block truncate text-[11px] text-slate-400">{helper}</span>
                     </span>
                   </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-stone-400" />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5" />
                 </Link>
               ))}
             </div>

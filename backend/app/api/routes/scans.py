@@ -223,16 +223,25 @@ async def create_scan(
         if crop_mismatch:
             file_path.unlink(missing_ok=True)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=crop_mismatch)
-    detection = (
-        detector.detect(
-            str(file_path),
-            crop_type=crop_type,
-            original_filename=original_filename,
-            allow_online_lookup=not offline_mode,
+    detection = None
+    if file_path is not None and not offline_mode and getattr(settings, "use_gemini_ai", True) and settings.gemini_api_key:
+        try:
+            from app.services.gemini_service import detect_disease_with_gemini
+            detection = await detect_disease_with_gemini(str(file_path), crop_type_hint=crop_type)
+        except Exception as exc:
+            logger.warning("Gemini disease detection threw: %s", exc)
+
+    if detection is None:
+        detection = (
+            detector.detect(
+                str(file_path),
+                crop_type=crop_type,
+                original_filename=original_filename,
+                allow_online_lookup=not offline_mode,
+            )
+            if file_path is not None
+            else manual_entry_diagnosis(crop_type, affected_part, symptoms, severity, field_notes)
         )
-        if file_path is not None
-        else manual_entry_diagnosis(crop_type, affected_part, symptoms, severity, field_notes)
-    )
     if file_path is not None:
         detection = await apply_verified_feedback(db, str(file_path), detection, crop_type)
         if detection.disease_name == "Invalid crop or leaf image":
